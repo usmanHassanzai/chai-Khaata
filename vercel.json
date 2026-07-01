@@ -5,7 +5,8 @@
     { "source": "/api/(.*)", "destination": "/api" }
   ],
   "functions": {
-    "api/index.js": {
+    "api/**/*.js": {
+      "includeFiles": "server/**",
       "maxDuration": 60,
       "memory": 1024
     }

@@ -1,0 +1,13 @@
+export default function handler(_req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.status(200).json({
+    ok: true,
+    service: 'chai-khata-auth',
+    sync: true,
+    storage:
+      process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+        ? 'supabase'
+        : 'file',
+    publicUrl: process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+  });
+}

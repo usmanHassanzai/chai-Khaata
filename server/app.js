@@ -85,6 +85,16 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' }));
 
+app.use((req, _res, next) => {
+  const raw = req.url || '';
+  const path = raw.split('?')[0];
+  if (!path.startsWith('/api') && path !== '/') {
+    const query = raw.includes('?') ? raw.slice(raw.indexOf('?')) : '';
+    req.url = `/api${path.startsWith('/') ? path : `/${path}`}${query}`;
+  }
+  next();
+});
+
 let bootstrapped = false;
 let bootstrapPromise = null;
 
