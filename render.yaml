@@ -1,0 +1,36 @@
+# Deploy Chai Khata API on Render (works on any mobile network)
+# https://render.com — sign up free, connect GitHub repo, use Blueprint or manual Web Service
+
+services:
+  - type: web
+    name: chai-khata-api
+    runtime: node
+    region: singapore
+    plan: starter
+    buildCommand: npm install
+    startCommand: node server/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ALLOW_ALL
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: usmankhan14700@gmail.com
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM
+        sync: false
+    disk:
+      name: chai-khata-data
+      mountPath: /opt/render/project/src/server/data
+      sizeGB: 1
+
+# After deploy: copy the URL (https://chai-khata-api.onrender.com) into every phone:
+# Settings → Cloud Sync → Cloud Server URL → Save → log out → log in

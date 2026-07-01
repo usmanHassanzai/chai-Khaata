@@ -1,0 +1,58 @@
+{
+  "name": "chai-khata",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite --host",
+    "dev:server": "node server/index.js",
+    "dev:all": "node scripts/dev.mjs",
+    "free-ports": "bash scripts/free-ports.sh",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "start:server": "node server/index.js",
+    "start": "node server/index.js",
+    "tunnel": "node scripts/tunnel.mjs",
+    "deploy:render": "node scripts/deploy-render.mjs",
+    "deploy:vercel": "node scripts/deploy-vercel.mjs",
+    "test:twilio": "node scripts/test-twilio.mjs",
+    "setup:twilio": "node scripts/setup-twilio.mjs",
+    "cap:sync": "cap sync",
+    "cap:android": "cap open android",
+    "cap:check": "bash scripts/check-android.sh",
+    "android:apk": "npm run build && npx cap sync android && cd android && ./gradlew assembleRelease && cp app/build/outputs/apk/release/app-release.apk ../releases/Chai-Khata.apk"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
+    "@supabase/supabase-js": "^2.110.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dexie": "^4.0.10",
+    "dexie-react-hooks": "^1.1.7",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "i18next": "^24.2.2",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^6.9.16",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-i18next": "^15.4.1",
+    "react-router-dom": "^7.1.5"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^10.0.3",
+    "localtunnel": "^2.0.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11",
+    "vite-plugin-pwa": "^0.21.1"
+  }
+}

@@ -1,0 +1,30 @@
+import { PageTitle } from '../i18n/useLabel';
+import AdminUsersPanel from '../components/AdminUsersPanel';
+import AdminPaymentProofsPanel from '../components/AdminPaymentProofsPanel';
+import { useAuth } from '../context/AuthContext';
+import { Label } from '../i18n/useLabel';
+
+export default function AdminApprovals() {
+  const { user } = useAuth();
+
+  if (user?.role !== 'admin') {
+    return (
+      <div className="page">
+        <PageTitle k="auth.adminUsers" />
+        <section className="card">
+          <p className="settings-note">
+            <Label k="auth.adminOnly" variant="compact" />
+          </p>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page">
+      <PageTitle k="auth.adminUsers" />
+      <AdminPaymentProofsPanel />
+      <AdminUsersPanel />
+    </div>
+  );
+}
