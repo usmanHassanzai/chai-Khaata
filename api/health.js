@@ -6,15 +6,13 @@ export default async function handler(_req, res) {
 
   let bootstrap = null;
   if (isSupabaseEnabled()) {
-    try {
-      bootstrap = await ensureBootstrapAdmin();
-    } catch (err) {
-      bootstrap = {
-        ok: false,
-        error: err instanceof Error ? err.message : 'Bootstrap failed',
-        hint: 'Check Vercel env: SUPABASE_URL + Secret key (not Publishable key)',
-      };
-    }
+    bootstrap = await ensureBootstrapAdmin();
+  } else {
+    bootstrap = {
+      ok: false,
+      error: 'Supabase not configured on server',
+      hint: 'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel, then Redeploy.',
+    };
   }
 
   res.status(200).json({
