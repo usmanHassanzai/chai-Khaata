@@ -14,6 +14,14 @@ export function getCloudApiUrl(): string {
   const defaultCloud = import.meta.env.VITE_DEFAULT_CLOUD_URL as string | undefined;
   if (defaultCloud?.trim()) return normalizeUrl(defaultCloud);
 
+  // Match authApi: on deployed web app, API is same origin (e.g. Vercel)
+  if (import.meta.env.PROD && typeof window !== 'undefined' && window.location?.origin) {
+    const origin = window.location.origin;
+    if (!origin.includes('localhost') && !origin.includes('127.0.0.1')) {
+      return normalizeUrl(origin);
+    }
+  }
+
   return '';
 }
 

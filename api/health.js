@@ -22,7 +22,7 @@ export default async function handler(_req, res) {
   } catch (err) {
     bootstrap = {
       ok: false,
-      error: err instanceof Error ? err.message : String(err),
+      error: err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err ? String(err.message) : String(err)),
       hint: 'Check Vercel function logs for details.',
     };
   }

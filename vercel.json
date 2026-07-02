@@ -2,6 +2,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/health", "destination": "/api/health" },
+    { "source": "/api/(.*)", "destination": "/api/server?__vercel_path=$1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "functions": {

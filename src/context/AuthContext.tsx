@@ -20,6 +20,7 @@ import {
 type AuthState = {
   user: AuthUser | null;
   loading: boolean;
+  dbReady: boolean;
   login: (emailOrLogin: string, password: string) => Promise<void>;
   register: (
     username: string,
@@ -39,30 +40,47 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dbReady, setDbReady] = useState(false);
+
+  const prepareDatabase = useCallback(async (userId: string) => {
+    setDbReady(false);
+    await initUserDatabase(userId);
+    setDbReady(true);
+  }, []);
 
   const refreshUser = useCallback(async () => {
     const token = getStoredToken();
     if (!token) {
       setUser(null);
+      setDbReady(false);
       return;
     }
 
     try {
       const { user: profile } = await authApi.me();
-      await initUserDatabase(profile.id);
+      try {
+        await prepareDatabase(profile.id);
+      } catch (dbErr) {
+        console.warn('[Chai Khata] Database init:', dbErr);
+        setDbReady(false);
+      }
       setUser(profile);
     } catch (err) {
+      setDbReady(false);
       if (err instanceof ApiError && (err.code === 'PENDING_APPROVAL' || err.code === 'REJECTED' || err.code === 'PAYMENT_DUE' || err.code === 'SUBSCRIPTION_EXPIRED')) {
         setUser(err.user ?? null);
       } else if (err instanceof ApiError && err.code === 'NOT_FOUND') {
         setStoredToken(null);
         setUser(null);
-      } else {
+      } else if (err instanceof ApiError && (err.code === 'UNAUTHORIZED' || err.code === 'INVALID_TOKEN')) {
         setStoredToken(null);
         setUser(null);
+      } else {
+        // Network/server error — keep token so user can retry without re-login
+        console.warn('[Chai Khata] Session refresh failed:', err);
       }
     }
-  }, []);
+  }, [prepareDatabase]);
 
   useEffect(() => {
     refreshUser().finally(() => setLoading(false));
@@ -72,12 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { token, user: loggedIn } = await authApi.login(emailOrLogin, password);
       setStoredToken(token);
+      await prepareDatabase(loggedIn.id);
       setUser(loggedIn);
-      try {
-        await initUserDatabase(loggedIn.id);
-      } catch (err) {
-        console.warn('[Chai Khata] Database init after login:', err);
-      }
     } catch (err) {
       if (err instanceof ApiError && err.code === 'PAYMENT_DUE' && err.user) {
         setUser(err.user);
@@ -87,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       throw err;
     }
-  }, []);
+  }, [prepareDatabase]);
 
   const register = useCallback(async (
     username: string,
@@ -105,11 +119,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     setStoredToken(null);
     setUser(null);
+    setDbReady(false);
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout, refreshUser }),
-    [user, loading, login, register, logout, refreshUser],
+    () => ({ user, loading, dbReady, login, register, logout, refreshUser }),
+    [user, loading, dbReady, login, register, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -40,6 +40,7 @@ import {
   isSubscriptionExpired,
   isValidPlanId,
 } from './subscriptions.js';
+import { ensureBootstrapAdmin } from './bootstrap.js';
 import { isSupabaseEnabled } from './supabase.js';
 
 dotenv.config();
@@ -95,32 +96,6 @@ app.use((req, _res, next) => {
   next();
 });
 
-let bootstrapped = false;
-let bootstrapPromise = null;
-
-async function ensureBootstrapped() {
-  if (bootstrapped) return;
-  if (!bootstrapPromise) {
-    bootstrapPromise = (async () => {
-      const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
-      await ensureDefaultAdmin(ADMIN_EMAIL, adminHash);
-      bootstrapped = true;
-    })();
-  }
-  await bootstrapPromise;
-}
-
-app.use(async (req, _res, next) => {
-  if (req.path.startsWith('/api')) {
-    try {
-      await ensureBootstrapped();
-    } catch (err) {
-      console.error('[Chai Khata] Bootstrap error:', err);
-    }
-  }
-  next();
-});
-
 function signToken(user) {
   return jwt.sign(
     { sub: user.id, role: user.role, username: user.username, email: user.email },
@@ -152,13 +127,15 @@ function adminMiddleware(req, res, next) {
   next();
 }
 
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', async (_req, res) => {
+  const bootstrap = await ensureBootstrapAdmin();
   res.json({
     ok: true,
     service: 'chai-khata-auth',
     sync: true,
     storage: isSupabaseEnabled() ? 'supabase' : 'file',
     publicUrl: PUBLIC_SERVER_URL || null,
+    bootstrap,
   });
 });
 
@@ -480,6 +457,10 @@ app.patch('/api/admin/payment-submissions/:id/reject', authMiddleware, adminMidd
 
 app.post('/api/auth/login', async (req, res) => {
   try {
+    if (isSupabaseEnabled()) {
+      await ensureBootstrapAdmin();
+    }
+
     const { username, email, login, password } = req.body ?? {};
     const loginValue = login ?? email ?? username;
 
@@ -958,7 +939,7 @@ app.put('/api/sync/ledger', authMiddleware, async (req, res) => {
 });
 
 async function startServer() {
-  await ensureBootstrapped();
+  await ensureBootstrapAdmin();
   const admin = await findUserByLogin(ADMIN_EMAIL);
   console.log(`Admin ready: ${admin?.email ?? ADMIN_EMAIL} (login with this email or username "${admin?.username ?? 'admin'}")`);
   console.log(`Storage: ${isSupabaseEnabled() ? 'Supabase ✓' : 'Local files (set SUPABASE_* for production)'}`);

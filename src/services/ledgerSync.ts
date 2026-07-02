@@ -56,7 +56,14 @@ async function syncRequest<T>(path: string, options: RequestInit = {}): Promise<
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${base}${path}`, { ...options, headers });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  let res: Response;
+  try {
+    res = await fetch(`${base}${path}`, { ...options, headers, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
   const text = await res.text();
   let data = {} as T;
   if (text) {

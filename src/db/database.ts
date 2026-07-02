@@ -47,6 +47,10 @@ class ChaiKhataDB extends Dexie {
 export type { ChaiKhataDB };
 export let db: ChaiKhataDB;
 
+export function isDbInitialized(): boolean {
+  return Boolean(db);
+}
+
 export async function initUserDatabase(userId: string): Promise<void> {
   if (db) {
     db.close();
@@ -55,9 +59,17 @@ export async function initUserDatabase(userId: string): Promise<void> {
   await ensureSettings();
 
   if (isCloudSyncEnabled()) {
-    await syncLedgerWithCloud(db);
-    attachLedgerSyncHooks(db);
-    startLedgerSyncLoop(db);
+    // Sync in background so login is not blocked on slow/unreachable cloud API
+    void syncLedgerWithCloud(db)
+      .then(() => {
+        attachLedgerSyncHooks(db);
+        startLedgerSyncLoop(db);
+      })
+      .catch((err) => {
+        console.warn('[Chai Khata] Cloud sync after login:', err);
+        attachLedgerSyncHooks(db);
+        startLedgerSyncLoop(db);
+      });
   } else if (!getLocalLedgerUpdatedAt()) {
     touchLocalLedgerUpdatedAt();
   }

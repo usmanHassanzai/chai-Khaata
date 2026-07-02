@@ -10,9 +10,9 @@ function isSubscriptionExpired(user: NonNullable<ReturnType<typeof useAuth>['use
 }
 
 export default function ProtectedRoute() {
-  const { user, loading } = useAuth();
+  const { user, loading, dbReady } = useAuth();
 
-  if (loading) {
+  if (loading || (user && !dbReady)) {
     return (
       <div className="auth-loading">
         <div className="auth-spinner" />

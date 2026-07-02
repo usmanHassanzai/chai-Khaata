@@ -1,5 +1,12 @@
 import { getSupabase } from '../supabase.js';
 
+function throwSupabaseError(error) {
+  const message = error?.message || error?.details || error?.hint || JSON.stringify(error);
+  const err = new Error(message);
+  if (error?.code) err.code = error.code;
+  throw err;
+}
+
 /** @param {Record<string, unknown>} row */
 export function rowToUser(row) {
   return {
@@ -58,7 +65,7 @@ export async function sbReadUsers() {
     .select('*')
     .order('created_at', { ascending: true });
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return (data ?? []).map(rowToUser);
 }
 
@@ -70,7 +77,7 @@ export async function sbFindUserByEmail(email) {
     .eq('email', normalized)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return data ? rowToUser(data) : null;
 }
 
@@ -82,7 +89,7 @@ export async function sbFindUserByUsername(username) {
     .eq('username', normalized)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return data ? rowToUser(data) : null;
 }
 
@@ -93,7 +100,7 @@ export async function sbFindUserById(id) {
     .eq('id', id)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return data ? rowToUser(data) : null;
 }
 
@@ -109,7 +116,7 @@ export async function sbInsertUser(user) {
       if (error.message?.includes('username')) throw new Error('USERNAME_TAKEN');
       if (error.message?.includes('email')) throw new Error('EMAIL_TAKEN');
     }
-    throw error;
+    throwSupabaseError(error);
   }
   return rowToUser(data);
 }
@@ -137,7 +144,7 @@ export async function sbUpdateUser(id, patch) {
       if (error.message?.includes('username')) throw new Error('USERNAME_TAKEN');
       if (error.message?.includes('email')) throw new Error('EMAIL_TAKEN');
     }
-    throw error;
+    throwSupabaseError(error);
   }
   return rowToUser(data);
 }
@@ -148,7 +155,7 @@ export async function sbDeleteUser(id) {
   if (existing.role === 'admin') throw new Error('CANNOT_DELETE_ADMIN');
 
   const { error } = await getSupabase().from('users').delete().eq('id', id);
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return existing;
 }
 
@@ -178,7 +185,7 @@ export async function sbCreateOtp(record) {
     .select('*')
     .single();
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return rowToOtp(data);
 }
 
@@ -189,7 +196,7 @@ export async function sbGetOtp(userId) {
     .eq('user_id', userId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return data ? rowToOtp(data) : null;
 }
 
@@ -206,7 +213,7 @@ export async function sbListActiveOtps() {
     .select('*')
     .gt('expires_at', now);
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return (data ?? []).map(rowToOtp);
 }
 
@@ -256,7 +263,7 @@ export async function sbFindPendingSubmission(userId) {
     .eq('status', 'pending')
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return data ? rowToSubmission(data) : null;
 }
 
@@ -273,7 +280,7 @@ export async function sbCreateSubmission(record) {
     .select('*')
     .single();
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return rowToSubmission(data);
 }
 
@@ -284,7 +291,7 @@ export async function sbUpdateSubmission(id, patch) {
     .eq('id', id)
     .maybeSingle();
 
-  if (findErr) throw findErr;
+  if (findErr) throwSupabaseError(findErr);
   if (!existing) throw new Error('NOT_FOUND');
 
   const merged = { ...rowToSubmission(existing), ...patch };
@@ -295,7 +302,7 @@ export async function sbUpdateSubmission(id, patch) {
     .select('*')
     .single();
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return rowToSubmission(data);
 }
 
@@ -306,7 +313,7 @@ export async function sbListPendingSubmissions() {
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return (data ?? []).map(rowToSubmission);
 }
 
@@ -321,7 +328,7 @@ export async function sbReadLedger(userId) {
     .eq('user_id', userId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   if (!data) return null;
 
   const payload = data.payload ?? {};
@@ -350,7 +357,7 @@ export async function sbWriteLedger(userId, snapshot) {
       payload,
     }, { onConflict: 'user_id' });
 
-  if (error) throw error;
+  if (error) throwSupabaseError(error);
   return record;
 }
 
