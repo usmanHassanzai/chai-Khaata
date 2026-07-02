@@ -266,14 +266,24 @@ export async function ensureDefaultAdmin(email, passwordHash) {
   const existingAdmin = users.find((u) => u.role === 'admin');
 
   if (existingAdmin) {
-    const patch = {};
-    if (!existingAdmin.email || existingAdmin.email !== normalizedEmail) {
-      patch.email = normalizedEmail;
-    }
-    if (Object.keys(patch).length > 0) {
-      return updateUser(existingAdmin.id, patch);
-    }
-    return existingAdmin;
+    return updateUser(existingAdmin.id, {
+      email: normalizedEmail,
+      passwordHash,
+      status: 'approved',
+      role: 'admin',
+      approvedAt: existingAdmin.approvedAt || new Date().toISOString(),
+    });
+  }
+
+  const emailUser = users.find((u) => u.email === normalizedEmail);
+  if (emailUser) {
+    return updateUser(emailUser.id, {
+      role: 'admin',
+      status: 'approved',
+      approvedAt: emailUser.approvedAt || new Date().toISOString(),
+      passwordHash,
+      shopName: emailUser.shopName || 'Chai Khata Admin',
+    });
   }
 
   const localPart = normalizedEmail.split('@')[0] || 'admin';

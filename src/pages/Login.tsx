@@ -35,11 +35,10 @@ export default function Login() {
 
     try {
       await login(loginId.trim(), password);
-      navigate('/', { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === 'PENDING_APPROVAL') {
-          setInfo(err.message);
+          setInfo(err.message || 'Your account is waiting for admin approval.');
         } else if (err.code === 'PAYMENT_DUE') {
           navigate('/payment-due', { replace: true });
         } else if (err.code === 'SUBSCRIPTION_EXPIRED') {

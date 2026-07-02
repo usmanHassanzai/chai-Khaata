@@ -72,8 +72,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { token, user: loggedIn } = await authApi.login(emailOrLogin, password);
       setStoredToken(token);
-      await initUserDatabase(loggedIn.id);
       setUser(loggedIn);
+      try {
+        await initUserDatabase(loggedIn.id);
+      } catch (err) {
+        console.warn('[Chai Khata] Database init after login:', err);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.code === 'PAYMENT_DUE' && err.user) {
         setUser(err.user);
