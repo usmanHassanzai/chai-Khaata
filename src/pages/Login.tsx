@@ -73,7 +73,7 @@ export default function Login() {
 
         {serverOnline === false && !isNativeAuthMode() && (
           <div className="auth-banner error">
-            <Label k="auth.serverOffline" variant="compact" />
+            API server is offline or crashed. Redeploy on Vercel, then open /api/health in your browser to test.
           </div>
         )}
 
