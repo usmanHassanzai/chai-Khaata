@@ -41,6 +41,7 @@ import {
   isValidPlanId,
 } from './subscriptions.js';
 import { ensureBootstrapAdmin } from './bootstrap.js';
+import { performLogin } from './authLogin.js';
 import { isSupabaseEnabled } from './supabase.js';
 
 dotenv.config();
@@ -53,9 +54,15 @@ const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 const CORS_ALLOW_ALL = process.env.CORS_ALLOW_ALL === 'true' || process.env.NODE_ENV === 'production';
 const PUBLIC_SERVER_URL =
   process.env.PUBLIC_SERVER_URL ||
+  process.env.SITE_URL ||
   process.env.RENDER_EXTERNAL_URL ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
   '';
+
+function extraCorsOrigins() {
+  const raw = process.env.ALLOWED_ORIGINS || '';
+  return raw.split(',').map((s) => s.trim()).filter(Boolean);
+}
 
 function normalizeEmailFromEnv(email) {
   return String(email).trim().toLowerCase();
@@ -70,6 +77,9 @@ const corsOrigins = [
   'https://localhost',
   'capacitor://localhost',
   'http://localhost',
+  'https://patiwala.pk',
+  'https://www.patiwala.pk',
+  ...extraCorsOrigins(),
 ];
 
 app.use(cors({
@@ -457,54 +467,27 @@ app.patch('/api/admin/payment-submissions/:id/reject', authMiddleware, adminMidd
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    if (isSupabaseEnabled()) {
-      await ensureBootstrapAdmin();
-    }
-
     const { username, email, login, password } = req.body ?? {};
     const loginValue = login ?? email ?? username;
-
-    if (!loginValue?.trim() || !password) {
-      return res.status(400).json({ error: 'VALIDATION', message: 'Email and password are required' });
-    }
-
-    const user = await findUserByLogin(String(loginValue));
-    if (!user) {
-      return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password' });
-    }
-
-    const valid = await bcrypt.compare(String(password), user.passwordHash);
-    if (!valid) {
-      return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password' });
-    }
-
-    if (user.status === 'pending') {
-      return res.status(403).json({
-        error: 'PENDING_APPROVAL',
-        message: `Your account is waiting for admin approval (${ADMIN_EMAIL}). Please try again after approval.`,
-        user: publicUser(user),
-      });
-    }
-
-    if (user.status === 'rejected') {
-      return res.status(403).json({
-        error: 'REJECTED',
-        message: `Your account was not approved. Contact admin at ${ADMIN_EMAIL}.`,
-        user: publicUser(user),
-      });
-    }
-
-    if (isPaymentBlocked(user)) {
-      return paymentBlockedResponse(user, res);
-    }
-
-    if (isSubscriptionExpired(user)) {
-      return subscriptionExpiredResponse(user, res);
-    }
-
-    const token = signToken(user);
-    res.json({ token, user: publicUser(user) });
+    const result = await performLogin(loginValue, password);
+    res.json(result);
   } catch (err) {
+    const code = err?.code || 'SERVER_ERROR';
+    if (code === 'VALIDATION') {
+      return res.status(400).json({ error: code, message: err.message });
+    }
+    if (code === 'INVALID_CREDENTIALS') {
+      return res.status(401).json({ error: code, message: err.message });
+    }
+    if (code === 'PENDING_APPROVAL' || code === 'REJECTED') {
+      return res.status(403).json({ error: code, message: err.message, user: err.user });
+    }
+    if (code === 'PAYMENT_DUE' || code === 'SUBSCRIPTION_EXPIRED') {
+      return res.status(403).json({ error: code, message: err.message, user: err.user });
+    }
+    if (code === 'SERVER_CONFIG') {
+      return res.status(503).json({ error: code, message: err.message, hint: err.hint });
+    }
     console.error('Login error:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not login' });
   }

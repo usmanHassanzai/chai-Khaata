@@ -1,6 +1,6 @@
--- Run in Supabase SQL Editor ONLY if /api/health bootstrap fails
--- Creates admin: usmankhan14700@gmail.com / password: admin123
--- Change password later in the app after first login
+-- Run in Supabase → SQL Editor → New query → Run
+-- Creates admin immediately (no Vercel needed)
+-- Login: usmankhan14700@gmail.com / admin123
 
 insert into public.users (
   id,

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="Green mint tea">
+  <defs>
+    <linearGradient id="bg3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e8f5e9"/>
+      <stop offset="100%" stop-color="#c8e6c9"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#81c784" stop-opacity="0.3"/>
+      <stop offset="50%" stop-color="#a5d6a7" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#66bb6a" stop-opacity="0.3"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" fill="url(#bg3)" rx="32"/>
+  <ellipse cx="200" cy="340" rx="110" ry="16" fill="#2d6a4f" opacity="0.1"/>
+  <path d="M155 140 L155 280 Q200 295 245 280 L245 140 Q200 125 155 140 Z" fill="url(#glass)" stroke="#40916c" stroke-width="3"/>
+  <ellipse cx="200" cy="140" rx="45" ry="12" fill="#66bb6a" opacity="0.4"/>
+  <rect x="175" y="180" width="50" height="90" rx="8" fill="#40916c" opacity="0.7"/>
+  <path d="M190 160 Q200 130 210 160" fill="none" stroke="#2d6a4f" stroke-width="4" stroke-linecap="round"/>
+  <path d="M160 200 Q130 190 125 220 Q130 250 155 245" fill="#4caf50" opacity="0.8"/>
+  <path d="M240 195 Q270 185 275 215 Q270 245 245 240" fill="#66bb6a" opacity="0.7"/>
+  <ellipse cx="200" cy="100" rx="18" ry="28" fill="#fff" opacity="0.35"/>
+  <ellipse cx="215" cy="88" rx="14" ry="22" fill="#fff" opacity="0.25"/>
+</svg>

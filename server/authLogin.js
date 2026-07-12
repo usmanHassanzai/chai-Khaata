@@ -1,0 +1,92 @@
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { findUserByLogin, isPaymentBlocked, paymentDueAmount, publicUser } from './store.js';
+import { isSubscriptionExpired } from './subscriptions.js';
+import { isSupabaseEnabled, validateSupabaseConfig } from './supabase.js';
+import { withTimeout } from './httpUtils.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || 'usmankhan14700@gmail.com').trim().toLowerCase();
+
+function signToken(user) {
+  return jwt.sign(
+    { sub: user.id, role: user.role, username: user.username, email: user.email },
+    JWT_SECRET,
+    { expiresIn: '30d' },
+  );
+}
+
+export async function performLogin(loginValue, password) {
+  const config = validateSupabaseConfig();
+  if (isSupabaseEnabled() && !config.ok) {
+    const err = new Error(config.error || 'Database not configured');
+    err.code = 'SERVER_CONFIG';
+    throw err;
+  }
+
+  if (!loginValue?.trim() || !password) {
+    const err = new Error('Email and password are required');
+    err.code = 'VALIDATION';
+    throw err;
+  }
+
+  const user = await withTimeout(
+    findUserByLogin(String(loginValue)),
+    8000,
+    'Database lookup',
+  );
+
+  if (!user) {
+    const err = new Error('Invalid email or password');
+    err.code = 'INVALID_CREDENTIALS';
+    throw err;
+  }
+
+  const valid = await bcrypt.compare(String(password), user.passwordHash);
+  if (!valid) {
+    const err = new Error('Invalid email or password');
+    err.code = 'INVALID_CREDENTIALS';
+    throw err;
+  }
+
+  if (user.status === 'pending') {
+    const err = new Error(`Your account is waiting for admin approval (${ADMIN_EMAIL}).`);
+    err.code = 'PENDING_APPROVAL';
+    err.user = publicUser(user);
+    throw err;
+  }
+
+  if (user.status === 'rejected') {
+    const err = new Error(`Your account was not approved. Contact admin at ${ADMIN_EMAIL}.`);
+    err.code = 'REJECTED';
+    err.user = publicUser(user);
+    throw err;
+  }
+
+  if (isPaymentBlocked(user)) {
+    const due = paymentDueAmount(user);
+    const err = new Error(`Payment due: Rs ${due.toLocaleString()}. Contact admin at ${ADMIN_EMAIL}.`);
+    err.code = 'PAYMENT_DUE';
+    err.user = publicUser(user);
+    throw err;
+  }
+
+  if (isSubscriptionExpired(user)) {
+    const err = new Error('Your subscription expired. Renew to continue.');
+    err.code = 'SUBSCRIPTION_EXPIRED';
+    err.user = publicUser(user);
+    throw err;
+  }
+
+  return { token: signToken(user), user: publicUser(user) };
+}
+
+export function getAuthConfig() {
+  return {
+    adminEmail: ADMIN_EMAIL,
+    requiresApproval: true,
+    cloudSync: true,
+    storage: isSupabaseEnabled() ? 'supabase' : 'file',
+    supabase: validateSupabaseConfig(),
+  };
+}

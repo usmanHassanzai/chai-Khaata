@@ -28,8 +28,8 @@ export default defineConfig({
       },
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'Chai Khata',
-        short_name: 'ChaiKhata',
+        name: 'Patiwala — Chai Khata',
+        short_name: 'Patiwala',
         description: 'Tea shop ledger — Dukaan, Godaam, Stock & Dues',
         theme_color: '#1a3d2f',
         background_color: '#faf7f2',

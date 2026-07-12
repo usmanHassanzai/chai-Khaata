@@ -3,6 +3,7 @@ import { setLabelMode, type LabelMode } from '../i18n/labels';
 import { useAuth } from '../context/AuthContext';
 import AdminUsersPanel from '../components/AdminUsersPanel';
 import CloudSyncPanel from '../components/CloudSyncPanel';
+import PageBanner from '../components/PageBanner';
 
 const MODES: { mode: LabelMode; labelKey: string; flag: string }[] = [
   { mode: 'bilingual', labelKey: 'common.bilingual', flag: '🇵🇰🇬🇧' },
@@ -18,6 +19,7 @@ export default function Settings() {
 
   return (
     <div className="page">
+      <PageBanner titleKey="settings.title" subtitle="Language, account & cloud sync" icon="⚙️" accent="green" />
       <PageTitle k="settings.title" />
 
       {user && (

@@ -19,6 +19,7 @@
     "tunnel": "node scripts/tunnel.mjs",
     "deploy:render": "node scripts/deploy-render.mjs",
     "deploy:vercel": "node scripts/deploy-vercel.mjs",
+    "deploy:domain": "node scripts/setup-domain.mjs",
     "test:twilio": "node scripts/test-twilio.mjs",
     "setup:twilio": "node scripts/setup-twilio.mjs",
     "cap:sync": "cap sync",

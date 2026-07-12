@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import AuthLayout from '../components/AuthLayout';
 import { useAuth } from '../context/AuthContext';
 import ImageUpload from '../components/ImageUpload';
 import { Label } from '../i18n/useLabel';
@@ -85,9 +86,7 @@ export default function PaymentDue() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-bg-pattern" aria-hidden />
-      <div className="auth-card payment-due-card payment-due-card-wide">
+    <AuthLayout wide>
         <div className="auth-brand">
           <div className="auth-logo">⛔</div>
           <h1><Label k="auth.paymentBlockedTitle" variant="stacked" /></h1>
@@ -165,7 +164,6 @@ export default function PaymentDue() {
         <p className="auth-switch">
           <Link to="/login"><Label k="auth.backToLogin" variant="compact" /></Link>
         </p>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

@@ -1,4 +1,5 @@
 import { Navigate, Outlet } from 'react-router-dom';
+import AppLoading from './AppLoading';
 import { useAuth } from '../context/AuthContext';
 
 function isPaymentBlocked(user: NonNullable<ReturnType<typeof useAuth>['user']>) {
@@ -13,12 +14,7 @@ export default function ProtectedRoute() {
   const { user, loading, dbReady } = useAuth();
 
   if (loading || (user && !dbReady)) {
-    return (
-      <div className="auth-loading">
-        <div className="auth-spinner" />
-        <p>Loading…</p>
-      </div>
-    );
+    return <AppLoading />;
   }
 
   if (!user) {

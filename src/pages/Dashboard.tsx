@@ -1,8 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import StatCard from '../components/StatCard';
 import MobileSaleCards from '../components/MobileSaleCards';
+import TeaHero from '../components/TeaHero';
+import TeaShowcase from '../components/TeaShowcase';
+import QuickActions from '../components/QuickActions';
 import { db, getSettingsQuery } from '../db/database';
-import { Label, PageTitle, SectionTitle, useLabel } from '../i18n/useLabel';
+import { Label, SectionTitle, useLabel } from '../i18n/useLabel';
 import {
   computeDashboardStats,
   formatCurrency,
@@ -37,7 +40,8 @@ export default function Dashboard() {
 
   return (
     <div className="page">
-      <PageTitle k="dashboard.title" />
+      <TeaHero todaySale={formatCurrency(stats.todaySale)} />
+      <QuickActions />
 
       <div className="stat-grid">
         <StatCard labelKey="dashboard.todaySale" value={formatCurrency(stats.todaySale)} accent="green" />
@@ -54,7 +58,9 @@ export default function Dashboard() {
         />
       </div>
 
-      <section className="card-section dashboard-recent">
+      <TeaShowcase />
+
+      <section className="card-section dashboard-recent animate-fade-in-up stagger-4">
         <SectionTitle k="dashboard.recentSales" />
         {stats.recentSales.length === 0 ? (
           <p className="empty">{l('common.noData')}</p>
@@ -100,7 +106,7 @@ export default function Dashboard() {
       </section>
 
       {stats.lowStockTeas.length > 0 && (
-        <section className="card-section alert-section">
+        <section className="card-section alert-section animate-fade-in-up">
           <SectionTitle k="dashboard.lowStockList" />
           <ul className="alert-list">
             {stats.lowStockTeas.map((tea) => (

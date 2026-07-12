@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import FormField from '../components/FormField';
+import PageBanner from '../components/PageBanner';
 import { db, getSettingsQuery } from '../db/database';
 import { Label, PageTitle, useLabel } from '../i18n/useLabel';
 import { computeTeaStocks, formatCurrency, formatKg } from '../services/calculations';
@@ -31,6 +32,7 @@ export default function StockLedger() {
 
   return (
     <div className="page">
+      <PageBanner titleKey="stock.title" subtitle="Live inventory per tea blend" icon="📋" accent="gold" />
       <PageTitle k="stock.title" />
 
       <form className="card form-card threshold-form" onSubmit={saveThreshold}>

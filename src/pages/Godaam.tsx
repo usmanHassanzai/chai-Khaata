@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useState } from 'react';
 import FormField, { FieldLabel, ReadOnlyField } from '../components/FormField';
 import ImageUpload, { ImageThumb } from '../components/ImageUpload';
+import PageBanner from '../components/PageBanner';
 import TextAreaField from '../components/TextAreaField';
 import { db } from '../db/database';
 import { Label, PageTitle, SectionTitle, useLabel } from '../i18n/useLabel';
@@ -137,6 +138,7 @@ export default function Godaam() {
 
   return (
     <div className="page">
+      <PageBanner titleKey="godaam.title" subtitle="Track purchases & dealer stock" icon="📦" accent="brown" />
       <PageTitle k="godaam.title" />
 
       <form className="card form-card" onSubmit={handleAddDealer}>

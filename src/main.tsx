@@ -6,6 +6,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 import i18n from './i18n';
 import { initPlatformClasses } from './utils/platform';
 import './index.css';
+import './styles/animations.css';
+import './styles/theme-advanced.css';
 
 async function bootstrap() {
   initPlatformClasses();

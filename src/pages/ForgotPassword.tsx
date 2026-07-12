@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import AuthLayout from '../components/AuthLayout';
 import { Label } from '../i18n/useLabel';
 import { ApiError, authApi } from '../services/authApi';
 
@@ -74,9 +75,7 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-bg-pattern" aria-hidden />
-      <div className="auth-card">
+    <AuthLayout>
         <div className="auth-brand">
           <div className="auth-logo">🔐</div>
           <h1><Label k="auth.forgotTitle" variant="stacked" /></h1>
@@ -190,7 +189,6 @@ export default function ForgotPassword() {
             <Link to="/login"><Label k="auth.backToLogin" variant="compact" /></Link>
           </p>
         )}
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

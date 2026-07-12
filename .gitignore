@@ -11,3 +11,5 @@ server/data/
 releases/*.apk
 android/chaikhata-release.keystore
 *.keystore
+.vercel
+.env*

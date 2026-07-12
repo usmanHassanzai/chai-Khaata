@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="Kashmiri pink tea">
+  <defs>
+    <linearGradient id="bg1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde8ef"/>
+      <stop offset="100%" stop-color="#f5c6d8"/>
+    </linearGradient>
+    <linearGradient id="cup1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#e8a0b8"/>
+      <stop offset="100%" stop-color="#c45c7a"/>
+    </linearGradient>
+    <radialGradient id="steam1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="400" height="400" fill="url(#bg1)" rx="32"/>
+  <ellipse cx="200" cy="340" rx="120" ry="18" fill="#c45c7a" opacity="0.15"/>
+  <path d="M130 180 Q200 120 270 180 L255 290 Q200 310 145 290 Z" fill="url(#cup1)"/>
+  <ellipse cx="200" cy="180" rx="70" ry="18" fill="#f8d4e0"/>
+  <ellipse cx="200" cy="175" rx="55" ry="12" fill="#d4738f"/>
+  <path d="M270 200 Q310 200 315 240 Q310 280 270 270" fill="none" stroke="#c45c7a" stroke-width="8" stroke-linecap="round"/>
+  <ellipse cx="185" cy="110" rx="22" ry="35" fill="url(#steam1)" opacity="0.5"/>
+  <ellipse cx="210" cy="95" rx="18" ry="30" fill="url(#steam1)" opacity="0.4"/>
+  <ellipse cx="200" cy="80" rx="15" ry="25" fill="url(#steam1)" opacity="0.3"/>
+  <circle cx="120" cy="120" r="8" fill="#d4a853" opacity="0.6"/>
+  <circle cx="300" cy="140" r="6" fill="#d4a853" opacity="0.5"/>
+</svg>

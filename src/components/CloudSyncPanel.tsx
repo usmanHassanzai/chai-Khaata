@@ -71,7 +71,7 @@ export default function CloudSyncPanel() {
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://chai-khata.vercel.app"
+          placeholder={(import.meta.env.VITE_DEFAULT_CLOUD_URL as string) || 'https://patiwala.pk'}
           inputMode="url"
         />
       </label>

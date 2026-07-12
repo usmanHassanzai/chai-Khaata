@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useState } from 'react';
 import FormField, { FieldLabel, ReadOnlyField } from '../components/FormField';
 import ImageUpload, { ImageThumb } from '../components/ImageUpload';
+import PageBanner from '../components/PageBanner';
 import StatCard from '../components/StatCard';
 import TextAreaField from '../components/TextAreaField';
 import { db } from '../db/database';
@@ -144,6 +145,7 @@ export default function Dukaan() {
 
   return (
     <div className="page">
+      <PageBanner titleKey="dukaan.title" subtitle="Record sales & track daily profit" icon="🏪" accent="green" />
       <PageTitle k="dukaan.title" />
 
       <form className="card form-card" onSubmit={handleSubmit}>
