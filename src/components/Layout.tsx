@@ -78,7 +78,7 @@ export default function Layout() {
           <div className="sidebar-logo">🍵</div>
           <div className="sidebar-brand-text">
             <span className="sidebar-brand-name"><Label k="appName" variant="compact" /></span>
-            <span className="sidebar-brand-tag">Tea Inventory</span>
+            <span className="sidebar-brand-tag">Patiwala Ledger</span>
           </div>
         </div>
 
@@ -142,7 +142,7 @@ export default function Layout() {
                   aria-label="Cloud sync status"
                 />
               )}
-              <span className="header-badge">Chai Khata</span>
+              <span className="header-badge">Patiwala</span>
               <span className="header-date">
                 {new Date().toLocaleDateString('en-PK', { weekday: 'short', day: 'numeric', month: 'short' })}
               </span>

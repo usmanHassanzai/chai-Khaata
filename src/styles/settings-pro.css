@@ -1,0 +1,566 @@
+/* ═══════════════════════════════════════════
+   Patiwala — Professional Settings & Dark Mode
+   ═══════════════════════════════════════════ */
+
+/* ─── Dark theme tokens ─── */
+[data-theme='dark'] {
+  --cream: #0f1419;
+  --cream-warm: #151c24;
+  --surface: #1a222d;
+  --surface-elevated: #222c3a;
+  --text-primary: #e8edf4;
+  --text-secondary: #9aa8b8;
+  --text-muted: #6b7a8c;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --glass: rgba(26, 34, 45, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='dark'] body {
+  background:
+    radial-gradient(ellipse 90% 60% at 10% -5%, rgba(45, 106, 79, 0.15) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 95% 105%, rgba(212, 168, 83, 0.08) 0%, transparent 50%),
+    var(--cream);
+}
+
+[data-theme='dark'] .sidebar {
+  background: linear-gradient(180deg, #0d1f18 0%, #122820 100%);
+}
+
+[data-theme='dark'] .card,
+[data-theme='dark'] .form-card,
+[data-theme='dark'] .stat-card {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] input,
+[data-theme='dark'] select,
+[data-theme='dark'] textarea {
+  background: var(--surface-elevated);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] .app-header {
+  background: var(--glass);
+  border-color: var(--border);
+}
+
+[data-theme='dark'] table th {
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+}
+
+[data-theme='dark'] .bottom-nav {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+/* ─── Compact UI ─── */
+.compact-ui .main-content {
+  padding: 0.75rem 1rem 5rem;
+}
+
+.compact-ui .stat-grid {
+  gap: 0.65rem;
+}
+
+.compact-ui .stat-card {
+  padding: 0.85rem 1rem;
+}
+
+.compact-ui .card {
+  padding: 1rem 1.15rem;
+}
+
+.compact-ui .page-banner {
+  padding: 1.25rem 1.5rem;
+  min-height: auto;
+}
+
+/* ─── Settings page layout ─── */
+.settings-page .settings-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  position: sticky;
+  top: 1rem;
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg, 16px);
+  padding: 0.65rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 0.9rem;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-secondary, #5a6b7d);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s, color 0.2s, transform 0.15s;
+}
+
+.settings-tab:hover {
+  background: rgba(45, 106, 79, 0.08);
+  color: var(--tea-deep, #1a3d2f);
+}
+
+.settings-tab.active {
+  background: linear-gradient(135deg, var(--tea-primary, #2d6a4f), var(--tea-mid, #40916c));
+  color: white;
+  box-shadow: 0 4px 14px rgba(45, 106, 79, 0.35);
+}
+
+.settings-tab-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.settings-panels {
+  min-width: 0;
+}
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.settings-card {
+  border-radius: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.settings-hint {
+  color: var(--text-muted, #7a8a9a);
+  font-size: 0.88rem;
+  margin: 0 0 1rem;
+  line-height: 1.5;
+}
+
+.settings-note {
+  color: var(--text-secondary, #5a6b7d);
+  font-size: 0.88rem;
+  margin: 0.75rem 0 0;
+}
+
+/* ─── Theme picker ─── */
+.settings-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
+}
+
+.settings-theme-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 1rem 0.5rem;
+  border: 2px solid var(--border, #e8ecef);
+  border-radius: 14px;
+  background: var(--surface, white);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.82rem;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+
+.settings-theme-btn span:first-child {
+  font-size: 1.5rem;
+}
+
+.settings-theme-btn:hover {
+  border-color: var(--tea-mid, #40916c);
+  transform: translateY(-2px);
+}
+
+.settings-theme-btn.active {
+  border-color: var(--tea-primary, #2d6a4f);
+  box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.15);
+  background: rgba(45, 106, 79, 0.06);
+}
+
+/* ─── Toggle switch ─── */
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border, #eef1f4);
+  cursor: pointer;
+}
+
+.settings-toggle-row:last-of-type {
+  border-bottom: none;
+}
+
+.settings-toggle-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.settings-toggle-hint {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted, #7a8a9a);
+  margin-top: 0.15rem;
+}
+
+.settings-switch {
+  position: relative;
+  width: 48px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.settings-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.settings-switch-slider {
+  position: absolute;
+  inset: 0;
+  background: #cbd5e1;
+  border-radius: 26px;
+  transition: background 0.25s;
+}
+
+.settings-switch-slider::before {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  left: 3px;
+  top: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.25s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.settings-switch input:checked + .settings-switch-slider {
+  background: var(--tea-primary, #2d6a4f);
+}
+
+.settings-switch input:checked + .settings-switch-slider::before {
+  transform: translateX(22px);
+}
+
+/* ─── Language grid ─── */
+.settings-lang-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+/* ─── Business settings ─── */
+.settings-inline-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.settings-inline-field input {
+  width: 100px;
+}
+
+.settings-unit {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.settings-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.settings-info-tile {
+  background: rgba(45, 106, 79, 0.06);
+  border: 1px solid rgba(45, 106, 79, 0.12);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+}
+
+.settings-info-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.settings-info-tile strong {
+  font-size: 1rem;
+  color: var(--tea-deep);
+}
+
+/* ─── Account card ─── */
+.settings-profile {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.settings-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--gradient-hero, linear-gradient(135deg, #1a3d2f, #40916c));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  box-shadow: 0 4px 14px rgba(45, 106, 79, 0.3);
+}
+
+.settings-profile-name {
+  margin: 0 0 0.15rem;
+  font-size: 1.15rem;
+}
+
+.settings-profile-email {
+  margin: 0 0 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+/* ─── Reset zone ─── */
+.settings-danger-zone {
+  border: 1px solid rgba(220, 53, 69, 0.2);
+  background: linear-gradient(135deg, rgba(220, 53, 69, 0.03), transparent);
+}
+
+.settings-reset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.settings-reset-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 1rem;
+  border: 1px solid var(--border, #e8ecef);
+  border-radius: 14px;
+  background: var(--surface, white);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+
+.settings-reset-btn span:first-child {
+  font-size: 1.35rem;
+}
+
+.settings-reset-btn strong {
+  font-size: 0.92rem;
+}
+
+.settings-reset-btn small {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.settings-reset-btn:hover {
+  border-color: var(--tea-mid);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.settings-reset-btn.danger {
+  border-color: rgba(220, 53, 69, 0.35);
+}
+
+.settings-reset-btn.danger:hover {
+  border-color: #dc3545;
+  background: rgba(220, 53, 69, 0.04);
+}
+
+.settings-reset-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ─── Steps list ─── */
+.settings-steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+/* ─── Toast ─── */
+.settings-toast {
+  position: fixed;
+  bottom: 5.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--tea-deep, #1a3d2f);
+  color: white;
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 1000;
+  animation: fadeInUp 0.3s ease;
+}
+
+/* ─── Confirm dialog ─── */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 20, 25, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 1rem;
+  animation: fadeIn 0.2s ease;
+}
+
+.confirm-dialog {
+  background: var(--surface, white);
+  border-radius: 20px;
+  padding: 1.75rem;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: var(--shadow-md);
+  text-align: center;
+  animation: fadeInUp 0.25s ease;
+}
+
+.confirm-dialog-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.confirm-dialog-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.confirm-dialog-message {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0 0 1.25rem;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  gap: 0.65rem;
+  justify-content: center;
+}
+
+.confirm-dialog-actions .btn {
+  min-width: 100px;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: white;
+  border: none;
+}
+
+.btn-danger:hover {
+  background: #c82333;
+}
+
+.confirm-dialog-danger {
+  border: 1px solid rgba(220, 53, 69, 0.25);
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 900px) {
+  .settings-page .settings-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-tabs {
+    flex-direction: row;
+    overflow-x: auto;
+    position: static;
+    padding: 0.5rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-tab {
+    flex-shrink: 0;
+    padding: 0.6rem 0.85rem;
+    font-size: 0.82rem;
+  }
+
+  .settings-theme-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .settings-reset-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-lang-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .settings-theme-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─── Reduce motion override ─── */
+.reduce-motion-ui *,
+.reduce-motion-ui *::before,
+.reduce-motion-ui *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-tab,
+  .settings-theme-btn,
+  .settings-reset-btn {
+    transition: none;
+  }
+}

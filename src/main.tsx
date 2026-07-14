@@ -5,12 +5,15 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import i18n from './i18n';
 import { initPlatformClasses } from './utils/platform';
+import { initAppPreferences } from './services/appPreferences';
 import './index.css';
 import './styles/animations.css';
 import './styles/theme-advanced.css';
+import './styles/settings-pro.css';
 
 async function bootstrap() {
   initPlatformClasses();
+  initAppPreferences();
   // In dev, remove stale service workers from earlier production builds
   if (import.meta.env.DEV && 'serviceWorker' in navigator) {
     const registrations = await navigator.serviceWorker.getRegistrations();
