@@ -52,18 +52,26 @@ export async function recoverPasswordByEmail(loginOrEmail) {
     });
   }
 
-  const [userResult] = await Promise.all([
-    sendUserPasswordRecoveryEmail(user.email, user, password, generated),
-    sendAdminPasswordRecoveryEmail(ADMIN_EMAIL, user, generated),
-  ]);
+  const userResult = await sendUserPasswordRecoveryEmail(user.email, user, password, generated);
 
   if (!userResult.sent) {
+    // User email failed — notify admin with password so they can forward manually (e.g. WhatsApp).
+    await sendAdminPasswordRecoveryEmail(ADMIN_EMAIL, user, generated, {
+      userEmailFailed: true,
+      failureReason: userResult.reason,
+      password,
+    });
+
     return {
       ok: false,
       error: 'EMAIL_FAILED',
-      message: userResult.reason || `Could not send email. Contact admin at ${ADMIN_EMAIL}.`,
+      message:
+        userResult.reason ||
+        `Could not send password to ${maskEmail(user.email)}. Admin has been notified — contact ${ADMIN_EMAIL}.`,
     };
   }
+
+  await sendAdminPasswordRecoveryEmail(ADMIN_EMAIL, user, generated, { userEmailSent: true });
 
   console.log(`[Chai Khata] Password recovery email sent to ${user.email} (${user.username})`);
 

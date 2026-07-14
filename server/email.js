@@ -13,9 +13,15 @@ export function isResendConfigured() {
   return true;
 }
 
-/** True when admin signup / notification emails can be sent (SMTP or Resend). */
+export function isBrevoConfigured() {
+  const key = String(process.env.BREVO_API_KEY || '').trim();
+  if (!key || /xkeysib-xxx|change-me|example/i.test(key)) return false;
+  return true;
+}
+
+/** True when admin signup / notification emails can be sent (SMTP, Brevo, or Resend). */
 export function isAdminNotificationConfigured() {
-  return isEmailConfigured() || isResendConfigured();
+  return isEmailConfigured() || isBrevoConfigured() || isResendConfigured();
 }
 
 function createTransporter() {
@@ -42,10 +48,62 @@ function isVercelRuntime() {
 }
 
 const VERCEL_SMTP_HINT =
-  'Gmail SMTP cannot send from Vercel (ports 587/465 blocked). Add RESEND_API_KEY + RESEND_FROM in Vercel env, then redeploy. Sign up free at resend.com';
+  'Gmail SMTP cannot send from Vercel (ports 587/465 blocked). Use free Brevo: sign up at brevo.com, verify your Gmail sender, add BREVO_API_KEY + BREVO_FROM in Vercel, redeploy.';
+
+function parseFromAddress(from) {
+  const raw = String(from || '').trim();
+  const match = raw.match(/^(.+?)\s*<([^>]+)>$/);
+  if (match) return { name: match[1].trim(), email: match[2].trim() };
+  if (raw.includes('@')) return { name: 'Patiwala', email: raw };
+  return { name: 'Patiwala', email: process.env.SMTP_USER || 'noreply@patiwala.pk' };
+}
 
 function mailFromAddress() {
-  return process.env.RESEND_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || 'Patiwala <noreply@patiwala.pk>';
+  return process.env.BREVO_FROM || process.env.RESEND_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || 'Patiwala <noreply@patiwala.pk>';
+}
+
+/**
+ * @param {string} to
+ * @param {string} subject
+ * @param {string} text
+ * @param {string} html
+ */
+async function sendViaBrevo(to, subject, text, html) {
+  if (!isBrevoConfigured()) return null;
+
+  const key = String(process.env.BREVO_API_KEY).trim();
+  const sender = parseFromAddress(mailFromAddress());
+
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'api-key': key,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender,
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(formatBrevoError(response.status, body));
+  }
+
+  return { sent: true, via: 'brevo' };
+}
+
+function formatBrevoError(status, body) {
+  const raw = String(body || '');
+  if (status === 403 && /sender.*not.*valid|not verified|unverified/i.test(raw)) {
+    return 'Brevo: verify your sender email at brevo.com → Senders, then set BREVO_FROM to that address in Vercel.';
+  }
+  return `Brevo ${status}: ${raw.slice(0, 180)}`;
 }
 
 /**
@@ -75,10 +133,21 @@ async function sendViaResend(to, subject, text, html) {
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
-    throw new Error(`Resend ${response.status}: ${body.slice(0, 200)}`);
+    throw new Error(formatResendError(response.status, body));
   }
 
   return { sent: true, via: 'resend' };
+}
+
+function formatResendError(status, body) {
+  const raw = String(body || '');
+  if (status === 403 && /only send testing emails to your own email/i.test(raw)) {
+    return 'Resend test mode: verify your domain at resend.com/domains to email all users. Until then, only your Resend account email can receive mail.';
+  }
+  if (status === 403 && /verify a domain/i.test(raw)) {
+    return 'Verify patiwala.pk at resend.com/domains, then set RESEND_FROM to Patiwala <noreply@patiwala.pk> in Vercel.';
+  }
+  return `Resend ${status}: ${raw.slice(0, 180)}`;
 }
 
 /**
@@ -119,10 +188,26 @@ async function sendViaSmtp(to, subject, text, html) {
 async function sendPlainEmail(to, subject, text, html) {
   if (!isAdminNotificationConfigured()) {
     console.log(`[Chai Khata Email → ${to}] ${subject}\n${text}`);
-    return { sent: false, reason: 'Email not configured — add SMTP_* or RESEND_API_KEY to server env' };
+    return { sent: false, reason: 'Email not configured — add SMTP_*, BREVO_API_KEY, or RESEND_API_KEY to server env' };
   }
 
-  // Resend uses HTTPS — works on Vercel. Gmail SMTP ports are blocked on serverless.
+  // Brevo + Resend use HTTPS — work on Vercel. Gmail SMTP ports are blocked on serverless.
+  if (isBrevoConfigured()) {
+    try {
+      const brevoResult = await sendViaBrevo(to, subject, text, html);
+      if (brevoResult?.sent) {
+        console.log(`[Chai Khata] Email sent (Brevo): ${subject} → ${to}`);
+        return brevoResult;
+      }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'Brevo send failed';
+      console.error(`[Chai Khata] Brevo failed for ${to}:`, reason);
+      if (!isResendConfigured() && (!isEmailConfigured() || isVercelRuntime())) {
+        return { sent: false, reason: `Email failed: ${reason}` };
+      }
+    }
+  }
+
   if (isResendConfigured()) {
     try {
       const resendResult = await sendViaResend(to, subject, text, html);
@@ -133,13 +218,13 @@ async function sendPlainEmail(to, subject, text, html) {
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'Resend send failed';
       console.error(`[Chai Khata] Resend failed for ${to}:`, reason);
-      if (!isEmailConfigured() || isVercelRuntime()) {
+      if (!isBrevoConfigured() && (!isEmailConfigured() || isVercelRuntime())) {
         return { sent: false, reason: `Email failed: ${reason}` };
       }
     }
   }
 
-  if (isVercelRuntime() && isEmailConfigured() && !isResendConfigured()) {
+  if (isVercelRuntime() && isEmailConfigured() && !isBrevoConfigured() && !isResendConfigured()) {
     return { sent: false, reason: VERCEL_SMTP_HINT };
   }
 
@@ -152,8 +237,24 @@ async function sendPlainEmail(to, subject, text, html) {
   } catch (err) {
     const reason = err instanceof Error ? err.message : 'SMTP send failed';
     console.warn(`[Chai Khata] SMTP failed for ${to}: ${reason}`);
-    if (!isResendConfigured()) {
+    if (!isBrevoConfigured() && !isResendConfigured()) {
       return { sent: false, reason: `SMTP failed: ${reason}` };
+    }
+  }
+
+  if (isBrevoConfigured()) {
+    try {
+      const brevoResult = await sendViaBrevo(to, subject, text, html);
+      if (brevoResult?.sent) {
+        console.log(`[Chai Khata] Email sent (Brevo fallback): ${subject} → ${to}`);
+        return brevoResult;
+      }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'Brevo send failed';
+      console.error(`[Chai Khata] Brevo failed for ${to}:`, reason);
+      if (!isResendConfigured()) {
+        return { sent: false, reason: `Email failed: ${reason}` };
+      }
     }
   }
 
@@ -190,8 +291,8 @@ export async function sendOtpEmail(to, otp, username, introLine) {
   `;
 
   if (!isAdminNotificationConfigured()) {
-    console.log(`[Chai Khata OTP → email ${to}] User: ${username}, OTP: ${otp} (email not configured — add SMTP_* or RESEND_API_KEY)`);
-    return { sent: false, reason: 'Email not configured on server — add SMTP or Resend settings' };
+    console.log(`[Chai Khata OTP → email ${to}] User: ${username}, OTP: ${otp} (email not configured — add SMTP, Brevo, or Resend settings)`);
+    return { sent: false, reason: 'Email not configured on server — add SMTP or Brevo settings' };
   }
 
   return sendPlainEmail(to, subject, text, html);
@@ -352,21 +453,56 @@ If you did not request this, contact admin immediately.
   return sendPlainEmail(to, subject, text, html);
 }
 
-/** @param {string} adminEmail @param {import('./store.js').UserRecord} user @param {boolean} [wasGenerated] */
-export async function sendAdminPasswordRecoveryEmail(adminEmail, user, wasGenerated = false) {
-  const subject = `[Patiwala] Password recovery — ${user.username}`;
+/**
+ * @param {string} adminEmail
+ * @param {import('./store.js').UserRecord} user
+ * @param {boolean} [wasGenerated]
+ * @param {{ userEmailSent?: boolean, userEmailFailed?: boolean, failureReason?: string, password?: string }} [opts]
+ */
+export async function sendAdminPasswordRecoveryEmail(adminEmail, user, wasGenerated = false, opts = {}) {
+  const { userEmailSent, userEmailFailed, failureReason, password } = opts;
+
+  const subject = userEmailFailed
+    ? `[Patiwala] ACTION NEEDED — password not delivered to ${user.username}`
+    : `[Patiwala] Password recovery — ${user.username}`;
+
+  const deliveryNote = userEmailFailed
+    ? `FAILED to email user (${failureReason || 'unknown error'}).
+Send the password to ${user.email} manually (WhatsApp / phone).`
+    : userEmailSent
+      ? 'Password was sent to their registered email successfully.'
+      : 'Password recovery requested.';
+
+  const passwordBlock =
+    userEmailFailed && password
+      ? `\nPassword to send manually: ${password}\n`
+      : '';
+
   const text = `Password recovery requested
 
 Username: ${user.username}
 Email:    ${user.email}
 Phone:    ${user.phone || '—'}
 Shop:     ${user.shopName || '—'}
-${wasGenerated ? 'Note: A new temporary password was generated and emailed to the user.' : 'Note: Stored signup password was emailed to the user.'}`;
+${passwordBlock}
+${deliveryNote}
+${wasGenerated ? 'Note: A new temporary password was generated.' : ''}`;
+
+  const passwordHtml =
+    userEmailFailed && password
+      ? `<p><strong>Send this password to the user manually:</strong></p>
+         <p><code style="font-size:18px;color:#b45309">${password}</code></p>`
+      : '';
+
+  const statusHtml = userEmailFailed
+    ? `<p style="color:#b45309"><strong>User did NOT receive the email.</strong> ${failureReason || ''}</p>`
+    : '<p>Password was sent to their registered email.</p>';
 
   return sendAdminPlainEmail(adminEmail, subject, text, `
     <h2>Password recovery requested</h2>
     <p><strong>${user.username}</strong> (${user.email}) requested their password.</p>
-    <p>Password was sent to their registered email.</p>
+    ${statusHtml}
+    ${passwordHtml}
     ${wasGenerated ? '<p><em>A new temporary password was generated.</em></p>' : ''}
   `);
 }
