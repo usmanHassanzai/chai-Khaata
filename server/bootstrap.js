@@ -30,15 +30,33 @@ function supabaseConfigHint() {
   return 'Use the Secret key (sb_secret_… or legacy service_role JWT), not the Publishable key.';
 }
 
-/** Creates default admin in Supabase on first API call. */
+/** Creates default admin on first API call (Supabase or local file storage). */
 export async function ensureBootstrapAdmin() {
+  const adminEmail = String(process.env.ADMIN_EMAIL || 'usmankhan14700@gmail.com').trim().toLowerCase();
+  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+  const passwordHash = await bcrypt.hash(adminPassword, 10);
+
   if (!isSupabaseEnabled()) {
-    return {
-      ok: false,
-      storage: 'file',
-      error: 'Supabase not connected — server is using temporary file storage',
-      hint: supabaseConfigHint(),
-    };
+    try {
+      const admin = await ensureDefaultAdmin(adminEmail, passwordHash);
+      bootstrapped = true;
+      return {
+        ok: true,
+        storage: 'file',
+        email: admin.email,
+        username: admin.username,
+        role: admin.role,
+        status: admin.status,
+        hint: 'Local dev mode — add SUPABASE_* to .env for production cloud sync',
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        storage: 'file',
+        error: formatError(err),
+        hint: 'Could not create local admin user. Check server/data folder permissions.',
+      };
+    }
   }
 
   const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '');

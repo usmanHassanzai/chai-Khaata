@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
 import { useAuth } from '../context/AuthContext';
 import { Label } from '../i18n/useLabel';
-import { ApiError, authHealth, isNativeAuthMode } from '../services/authApi';
+import { ApiError, authHealth, getApiBase, isNativeAuthMode } from '../services/authApi';
 
 export default function Login() {
   const { user, login } = useAuth();
@@ -51,11 +51,19 @@ export default function Login() {
         }
       } else {
         setServerOnline(false);
-        setError(
-          isNativeAuthMode()
-            ? 'Could not start the app. Please close and reopen Chai Khata.'
-            : 'Cannot reach the server. Run npm run dev for local testing.',
-        );
+        const base = getApiBase();
+        const isLocal = typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.hostname);
+        if (isLocal) {
+          setError('Cannot reach auth server. Run: npm run dev (starts server + app together).');
+        } else if (base && !base.includes(window.location.hostname)) {
+          setError(`Cannot reach server at ${base}. Check Cloud Sync URL in Settings, or use the live site.`);
+        } else {
+          setError(
+            isNativeAuthMode()
+              ? 'Could not start the app. Please close and reopen Chai Khata.'
+              : 'Cannot reach the server. Check your internet connection and try again.',
+          );
+        }
       }
     } finally {
       setSubmitting(false);
@@ -72,7 +80,10 @@ export default function Login() {
 
       {serverOnline === false && !isNativeAuthMode() && (
         <div className="auth-banner error">
-          API server offline. Run <code>npm run dev</code> in terminal.
+          API server offline. In terminal run: <code>cd ~/chai-khaata && npm run dev</code>
+          {getApiBase() && !/localhost|127\.0\.0\.1/.test(window.location.hostname) && (
+            <span> — or fix Cloud Sync URL in Settings.</span>
+          )}
         </div>
       )}
 

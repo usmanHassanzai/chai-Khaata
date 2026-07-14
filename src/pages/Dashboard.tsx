@@ -44,23 +44,24 @@ export default function Dashboard() {
       <QuickActions />
 
       <div className="stat-grid">
-        <StatCard labelKey="dashboard.todaySale" value={formatCurrency(stats.todaySale)} accent="green" />
-        <StatCard labelKey="dashboard.monthSale" value={formatCurrency(stats.monthSale)} accent="blue" />
-        <StatCard labelKey="dashboard.yearSale" value={formatCurrency(stats.yearSale)} accent="blue" />
-        <StatCard labelKey="dashboard.monthProfit" value={formatCurrency(stats.monthProfit)} accent="amber" />
-        <StatCard labelKey="dashboard.stockValue" value={formatCurrency(stats.stockValue)} accent="brown" />
-        <StatCard labelKey="dashboard.customerDues" value={formatCurrency(stats.customerDues)} accent="red" />
-        <StatCard labelKey="dashboard.dealerDues" value={formatCurrency(stats.dealerDues)} accent="red" />
+        <StatCard labelKey="dashboard.todaySale" value={formatCurrency(stats.todaySale)} accent="green" delay={0} />
+        <StatCard labelKey="dashboard.monthSale" value={formatCurrency(stats.monthSale)} accent="blue" delay={50} />
+        <StatCard labelKey="dashboard.yearSale" value={formatCurrency(stats.yearSale)} accent="blue" delay={100} />
+        <StatCard labelKey="dashboard.monthProfit" value={formatCurrency(stats.monthProfit)} accent="amber" delay={150} />
+        <StatCard labelKey="dashboard.stockValue" value={formatCurrency(stats.stockValue)} accent="brown" delay={200} />
+        <StatCard labelKey="dashboard.customerDues" value={formatCurrency(stats.customerDues)} accent="red" delay={250} />
+        <StatCard labelKey="dashboard.dealerDues" value={formatCurrency(stats.dealerDues)} accent="red" delay={300} />
         <StatCard
           labelKey="dashboard.lowStockAlerts"
           value={String(stats.lowStockCount)}
           accent={stats.lowStockCount > 0 ? 'red' : 'green'}
+          delay={350}
         />
       </div>
 
       <TeaShowcase />
 
-      <section className="card-section dashboard-recent animate-fade-in-up stagger-4">
+      <section className="card-section dashboard-recent pak-accent-border card-premium animate-fade-in-up stagger-4">
         <SectionTitle k="dashboard.recentSales" />
         {stats.recentSales.length === 0 ? (
           <p className="empty">{l('common.noData')}</p>

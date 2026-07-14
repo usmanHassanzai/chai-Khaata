@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { Label } from '../i18n/useLabel';
 
 const ICONS: Record<string, string> = {
@@ -6,6 +7,14 @@ const ICONS: Record<string, string> = {
   red: '⚠️',
   blue: '📈',
   brown: '📦',
+};
+
+const TEA_BG: Record<string, string> = {
+  green: '/images/tea/green-mint-chai.jpg',
+  amber: '/images/tea/kashmiri-chai.jpg',
+  red: '/images/tea/sada-chai.jpg',
+  blue: '/images/tea/karak-chai.jpg',
+  brown: '/images/tea/tea-leaves.svg',
 };
 
 interface StatCardProps {
@@ -18,9 +27,14 @@ interface StatCardProps {
 export default function StatCard({ labelKey, value, accent = 'green', delay = 0 }: StatCardProps) {
   return (
     <div
-      className={`stat-card stat-${accent} animate-fade-in-up`}
-      style={{ animationDelay: `${delay}ms` }}
+      className={`stat-card stat-${accent} stat-card-premium animate-fade-in-up`}
+      style={{
+        animationDelay: `${delay}ms`,
+        '--stat-tea-bg': `url(${TEA_BG[accent]})`,
+      } as CSSProperties}
     >
+      <div className="stat-card-tea-bg" aria-hidden />
+      <div className="stat-card-shine" aria-hidden />
       <div className="stat-card-top">
         <span className="stat-icon">{ICONS[accent] ?? '📊'}</span>
         <span className="stat-label">

@@ -1,0 +1,519 @@
+/* ═══════════════════════════════════════════
+   Patiwala — Interior Pro (Pakistani Tea Theme)
+   ═══════════════════════════════════════════ */
+
+/* ─── Ambient interior backdrop ─── */
+.main-content {
+  position: relative;
+  overflow: hidden;
+}
+
+.app-interior {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.app-interior-pattern {
+  position: absolute;
+  inset: 0;
+  opacity: 0.04;
+  background-image:
+    radial-gradient(circle at 20% 30%, var(--tea-primary) 1px, transparent 1px),
+    radial-gradient(circle at 80% 70%, var(--gold) 1px, transparent 1px);
+  background-size: 48px 48px, 64px 64px;
+}
+
+.app-interior-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.35;
+  animation: glowDrift 12s ease-in-out infinite;
+}
+
+.app-interior-glow-a {
+  width: 320px;
+  height: 320px;
+  background: rgba(45, 106, 79, 0.25);
+  top: -80px;
+  right: -60px;
+}
+
+.app-interior-glow-b {
+  width: 280px;
+  height: 280px;
+  background: rgba(212, 168, 83, 0.2);
+  bottom: 10%;
+  left: -40px;
+  animation-delay: -6s;
+}
+
+.floating-leaf {
+  position: absolute;
+  top: 10%;
+  font-size: 1.25rem;
+  opacity: 0.2;
+  animation: leafDrift linear infinite;
+  z-index: 0;
+}
+
+.app-interior-featured {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 1rem;
+  width: 88px;
+  height: 88px;
+  border-radius: 18px;
+  overflow: hidden;
+  opacity: 0.12;
+  box-shadow: var(--shadow-lg);
+  transform: rotate(6deg);
+  transition: opacity 0.5s;
+}
+
+.app-interior-featured img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.app-interior-featured-label {
+  display: none;
+}
+
+.page-container {
+  position: relative;
+  z-index: 1;
+}
+
+.page-enter {
+  animation: pageEnter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ─── Sidebar tea strip ─── */
+.sidebar-logo-wrap {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.sidebar-logo-img {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.sidebar-logo-steam {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 0.85rem;
+  animation: float 3s ease-in-out infinite;
+}
+
+.sidebar-tea-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0.75rem 0.85rem 1rem;
+  padding: 0.55rem 0.65rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.sidebar-tea-strip img {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.sidebar-tea-strip strong {
+  display: block;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.95);
+  line-height: 1.2;
+}
+
+.sidebar-tea-strip small {
+  font-size: 0.65rem;
+  font-family: 'Noto Nastaliq Urdu', serif;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* ─── Tea image frame ─── */
+.tea-image-frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tea-image-frame-sm { width: 80px; height: 80px; }
+.tea-image-frame-md { width: 160px; height: 160px; }
+.tea-image-frame-lg { width: 220px; height: 220px; }
+
+.tea-image-frame-ring {
+  position: absolute;
+  inset: -8px;
+  border-radius: 28px;
+  border: 2px dashed rgba(255, 255, 255, 0.25);
+  animation: spin 24s linear infinite;
+}
+
+.tea-image-frame-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  border: 3px solid rgba(255, 255, 255, 0.3);
+}
+
+.tea-image-frame-steam {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* ─── Premium dashboard hero ─── */
+.dashboard-hero-premium {
+  min-height: 300px;
+}
+
+.dashboard-hero-bg-photo {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.18;
+  filter: saturate(1.1);
+}
+
+.dashboard-hero-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hero-particle {
+  position: absolute;
+  font-size: 1.5rem;
+  opacity: 0.25;
+  animation: particleFloat 6s ease-in-out infinite;
+}
+
+.hero-particle:nth-child(1) { top: 15%; left: 8%; }
+.hero-particle:nth-child(2) { top: 25%; right: 12%; animation-delay: 1s; }
+.hero-particle:nth-child(3) { bottom: 20%; left: 15%; animation-delay: 2s; }
+.hero-particle:nth-child(4) { bottom: 30%; right: 20%; animation-delay: 0.5s; }
+
+.hero-stat-glow {
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+/* ─── Photo page banners ─── */
+.page-banner-photo {
+  position: relative;
+  overflow: hidden;
+  min-height: 110px;
+  border: none;
+}
+
+.page-banner-bg {
+  position: absolute;
+  inset: 0;
+  background-image: var(--banner-image);
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.05);
+  transition: transform 8s ease;
+}
+
+.page-banner-photo:hover .page-banner-bg {
+  transform: scale(1.12);
+}
+
+.page-banner-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    rgba(26, 61, 47, 0.92) 0%,
+    rgba(45, 106, 79, 0.78) 45%,
+    rgba(26, 61, 47, 0.55) 100%
+  );
+}
+
+.page-banner-gold .page-banner-overlay {
+  background: linear-gradient(105deg, rgba(92, 64, 20, 0.9), rgba(184, 115, 51, 0.75));
+}
+
+.page-banner-blue .page-banner-overlay {
+  background: linear-gradient(105deg, rgba(30, 58, 95, 0.9), rgba(37, 99, 235, 0.7));
+}
+
+.page-banner-brown .page-banner-overlay {
+  background: linear-gradient(105deg, rgba(60, 40, 25, 0.92), rgba(139, 90, 43, 0.75));
+}
+
+.page-banner-photo .page-banner-icon,
+.page-banner-photo .page-banner-text,
+.page-banner-photo .page-banner-steam {
+  position: relative;
+  z-index: 2;
+}
+
+.page-banner-photo .page-banner-title,
+.page-banner-photo .page-banner-sub {
+  color: white;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+.page-banner-shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  animation: bannerShine 6s ease-in-out infinite;
+  z-index: 1;
+}
+
+/* ─── Premium stat cards ─── */
+.stat-card-premium {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s;
+}
+
+.stat-card-premium::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--tea-primary), var(--gold), var(--tea-light));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.stat-card-premium:hover {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 16px 40px rgba(26, 61, 47, 0.15);
+}
+
+.stat-card-premium:hover::before {
+  opacity: 1;
+}
+
+.stat-card-tea-bg {
+  position: absolute;
+  inset: 0;
+  background-image: var(--stat-tea-bg);
+  background-size: cover;
+  background-position: center;
+  opacity: 0.06;
+  transition: opacity 0.4s;
+}
+
+.stat-card-premium:hover .stat-card-tea-bg {
+  opacity: 0.14;
+}
+
+.stat-card-shine {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(from 0deg, transparent, rgba(255, 255, 255, 0.03), transparent);
+  animation: spin 8s linear infinite;
+  pointer-events: none;
+}
+
+.stat-card-premium .stat-card-top,
+.stat-card-premium .stat-value {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── Premium cards & tables ─── */
+.card,
+.form-card,
+.card-section {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s;
+}
+
+.card:hover,
+.form-card:hover {
+  box-shadow: 0 12px 36px rgba(26, 61, 47, 0.1);
+}
+
+.card-premium {
+  border: 1px solid rgba(45, 106, 79, 0.1);
+  background: linear-gradient(145deg, var(--surface) 0%, var(--surface-2) 100%);
+}
+
+.table-wrap tbody tr {
+  transition: background 0.2s, transform 0.2s;
+}
+
+.table-wrap tbody tr:hover {
+  background: rgba(45, 106, 79, 0.05);
+}
+
+/* ─── Tea showcase upgrades ─── */
+.tea-showcase-card {
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.4s;
+}
+
+.tea-showcase-card.is-active {
+  transform: translateY(-8px) scale(1.03);
+  box-shadow: 0 20px 48px rgba(26, 61, 47, 0.18);
+}
+
+.tea-showcase-img-wrap img {
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tea-showcase-card.is-active .tea-showcase-img-wrap img,
+.tea-showcase-card:hover .tea-showcase-img-wrap img {
+  transform: scale(1.08);
+}
+
+.tea-showcase-body p {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.tea-showcase-region {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--tea-primary);
+  background: rgba(45, 106, 79, 0.1);
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  margin: 0.25rem 0;
+}
+
+/* ─── Quick actions ripple ─── */
+.quick-action-card {
+  transition: transform 0.3s, box-shadow 0.3s, background 0.3s;
+}
+
+.quick-action-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(45, 106, 79, 0.15);
+}
+
+.quick-action-card:active {
+  transform: scale(0.96);
+}
+
+/* ─── Nav link polish ─── */
+.nav-link {
+  transition: background 0.25s, transform 0.2s, padding-left 0.25s;
+}
+
+.nav-link:hover {
+  transform: translateX(4px);
+}
+
+.nav-link.active {
+  animation: navPop 0.4s ease;
+}
+
+.bottom-link {
+  transition: transform 0.25s;
+}
+
+.bottom-link.active .bottom-icon {
+  animation: navPop 0.35s ease;
+}
+
+/* ─── Buttons ─── */
+.btn.primary {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.25s;
+}
+
+.btn.primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.15) 50%, transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 0.5s;
+}
+
+.btn.primary:hover::after {
+  transform: translateX(100%);
+}
+
+.btn.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(45, 106, 79, 0.35);
+}
+
+/* ─── Pakistani truck-art accent border ─── */
+.pak-accent-border {
+  position: relative;
+}
+
+.pak-accent-border::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: repeating-linear-gradient(
+    90deg,
+    #2d6a4f,
+    #2d6a4f 12px,
+    #d4a853 12px,
+    #d4a853 24px,
+    #c45c7a 24px,
+    #c45c7a 36px,
+    #40916c 36px,
+    #40916c 48px
+  );
+}
+
+@media (max-width: 900px) {
+  .app-interior-featured,
+  .sidebar-tea-strip {
+    display: none;
+  }
+
+  .dashboard-hero-premium {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .app-interior-glow,
+  .hero-particle,
+  .page-banner-shine,
+  .stat-card-shine {
+    animation: none !important;
+  }
+}

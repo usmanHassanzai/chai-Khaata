@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { authApi } from '../services/authApi';
 import { isCloudSyncEnabled } from '../services/cloudConfig';
 import { onSyncStatus, type SyncStatus } from '../services/ledgerSync';
+import AppInterior from './AppInterior';
+import { TEA_GALLERY } from '../data/teaGallery';
 import { Label } from '../i18n/useLabel';
 import { getLabel } from '../i18n/labels';
 import { useLabelMode } from '../i18n/useLabel';
@@ -43,6 +45,15 @@ export default function Layout() {
   const [pendingCount, setPendingCount] = useState(0);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
 
+  const [sidebarTea, setSidebarTea] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setSidebarTea((i) => (i + 1) % TEA_GALLERY.length);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const isAdmin = user?.role === 'admin';
   const mobilePageTitle = pageTitleFromPath(location.pathname, mode);
 
@@ -75,10 +86,25 @@ export default function Layout() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div className="sidebar-logo">🍵</div>
+          <div className="sidebar-logo-wrap">
+            <img
+              src={TEA_GALLERY[sidebarTea].image}
+              alt=""
+              className="sidebar-logo-img animate-scale-in"
+            />
+            <span className="sidebar-logo-steam" aria-hidden>🍵</span>
+          </div>
           <div className="sidebar-brand-text">
             <span className="sidebar-brand-name"><Label k="appName" variant="compact" /></span>
-            <span className="sidebar-brand-tag">Patiwala Ledger</span>
+            <span className="sidebar-brand-tag">Patiwala · Pakistan</span>
+          </div>
+        </div>
+
+        <div className="sidebar-tea-strip animate-fade-in-up">
+          <img src={TEA_GALLERY[sidebarTea].image} alt="" />
+          <div>
+            <strong>{TEA_GALLERY[sidebarTea].name}</strong>
+            <small>{TEA_GALLERY[sidebarTea].nameUr}</small>
           </div>
         </div>
 
@@ -160,7 +186,8 @@ export default function Layout() {
         </header>
 
         <main className="main-content">
-          <div key={location.pathname} className="page-container">
+          <AppInterior />
+          <div key={location.pathname} className="page-container page-enter">
             <Outlet />
           </div>
         </main>

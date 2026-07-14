@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "dev:web": "vite --host",
+    "dev:web": "echo '⚠️  Use npm run dev instead (starts auth server + app). Starting web only...' && vite --host",
     "dev:server": "node server/index.js",
     "dev:all": "node scripts/dev.mjs",
     "free-ports": "bash scripts/free-ports.sh",
@@ -20,6 +20,7 @@
     "deploy:render": "node scripts/deploy-render.mjs",
     "deploy:vercel": "node scripts/deploy-vercel.mjs",
     "deploy:domain": "node scripts/setup-domain.mjs",
+    "seed:local-admin": "node scripts/seed-local-admin.mjs",
     "test:twilio": "node scripts/test-twilio.mjs",
     "setup:twilio": "node scripts/setup-twilio.mjs",
     "cap:sync": "cap sync",

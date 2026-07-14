@@ -14,8 +14,8 @@ export default function TeaShowcase() {
   return (
     <section className="tea-showcase animate-fade-in-up stagger-2" aria-label="Tea varieties">
       <div className="tea-showcase-header">
-        <h3 className="tea-showcase-title">Our Tea Collection</h3>
-        <p className="tea-showcase-sub">Premium blends for your dukaan</p>
+        <h3 className="tea-showcase-title">Pakistani Tea Collection</h3>
+        <p className="tea-showcase-sub">Kashmiri · Karak · Doodh Patti — premium blends</p>
       </div>
 
       <div className="tea-showcase-grid">
@@ -39,6 +39,7 @@ export default function TeaShowcase() {
             <div className="tea-showcase-body">
               <strong>{tea.name}</strong>
               <span className="tea-showcase-ur">{tea.nameUr}</span>
+              {tea.region && <span className="tea-showcase-region">{tea.region}</span>}
               <p>{tea.description}</p>
             </div>
           </article>

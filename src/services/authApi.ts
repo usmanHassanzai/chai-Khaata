@@ -90,6 +90,14 @@ import { ApiError, getStoredToken } from './authCommon';
 import { getCloudApiUrl } from './cloudConfig';
 
 function apiBase(): string {
+  // Local dev: always use Vite proxy (same origin) — avoids broken cloud URLs like patiwala.pk
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return origin;
+    }
+  }
+
   const cloud = getCloudApiUrl();
   if (cloud) return cloud;
   const env = import.meta.env.VITE_API_URL as string | undefined;
@@ -298,12 +306,26 @@ export async function authHealth(): Promise<boolean> {
       return false;
     }
   }
-  try {
-    const res = await fetch(`${getApiBase()}/api/health`);
-    return res.ok;
-  } catch {
-    return false;
+
+  const bases: string[] = [];
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      bases.push(origin);
+    }
   }
+  const primary = getApiBase();
+  if (primary && !bases.includes(primary)) bases.push(primary);
+
+  for (const base of bases) {
+    try {
+      const res = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(6000) });
+      if (res.ok) return true;
+    } catch {
+      /* try next base */
+    }
+  }
+  return false;
 }
 
 export const authApi = new Proxy({} as typeof remoteAuthApi, {
