@@ -110,12 +110,13 @@ export interface AuthResponse {
 export { ApiError, getStoredToken, setStoredToken } from './authCommon';
 import { ApiError, getStoredToken, notifyAuthSessionInvalid } from './authCommon';
 import { getCloudApiUrl } from './cloudConfig';
+import { isLocalDevHost } from '../utils/authErrors';
 
 function apiBase(): string {
-  // Local dev: always use Vite proxy (same origin) — avoids broken cloud URLs like patiwala.pk
+  // Vite dev/preview: always use same-origin proxy (localhost, LAN IP, etc.)
   if (import.meta.env.DEV && typeof window !== 'undefined') {
-    const origin = window.location.origin;
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+    const { origin, port } = window.location;
+    if (port === '5173' || port === '5174' || port === '4173' || isLocalDevHost()) {
       return origin;
     }
   }
@@ -141,11 +142,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${apiBase()}${path}`, { ...options, headers });
-  } catch (err) {
-    const isLocal = typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.hostname);
+  } catch {
     throw new ApiError(
       'NETWORK_ERROR',
-      isLocal
+      isLocalDevHost()
         ? 'Cannot reach server. Run: npm run dev'
         : 'Cannot reach server. Check internet or Cloud Sync URL in Settings.',
     );
@@ -171,14 +171,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const code = (data.error as string) ?? 'REQUEST_FAILED';
+    let message = (data.message as string) ?? `Request failed (${res.status})`;
+    if (/fetch failed|typeerror/i.test(message)) {
+      message = isLocalDevHost()
+        ? 'Cannot reach auth server. Run: npm run dev'
+        : 'Server connection failed. Check internet or Cloud Sync URL in Settings.';
+    }
     if (res.status === 401 && (code === 'UNAUTHORIZED' || code === 'INVALID_TOKEN')) {
       notifyAuthSessionInvalid();
     }
-    throw new ApiError(
-      code,
-      (data.message as string) ?? `Request failed (${res.status})`,
-      data.user as AuthUser | undefined,
-    );
+    throw new ApiError(code, message, data.user as AuthUser | undefined);
   }
 
   return data as T;
@@ -364,8 +366,8 @@ export async function authHealth(): Promise<boolean> {
 
   const bases: string[] = [];
   if (import.meta.env.DEV && typeof window !== 'undefined') {
-    const origin = window.location.origin;
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+    const { origin, port } = window.location;
+    if (port === '5173' || port === '5174' || port === '4173' || isLocalDevHost()) {
       bases.push(origin);
     }
   }

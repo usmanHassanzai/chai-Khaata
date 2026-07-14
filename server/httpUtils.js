@@ -30,6 +30,15 @@ export async function readJsonBody(req) {
   return JSON.parse(raw);
 }
 
+/** Map internal errors to safe login messages for the client. */
+export function sanitizeAuthErrorMessage(err) {
+  const msg = err instanceof Error ? err.message : String(err || '');
+  if (/fetch failed|econnrefused|enotfound|etimedout|network/i.test(msg)) {
+    return 'Server could not reach the database. Please try again in a moment.';
+  }
+  return msg || 'Could not login';
+}
+
 export function withTimeout(promise, ms, label = 'Operation') {
   return Promise.race([
     promise,

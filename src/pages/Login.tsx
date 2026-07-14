@@ -4,6 +4,7 @@ import AuthLayout from '../components/AuthLayout';
 import { useAuth } from '../context/AuthContext';
 import { Label } from '../i18n/useLabel';
 import { ApiError, authHealth, getApiBase, isNativeAuthMode } from '../services/authApi';
+import { friendlyAuthError, isLocalDevHost } from '../utils/authErrors';
 
 export default function Login() {
   const { user, login } = useAuth();
@@ -46,15 +47,19 @@ export default function Login() {
           navigate('/subscription-renew', { replace: true });
         } else if (err.code === 'SERVER_CONFIG') {
           setError(`${err.message}. Fix SUPABASE_SERVICE_ROLE_KEY in Vercel — use Secret key (sb_secret_…), then Redeploy.`);
+        } else if (err.code === 'INVALID_CREDENTIALS') {
+          setError('Invalid email or password');
+        } else if (err.code === 'NETWORK_ERROR') {
+          setError(friendlyAuthError(err));
+          setServerOnline(false);
         } else {
-          setError(err.message);
+          setError(friendlyAuthError(err));
         }
       } else {
         setServerOnline(false);
         const base = getApiBase();
-        const isLocal = typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.hostname);
-        if (isLocal) {
-          setError('Cannot reach auth server. Run: npm run dev (starts server + app together).');
+        if (isLocalDevHost()) {
+          setError('Cannot reach auth server. Run: cd ~/chai-khaata && npm run dev');
         } else if (base && !base.includes(window.location.hostname)) {
           setError(`Cannot reach server at ${base}. Check Cloud Sync URL in Settings, or use the live site.`);
         } else {

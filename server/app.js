@@ -558,7 +558,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(503).json({ error: code, message: err.message, hint: err.hint });
     }
     console.error('Login error:', err);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not login' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: sanitizeAuthErrorMessage(err) });
   }
 });
 

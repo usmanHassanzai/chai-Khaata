@@ -38,6 +38,10 @@ export async function notifyAdminPendingLogin(adminEmail, user) {
   → Review payment screenshot in Admin → Approvals`,
   );
 
-  const { sendAdminPendingLoginEmail } = await import('./email.js');
-  await sendAdminPendingLoginEmail(adminEmail, user);
+  try {
+    const { sendAdminPendingLoginEmail } = await import('./email.js');
+    await sendAdminPendingLoginEmail(adminEmail, user);
+  } catch (err) {
+    console.warn('[Chai Khata] Admin pending-login email failed:', err);
+  }
 }

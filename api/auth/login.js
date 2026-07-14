@@ -1,5 +1,5 @@
 import { performLogin } from '../../server/authLogin.js';
-import { readJsonBody, sendJson, setCors } from '../../server/httpUtils.js';
+import { readJsonBody, sendJson, setCors, sanitizeAuthErrorMessage } from '../../server/httpUtils.js';
 
 export default async function handler(req, res) {
   setCors(res);
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
 
     sendJson(res, status, {
       error: code,
-      message: err instanceof Error ? err.message : 'Login failed',
+      message: code === 'SERVER_ERROR' ? sanitizeAuthErrorMessage(err) : (err instanceof Error ? err.message : 'Login failed'),
       user: err?.user,
       hint: code === 'SERVER_CONFIG'
         ? 'Fix SUPABASE_SERVICE_ROLE_KEY in Vercel (use Secret key sb_secret_…), then Redeploy'
