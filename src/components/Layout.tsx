@@ -85,57 +85,61 @@ export default function Layout() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="sidebar-brand">
-          <div className="sidebar-logo-wrap">
-            <img
-              src={TEA_GALLERY[sidebarTea].image}
-              alt=""
-              className="sidebar-logo-img animate-scale-in"
-            />
-            <span className="sidebar-logo-steam" aria-hidden>🍵</span>
+        <div className="sidebar-top">
+          <div className="sidebar-brand">
+            <div className="sidebar-logo-wrap">
+              <img
+                src={TEA_GALLERY[sidebarTea].image}
+                alt=""
+                className="sidebar-logo-img animate-scale-in"
+              />
+              <span className="sidebar-logo-steam" aria-hidden>🍵</span>
+            </div>
+            <div className="sidebar-brand-text">
+              <span className="sidebar-brand-name"><Label k="appName" variant="compact" /></span>
+              <span className="sidebar-brand-tag">Patiwala · Pakistan</span>
+            </div>
           </div>
-          <div className="sidebar-brand-text">
-            <span className="sidebar-brand-name"><Label k="appName" variant="compact" /></span>
-            <span className="sidebar-brand-tag">Patiwala · Pakistan</span>
+
+          <div className="sidebar-tea-strip animate-fade-in-up">
+            <img src={TEA_GALLERY[sidebarTea].image} alt="" />
+            <div>
+              <strong>{TEA_GALLERY[sidebarTea].name}</strong>
+              <small>{TEA_GALLERY[sidebarTea].nameUr}</small>
+            </div>
           </div>
         </div>
 
-        <div className="sidebar-tea-strip animate-fade-in-up">
-          <img src={TEA_GALLERY[sidebarTea].image} alt="" />
-          <div>
-            <strong>{TEA_GALLERY[sidebarTea].name}</strong>
-            <small>{TEA_GALLERY[sidebarTea].nameUr}</small>
-          </div>
+        <div className="sidebar-scroll">
+          <p className="sidebar-section-label">Menu</p>
+          <nav className="sidebar-nav">
+            {mainLinks.map(({ to, key, icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                <span className="nav-icon-wrap">{icon}</span>
+                <span className="nav-text">
+                  <Label k={`nav.${key}`} variant="stacked" />
+                </span>
+              </NavLink>
+            ))}
+            {isAdmin && (
+              <NavLink
+                to={adminLink.to}
+                className={({ isActive }) => `nav-link nav-link-admin${isActive ? ' active' : ''}`}
+              >
+                <span className="nav-icon-wrap">{adminLink.icon}</span>
+                <span className="nav-text">
+                  <Label k={`nav.${adminLink.key}`} variant="stacked" />
+                  {pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}
+                </span>
+              </NavLink>
+            )}
+          </nav>
         </div>
-
-        <p className="sidebar-section-label">Menu</p>
-        <nav className="sidebar-nav">
-          {mainLinks.map(({ to, key, icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-            >
-              <span className="nav-icon-wrap">{icon}</span>
-              <span className="nav-text">
-                <Label k={`nav.${key}`} variant="stacked" />
-              </span>
-            </NavLink>
-          ))}
-          {isAdmin && (
-            <NavLink
-              to={adminLink.to}
-              className={({ isActive }) => `nav-link nav-link-admin${isActive ? ' active' : ''}`}
-            >
-              <span className="nav-icon-wrap">{adminLink.icon}</span>
-              <span className="nav-text">
-                <Label k={`nav.${adminLink.key}`} variant="stacked" />
-                {pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}
-              </span>
-            </NavLink>
-          )}
-        </nav>
 
         <div className="sidebar-footer">
           <NavLink
