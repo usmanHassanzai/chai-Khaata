@@ -50,6 +50,7 @@ export function validateSupabaseConfig() {
 
 /** Use Supabase only when credentials are real and valid (not .env placeholders). */
 export function isSupabaseEnabled() {
+  if (process.env.STORAGE === 'file' || process.env.USE_FILE_STORAGE === 'true') return false;
   if (!supabaseEnvPresent()) return false;
   return validateSupabaseConfig().ok;
 }

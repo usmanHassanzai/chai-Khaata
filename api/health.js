@@ -1,23 +1,25 @@
-export default async function handler(_req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+import { ensureBootstrapAdmin } from '../server/bootstrap.js';
+import { getStorageMode, validateSupabaseConfig } from '../server/supabase.js';
+import { setCors } from '../server/httpUtils.js';
 
-  const hasSupabase = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
-  const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '');
-  let keyOk = hasSupabase && !key.startsWith('sb_publishable_');
+export default async function handler(_req, res) {
+  setCors(res);
+  const bootstrap = await ensureBootstrapAdmin();
+  const storage = getStorageMode();
+  const configCheck = validateSupabaseConfig();
 
   res.statusCode = 200;
   res.end(JSON.stringify({
-    ok: true,
+    ok: bootstrap.ok !== false,
     service: 'chai-khata-auth',
     sync: true,
-    storage: hasSupabase ? 'supabase' : 'file',
-    supabaseKeyValid: keyOk,
-    hint: !keyOk && hasSupabase
-      ? 'Fix SUPABASE_SERVICE_ROLE_KEY — use Secret key (sb_secret_…), not Publishable'
-      : !hasSupabase
-        ? 'Add SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in Vercel'
-        : 'Open /api/auth/login after creating admin in Supabase',
+    storage,
+    supabase: {
+      envSet: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+      valid: configCheck.ok,
+      hint: configCheck.hint ?? null,
+    },
+    bootstrap,
     publicUrl: process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
   }));
 }

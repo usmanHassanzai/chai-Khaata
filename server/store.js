@@ -8,6 +8,27 @@ import { generatePaymentRefId } from './paymentConfig.js';
 import { isTrialActive, trialFieldsForPublic } from './trialAccess.js';
 import * as sb from './persistence/supabase.js';
 
+/** If Supabase fails once, fall back to file storage for this process. */
+let supabaseUnavailable = false;
+
+async function preferSupabase() {
+  return isSupabaseEnabled() && !supabaseUnavailable;
+}
+
+/** @template T @param {() => Promise<T>} supabaseFn @param {() => Promise<T>} fileFn */
+async function withStorage(supabaseFn, fileFn) {
+  if (await preferSupabase()) {
+    try {
+      return await supabaseFn();
+    } catch (err) {
+      supabaseUnavailable = true;
+      const reason = err instanceof Error ? err.message : String(err);
+      console.warn(`[Chai Khata] Supabase unavailable — using file storage. (${reason})`);
+    }
+  }
+  return fileFn();
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data');
 const USERS_FILE = join(DATA_DIR, 'users.json');
@@ -86,9 +107,7 @@ async function ensureDataFile() {
 }
 
 /** @returns {Promise<UserRecord[]>} */
-export async function readUsers() {
-  if (isSupabaseEnabled()) return sb.sbReadUsers();
-
+async function readUsersFromFile() {
   await ensureDataFile();
   const raw = await readFile(USERS_FILE, 'utf8');
   const users = JSON.parse(raw);
@@ -98,6 +117,11 @@ export async function readUsers() {
     phone: u.phone ? String(u.phone).trim() : '',
     paymentDue: paymentDueAmount(u),
   }));
+}
+
+/** @returns {Promise<UserRecord[]>} */
+export async function readUsers() {
+  return withStorage(() => sb.sbReadUsers(), readUsersFromFile);
 }
 
 /** @param {UserRecord[]} users */
@@ -150,20 +174,25 @@ export function getAdminSignupView(user) {
 
 /** @param {string} email */
 export async function findUserByEmail(email) {
-  if (isSupabaseEnabled()) return sb.sbFindUserByEmail(email);
-
-  const users = await readUsers();
-  const normalized = normalizeEmail(email);
-  return users.find((u) => u.email === normalized) ?? null;
+  return withStorage(
+    () => sb.sbFindUserByEmail(email),
+    async () => {
+      const users = await readUsersFromFile();
+      return users.find((u) => u.email === normalizeEmail(email)) ?? null;
+    },
+  );
 }
 
 /** @param {string} username */
 export async function findUserByUsername(username) {
-  if (isSupabaseEnabled()) return sb.sbFindUserByUsername(username);
-
-  const users = await readUsers();
-  const normalized = username.trim().toLowerCase();
-  return users.find((u) => u.username === normalized) ?? null;
+  return withStorage(
+    () => sb.sbFindUserByUsername(username),
+    async () => {
+      const users = await readUsersFromFile();
+      const normalized = username.trim().toLowerCase();
+      return users.find((u) => u.username === normalized) ?? null;
+    },
+  );
 }
 
 /** Login with email or username */
@@ -177,17 +206,20 @@ export async function findUserByLogin(login) {
 
 /** @param {string} id */
 export async function findUserById(id) {
-  if (isSupabaseEnabled()) return sb.sbFindUserById(id);
-
-  const users = await readUsers();
-  return users.find((u) => u.id === id) ?? null;
+  return withStorage(
+    () => sb.sbFindUserById(id),
+    async () => {
+      const users = await readUsersFromFile();
+      return users.find((u) => u.id === id) ?? null;
+    },
+  );
 }
 
 /**
  * @param {Omit<UserRecord, 'id' | 'createdAt'> & { id?: string }}
  */
 export async function createUser(user) {
-  const users = isSupabaseEnabled() ? await sb.sbReadUsers() : await readUsers();
+  const users = await readUsers();
   const normalizedUsername = user.username.trim().toLowerCase();
   const normalizedEmail = normalizeEmail(user.email);
 
@@ -230,20 +262,33 @@ export async function createUser(user) {
     ...(user.approvedAt ? { approvedAt: user.approvedAt } : {}),
   };
 
-  if (isSupabaseEnabled()) {
-    return sb.sbInsertUser(record);
+  if (await preferSupabase()) {
+    try {
+      return await sb.sbInsertUser(record);
+    } catch (err) {
+      supabaseUnavailable = true;
+      console.warn('[Chai Khata] Supabase insert failed — saving to file:', err);
+    }
   }
 
-  users.push(record);
-  await writeUsers(users);
+  const fileUsers = await readUsersFromFile();
+  fileUsers.push(record);
+  await writeUsers(fileUsers);
   return record;
 }
 
 /** @param {string} id @param {Partial<UserRecord>} patch */
 export async function updateUser(id, patch) {
-  if (isSupabaseEnabled()) return sb.sbUpdateUser(id, patch);
+  if (await preferSupabase()) {
+    try {
+      return await sb.sbUpdateUser(id, patch);
+    } catch (err) {
+      supabaseUnavailable = true;
+      console.warn('[Chai Khata] Supabase update failed — using file:', err);
+    }
+  }
 
-  const users = await readUsers();
+  const users = await readUsersFromFile();
   const index = users.findIndex((u) => u.id === id);
   if (index === -1) throw new Error('NOT_FOUND');
 
@@ -313,9 +358,16 @@ export async function ensureDefaultAdmin(email, passwordHash) {
 
 /** Permanently remove user from database. */
 export async function deleteUser(id) {
-  if (isSupabaseEnabled()) return sb.sbDeleteUser(id);
+  if (await preferSupabase()) {
+    try {
+      return await sb.sbDeleteUser(id);
+    } catch (err) {
+      supabaseUnavailable = true;
+      console.warn('[Chai Khata] Supabase delete failed — using file:', err);
+    }
+  }
 
-  const users = await readUsers();
+  const users = await readUsersFromFile();
   const index = users.findIndex((u) => u.id === id);
   if (index === -1) throw new Error('NOT_FOUND');
   if (users[index].role === 'admin') throw new Error('CANNOT_DELETE_ADMIN');

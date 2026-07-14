@@ -89,3 +89,7 @@ process.on('SIGTERM', () => shutdown(0));
 
 run('auth', process.execPath, ['server/index.js']);
 run('web', process.execPath, [viteBin, '--host']);
+
+console.log('   Auth API:  http://localhost:3001/api/health');
+console.log('   Web app:   http://localhost:5173');
+console.log('   Storage:   file (local) unless USE_FILE_STORAGE=false + valid Supabase\n');

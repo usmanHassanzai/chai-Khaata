@@ -403,7 +403,7 @@ app.post('/api/auth/submit-signup-payment', async (req, res) => {
     }
 
     const plan = getPlan(user.subscriptionPlan ?? 'monthly');
-    const amount = plan?.price ?? Number(user.registrationFee) || 0;
+    const amount = plan?.price ?? (Number(user.registrationFee) || 0);
 
     const submission = await createSubmission({
       userId: user.id,
