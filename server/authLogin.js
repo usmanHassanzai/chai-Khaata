@@ -1,12 +1,10 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { ADMIN_EMAIL, JWT_SECRET } from './env.js';
 import { findUserByLogin, isPaymentBlocked, paymentDueAmount, publicUser } from './store.js';
 import { isSubscriptionExpired } from './subscriptions.js';
 import { isSupabaseEnabled, validateSupabaseConfig } from './supabase.js';
 import { withTimeout } from './httpUtils.js';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
-const ADMIN_EMAIL = String(process.env.ADMIN_EMAIL || 'usmankhan14700@gmail.com').trim().toLowerCase();
 
 function signToken(user) {
   return jwt.sign(

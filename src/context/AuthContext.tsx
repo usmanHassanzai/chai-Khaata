@@ -16,6 +16,7 @@ import {
   type AuthUser,
   type SubscriptionPlanId,
 } from '../services/authApi';
+import { AUTH_SESSION_INVALID_EVENT } from '../services/authCommon';
 
 type AuthState = {
   user: AuthUser | null;
@@ -85,6 +86,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshUser().finally(() => setLoading(false));
   }, [refreshUser]);
+
+  useEffect(() => {
+    const onSessionInvalid = () => {
+      setUser(null);
+      setDbReady(false);
+    };
+    window.addEventListener(AUTH_SESSION_INVALID_EVENT, onSessionInvalid);
+    return () => window.removeEventListener(AUTH_SESSION_INVALID_EVENT, onSessionInvalid);
+  }, []);
 
   const login = useCallback(async (emailOrLogin: string, password: string) => {
     try {

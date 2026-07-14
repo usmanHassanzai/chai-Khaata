@@ -13,7 +13,7 @@ import { getSettingsQuery } from '../db/database';
 import {
   downloadJson,
   exportLedgerJson,
-  getPreferences,
+  getPreferencesSnapshot,
   resetCloudConfigOnly,
   resetPreferencesOnly,
   runReset,
@@ -21,9 +21,16 @@ import {
   setCompactUi,
   setShowProfitOnDashboard,
   setTheme,
+  subscribePreferences,
   type ResetScope,
   type ThemeMode,
 } from '../services/appPreferences';
+
+const DEFAULT_SETTINGS = {
+  id: 'settings' as const,
+  lowStockThresholdKg: 50,
+  language: 'ur-roman' as const,
+};
 
 const MODES: { mode: LabelMode; labelKey: string; flag: string }[] = [
   { mode: 'bilingual', labelKey: 'common.bilingual', flag: '🇵🇰🇬🇧' },
@@ -41,15 +48,6 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'] | 'admin';
-
-function subscribePreferences(cb: () => void) {
-  window.addEventListener('app-preferences-change', cb);
-  window.addEventListener('label-mode-change', cb);
-  return () => {
-    window.removeEventListener('app-preferences-change', cb);
-    window.removeEventListener('label-mode-change', cb);
-  };
-}
 
 function ToggleRow({
   label,
@@ -81,7 +79,7 @@ export default function Settings() {
   const current = useLabelMode();
   const { user, dbReady } = useAuth();
   const appDb = useAppDb();
-  const prefs = useSyncExternalStore(subscribePreferences, getPreferences, getPreferences);
+  const prefs = useSyncExternalStore(subscribePreferences, getPreferencesSnapshot, getPreferencesSnapshot);
 
   const [tab, setTab] = useState<TabId>('general');
   const [threshold, setThreshold] = useState('50');
@@ -92,11 +90,7 @@ export default function Settings() {
   const settings = useLiveQuery(
     () => (appDb ? getSettingsQuery() : undefined),
     [appDb, dbReady],
-  ) ?? {
-    id: 'settings' as const,
-    lowStockThresholdKg: 50,
-    language: 'ur-roman' as const,
-  };
+  ) ?? DEFAULT_SETTINGS;
 
   useEffect(() => {
     setThreshold(String(settings.lowStockThresholdKg));

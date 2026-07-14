@@ -13,6 +13,17 @@ export class ApiError extends Error {
 
 const TOKEN_KEY = 'chai-khata-token';
 
+export const AUTH_SESSION_INVALID_EVENT = 'auth-session-invalid';
+
+export function clearStoredToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+export function notifyAuthSessionInvalid() {
+  clearStoredToken();
+  window.dispatchEvent(new Event(AUTH_SESSION_INVALID_EVENT));
+}
+
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }

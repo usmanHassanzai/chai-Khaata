@@ -86,7 +86,7 @@ export interface AuthResponse {
 }
 
 export { ApiError, getStoredToken, setStoredToken } from './authCommon';
-import { ApiError, getStoredToken } from './authCommon';
+import { ApiError, getStoredToken, notifyAuthSessionInvalid } from './authCommon';
 import { getCloudApiUrl } from './cloudConfig';
 
 function apiBase(): string {
@@ -148,8 +148,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   if (!res.ok) {
+    const code = (data.error as string) ?? 'REQUEST_FAILED';
+    if (res.status === 401 && (code === 'UNAUTHORIZED' || code === 'INVALID_TOKEN')) {
+      notifyAuthSessionInvalid();
+    }
     throw new ApiError(
-      (data.error as string) ?? 'REQUEST_FAILED',
+      code,
       (data.message as string) ?? `Request failed (${res.status})`,
       data.user as AuthUser | undefined,
     );

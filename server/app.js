@@ -1,6 +1,5 @@
 import bcrypt from 'bcryptjs';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { sendOtpEmail } from './email.js';
@@ -43,13 +42,8 @@ import {
 import { ensureBootstrapAdmin } from './bootstrap.js';
 import { performLogin } from './authLogin.js';
 import { isSupabaseEnabled } from './supabase.js';
+import { ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET, PORT } from './env.js';
 
-dotenv.config();
-
-const PORT = Number(process.env.PORT) || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
-const ADMIN_EMAIL = normalizeEmailFromEnv(process.env.ADMIN_EMAIL || 'usmankhan14700@gmail.com');
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 const CORS_ALLOW_ALL = process.env.CORS_ALLOW_ALL === 'true' || process.env.NODE_ENV === 'production';
 const PUBLIC_SERVER_URL =

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AdminUserCard from './AdminUserCard';
 import AdminUserDetailsModal from './AdminUserDetailsModal';
 import { Label, SectionTitle } from '../i18n/useLabel';
 import { useAuth } from '../context/AuthContext';
-import { ApiError, authApi, getApiBase, type AuthUser, type OtpRequest } from '../services/authApi';
+import { ApiError, authApi, getApiBase, getStoredToken, type AuthUser, type OtpRequest } from '../services/authApi';
 
 function formatLoadError(err: unknown): string {
   if (err instanceof ApiError) {
@@ -16,7 +17,8 @@ function formatLoadError(err: unknown): string {
 }
 
 export default function AdminUsersPanel() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [otpRequests, setOtpRequests] = useState<OtpRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +31,13 @@ export default function AdminUsersPanel() {
     if (user?.role !== 'admin') {
       setLoading(false);
       setError('Admin access required.');
+      setUsers([]);
+      return;
+    }
+
+    if (!getStoredToken()) {
+      setLoading(false);
+      setError('Session expired. Please log in again.');
       setUsers([]);
       return;
     }
@@ -214,6 +223,19 @@ export default function AdminUsersPanel() {
           <p className="settings-note" style={{ marginTop: '0.5rem' }}>
             API: {getApiBase() || 'same origin'} — ensure <code>npm run dev</code> is running.
           </p>
+          {(error.includes('Session expired') || error.includes('log in')) && (
+            <button
+              type="button"
+              className="btn sm primary"
+              style={{ marginTop: '0.75rem' }}
+              onClick={() => {
+                logout();
+                navigate('/login', { replace: true });
+              }}
+            >
+              Log in again
+            </button>
+          )}
         </div>
       )}
 

@@ -44,7 +44,7 @@ function readBool(key: string, fallback: boolean): boolean {
   return v === 'true';
 }
 
-export function getPreferences(): AppPreferences {
+function readPreferences(): AppPreferences {
   const theme = (localStorage.getItem(STORAGE.theme) as ThemeMode | null) ?? DEFAULT_PREFERENCES.theme;
   return {
     theme: theme === 'dark' || theme === 'auto' ? theme : 'light',
@@ -54,8 +54,33 @@ export function getPreferences(): AppPreferences {
   };
 }
 
+/** Stable snapshot for useSyncExternalStore — must return same reference until prefs change. */
+let preferencesSnapshot: AppPreferences = readPreferences();
+
+export function getPreferences(): AppPreferences {
+  return preferencesSnapshot;
+}
+
+export function getPreferencesSnapshot(): AppPreferences {
+  return preferencesSnapshot;
+}
+
+function refreshPreferencesSnapshot() {
+  preferencesSnapshot = readPreferences();
+}
+
 function notifyChange() {
+  refreshPreferencesSnapshot();
   window.dispatchEvent(new Event('app-preferences-change'));
+}
+
+export function subscribePreferences(cb: () => void) {
+  window.addEventListener('app-preferences-change', cb);
+  window.addEventListener('label-mode-change', cb);
+  return () => {
+    window.removeEventListener('app-preferences-change', cb);
+    window.removeEventListener('label-mode-change', cb);
+  };
 }
 
 export function setTheme(theme: ThemeMode) {
@@ -97,6 +122,7 @@ export function applyPreferences() {
 }
 
 export function initAppPreferences() {
+  refreshPreferencesSnapshot();
   applyPreferences();
   const mq = window.matchMedia('(prefers-color-scheme: dark)');
   const onSystemChange = () => {
