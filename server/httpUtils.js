@@ -33,9 +33,9 @@ export async function readJsonBody(req) {
 /** Map internal errors to safe login messages for the client. */
 export function sanitizeAuthErrorMessage(err) {
   const msg = err instanceof Error ? err.message : String(err || '');
-  if (/fetch failed|econnrefused|enotfound|etimedout|network|abort/i.test(msg)) {
+  if (/fetch failed|econnrefused|enotfound|etimedout|network|abort|enoent.*mkdir|read-only/i.test(msg)) {
     if (process.env.VERCEL) {
-      return 'Database connection failed. Set valid SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel, run supabase/schema.sql, then Redeploy.';
+      return 'Database storage unavailable on server. Add SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in Vercel env vars, run supabase/schema.sql, then Redeploy.';
     }
     return 'Database connection failed. Run: npm run seed:local-admin && npm run dev';
   }

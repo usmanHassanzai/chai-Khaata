@@ -1,11 +1,7 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFile, writeFile } from 'node:fs/promises';
 import * as sb from './persistence/supabase.js';
 import { isSupabaseEnabled } from './supabase.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const LEDGER_DIR = join(__dirname, 'data', 'ledger');
+import { ledgerFile } from './dataPaths.js';
 
 /** @typedef {Object} LedgerSnapshot
  * @property {string} updatedAt
@@ -18,17 +14,12 @@ const LEDGER_DIR = join(__dirname, 'data', 'ledger');
  * @property {string} [userId]
  */
 
-async function ledgerPath(userId) {
-  await mkdir(LEDGER_DIR, { recursive: true });
-  return join(LEDGER_DIR, `${userId}.json`);
-}
-
 /** @param {string} userId */
 export async function readLedger(userId) {
   if (isSupabaseEnabled()) return sb.sbReadLedger(userId);
 
   try {
-    const raw = await readFile(await ledgerPath(userId), 'utf8');
+    const raw = await readFile(await ledgerFile(userId), 'utf8');
     return /** @type {LedgerSnapshot} */ (JSON.parse(raw));
   } catch {
     return null;
@@ -44,7 +35,7 @@ export async function writeLedger(userId, snapshot) {
     userId,
     updatedAt: snapshot.updatedAt || new Date().toISOString(),
   };
-  await writeFile(await ledgerPath(userId), JSON.stringify(record, null, 2), 'utf8');
+  await writeFile(await ledgerFile(userId), JSON.stringify(record, null, 2), 'utf8');
   return record;
 }
 
@@ -64,7 +55,7 @@ export async function deleteLedger(userId) {
 
   try {
     const { unlink } = await import('node:fs/promises');
-    await unlink(await ledgerPath(userId));
+    await unlink(await ledgerFile(userId));
   } catch {
     /* ignore */
   }

@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { isSubscriptionExpired, subscriptionInfo } from './subscriptions.js';
 import { isSupabaseEnabled } from './supabase.js';
 import { generatePaymentRefId } from './paymentConfig.js';
 import { isTrialActive, trialFieldsForPublic } from './trialAccess.js';
+import { dataFile, ensureDataDir, getDataDir, readDataJson } from './dataPaths.js';
 import * as sb from './persistence/supabase.js';
 
 /** If Supabase fails once, fall back to file storage for this process. */
@@ -29,9 +29,12 @@ async function withStorage(supabaseFn, fileFn) {
   return fileFn();
 }
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, 'data');
-const USERS_FILE = join(DATA_DIR, 'users.json');
+const USERS_FILE = () => dataFile('users.json');
+
+async function ensureDataFile() {
+  await ensureDataDir();
+  await readDataJson('users.json', '[]');
+}
 
 /** @typedef {'pending' | 'approved' | 'rejected'} UserStatus */
 /** @typedef {'user' | 'admin'} UserRole */
@@ -97,19 +100,9 @@ export function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
 }
 
-async function ensureDataFile() {
-  await mkdir(DATA_DIR, { recursive: true });
-  try {
-    await readFile(USERS_FILE, 'utf8');
-  } catch {
-    await writeFile(USERS_FILE, '[]', 'utf8');
-  }
-}
-
-/** @returns {Promise<UserRecord[]>} */
 async function readUsersFromFile() {
   await ensureDataFile();
-  const raw = await readFile(USERS_FILE, 'utf8');
+  const raw = await readFile(USERS_FILE(), 'utf8');
   const users = JSON.parse(raw);
   return users.map((u) => ({
     ...u,
@@ -127,9 +120,10 @@ export async function readUsers() {
 /** @param {UserRecord[]} users */
 async function writeUsers(users) {
   await ensureDataFile();
-  const tmp = join(DATA_DIR, 'users.json.tmp');
+  const file = USERS_FILE();
+  const tmp = join(getDataDir(), 'users.json.tmp');
   await writeFile(tmp, JSON.stringify(users, null, 2), 'utf8');
-  await writeFile(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
+  await writeFile(file, JSON.stringify(users, null, 2), 'utf8');
   try {
     const { unlink } = await import('node:fs/promises');
     await unlink(tmp);

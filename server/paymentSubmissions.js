@@ -1,13 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFile, writeFile } from 'node:fs/promises';
 import * as sb from './persistence/supabase.js';
 import { isSupabaseEnabled } from './supabase.js';
+import { dataFile, ensureDataDir, readDataJson } from './dataPaths.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, 'data');
-const FILE = join(DATA_DIR, 'payment-submissions.json');
+const FILE = () => dataFile('payment-submissions.json');
 
 /** @typedef {'pending' | 'approved' | 'rejected'} SubmissionStatus */
 
@@ -30,24 +27,20 @@ const FILE = join(DATA_DIR, 'payment-submissions.json');
  */
 
 async function ensureFile() {
-  await mkdir(DATA_DIR, { recursive: true });
-  try {
-    await readFile(FILE, 'utf8');
-  } catch {
-    await writeFile(FILE, '[]', 'utf8');
-  }
+  await ensureDataDir();
+  await readDataJson('payment-submissions.json', '[]');
 }
 
 /** @returns {Promise<PaymentSubmission[]>} */
 export async function readSubmissions() {
   await ensureFile();
-  return JSON.parse(await readFile(FILE, 'utf8'));
+  return JSON.parse(await readFile(FILE(), 'utf8'));
 }
 
 /** @param {PaymentSubmission[]} list */
 async function writeSubmissions(list) {
   await ensureFile();
-  await writeFile(FILE, JSON.stringify(list, null, 2), 'utf8');
+  await writeFile(FILE(), JSON.stringify(list, null, 2), 'utf8');
 }
 
 /** @param {string} userId */

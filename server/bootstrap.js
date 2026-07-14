@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { ensureDefaultAdmin } from './store.js';
 import { isSupabaseEnabled, getStorageMode } from './supabase.js';
+import { isServerlessEnv } from './dataPaths.js';
 
 let bootstrapped = false;
 
@@ -42,19 +43,23 @@ export async function ensureBootstrapAdmin() {
       bootstrapped = true;
       return {
         ok: true,
-        storage: 'file',
+        storage: getStorageMode(),
         email: admin.email,
         username: admin.username,
         role: admin.role,
         status: admin.status,
-        hint: 'Local dev mode — add SUPABASE_* to .env for production cloud sync',
+        hint: isServerlessEnv()
+          ? 'Serverless mode — using /tmp storage. Add Supabase env vars on Vercel for permanent data.'
+          : 'Local dev mode — add SUPABASE_* to .env for production cloud sync',
       };
     } catch (err) {
       return {
         ok: false,
-        storage: 'file',
+        storage: getStorageMode(),
         error: formatError(err),
-        hint: 'Could not create local admin user. Check server/data folder permissions.',
+        hint: isServerlessEnv()
+          ? 'Using /tmp storage on serverless. For permanent data, add Supabase env vars on Vercel.'
+          : 'Could not create local admin user. Check server/data folder permissions.',
       };
     }
   }

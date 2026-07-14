@@ -1,13 +1,10 @@
 import { randomInt } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFile, writeFile } from 'node:fs/promises';
 import * as sb from './persistence/supabase.js';
 import { isSupabaseEnabled } from './supabase.js';
+import { dataFile, ensureDataDir, readDataJson } from './dataPaths.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, 'data');
-const OTPS_FILE = join(DATA_DIR, 'otps.json');
+const OTPS_FILE = () => dataFile('otps.json');
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 
@@ -24,25 +21,19 @@ const OTP_TTL_MS = 10 * 60 * 1000;
  */
 
 async function ensureOtpsFile() {
-  await mkdir(DATA_DIR, { recursive: true });
-  try {
-    await readFile(OTPS_FILE, 'utf8');
-  } catch {
-    await writeFile(OTPS_FILE, '[]', 'utf8');
-  }
+  await ensureDataDir();
+  await readDataJson('otps.json', '[]');
 }
 
 /** @returns {Promise<OtpRecord[]>} */
 async function readOtps() {
   await ensureOtpsFile();
-  const raw = await readFile(OTPS_FILE, 'utf8');
+  const raw = await readFile(OTPS_FILE(), 'utf8');
   return JSON.parse(raw);
 }
 
-/** @param {OtpRecord[]} otps */
-async function writeOtps(otps) {
-  await ensureOtpsFile();
-  await writeFile(OTPS_FILE, JSON.stringify(otps, null, 2), 'utf8');
+async function writeOtps(list) {
+  await writeFile(OTPS_FILE(), JSON.stringify(list, null, 2), 'utf8');
 }
 
 export function generateOtp() {
@@ -63,7 +54,6 @@ export async function createOtp(userId, channel, sentTo) {
   if (isSupabaseEnabled()) return sb.sbCreateOtp(record);
 
   const otps = await readOtps();
-
   const filtered = otps.filter((o) => o.userId !== userId);
   filtered.push(record);
   await writeOtps(filtered);

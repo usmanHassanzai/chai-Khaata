@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { isServerlessEnv } from './dataPaths.js';
 
 let client = null;
 
@@ -50,13 +51,22 @@ export function validateSupabaseConfig() {
 
 /** Use Supabase only when credentials are real and valid (not .env placeholders). */
 export function isSupabaseEnabled() {
-  if (process.env.STORAGE === 'file' || process.env.USE_FILE_STORAGE === 'true') return false;
+  if (process.env.STORAGE === 'file') return false;
+  // Local dev file storage — never on Vercel (read-only filesystem)
+  if (process.env.USE_FILE_STORAGE === 'true' && !isServerlessEnv()) return false;
   if (!supabaseEnvPresent()) return false;
   return validateSupabaseConfig().ok;
 }
 
+/** On Vercel/serverless, Supabase is required for persistent data. */
+export function requiresSupabaseOnServerless() {
+  return isServerlessEnv() && !isSupabaseEnabled();
+}
+
 export function getStorageMode() {
-  return isSupabaseEnabled() ? 'supabase' : 'file';
+  if (isSupabaseEnabled()) return 'supabase';
+  if (isServerlessEnv()) return 'file-tmp';
+  return 'file';
 }
 
 function fetchWithTimeout(url, options = {}) {
