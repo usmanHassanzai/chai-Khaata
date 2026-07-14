@@ -5,7 +5,7 @@ import { isSubscriptionExpired, subscriptionInfo } from './subscriptions.js';
 import { isSupabaseEnabled } from './supabase.js';
 import { generatePaymentRefId } from './paymentConfig.js';
 import { isTrialActive, trialFieldsForPublic } from './trialAccess.js';
-import { dataFile, ensureDataDir, getDataDir, readDataJson } from './dataPaths.js';
+import { dataFile, ensureDataDir, getDataDir, isServerlessEnv, readDataJson } from './dataPaths.js';
 import * as sb from './persistence/supabase.js';
 
 /** If Supabase fails once, fall back to file storage for this process. */
@@ -15,15 +15,24 @@ async function preferSupabase() {
   return isSupabaseEnabled() && !supabaseUnavailable;
 }
 
+function handleSupabaseFailure(err) {
+  const reason = err instanceof Error ? err.message : String(err);
+  if (isServerlessEnv()) {
+    const wrapped = err instanceof Error ? err : new Error(reason);
+    wrapped.code = wrapped.code || 'SERVER_CONFIG';
+    throw wrapped;
+  }
+  supabaseUnavailable = true;
+  console.warn(`[Chai Khata] Supabase unavailable — using file storage. (${reason})`);
+}
+
 /** @template T @param {() => Promise<T>} supabaseFn @param {() => Promise<T>} fileFn */
 async function withStorage(supabaseFn, fileFn) {
   if (await preferSupabase()) {
     try {
       return await supabaseFn();
     } catch (err) {
-      supabaseUnavailable = true;
-      const reason = err instanceof Error ? err.message : String(err);
-      console.warn(`[Chai Khata] Supabase unavailable — using file storage. (${reason})`);
+      handleSupabaseFailure(err);
     }
   }
   return fileFn();
@@ -260,8 +269,7 @@ export async function createUser(user) {
     try {
       return await sb.sbInsertUser(record);
     } catch (err) {
-      supabaseUnavailable = true;
-      console.warn('[Chai Khata] Supabase insert failed — saving to file:', err);
+      handleSupabaseFailure(err);
     }
   }
 
@@ -277,8 +285,7 @@ export async function updateUser(id, patch) {
     try {
       return await sb.sbUpdateUser(id, patch);
     } catch (err) {
-      supabaseUnavailable = true;
-      console.warn('[Chai Khata] Supabase update failed — using file:', err);
+      handleSupabaseFailure(err);
     }
   }
 
@@ -356,8 +363,7 @@ export async function deleteUser(id) {
     try {
       return await sb.sbDeleteUser(id);
     } catch (err) {
-      supabaseUnavailable = true;
-      console.warn('[Chai Khata] Supabase delete failed — using file:', err);
+      handleSupabaseFailure(err);
     }
   }
 

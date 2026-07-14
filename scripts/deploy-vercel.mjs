@@ -63,6 +63,9 @@ console.log(`── Step 3: Deploy API on Vercel (free) ──
      JWT_SECRET=<long random string>
      ADMIN_EMAIL=usmankhan14700@gmail.com
      ADMIN_PASSWORD=admin123
+     PUBLIC_SERVER_URL=https://patiwala.pk
+     CLIENT_ORIGIN=https://patiwala.pk
+     VITE_DEFAULT_CLOUD_URL=https://patiwala.pk
      CORS_ALLOW_ALL=true
      TWILIO_ACCOUNT_SID=...
      TWILIO_AUTH_TOKEN=...

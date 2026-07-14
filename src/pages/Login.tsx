@@ -18,12 +18,30 @@ export default function Login() {
   const [info, setInfo] = useState(pendingFromState ? 'Your account is waiting for admin approval.' : '');
   const [submitting, setSubmitting] = useState(false);
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
+  const [checkingServer, setCheckingServer] = useState(false);
+
+  async function refreshServerStatus() {
+    setCheckingServer(true);
+    try {
+      const ok = await authHealth();
+      setServerOnline(ok);
+      if (ok) setError('');
+      return ok;
+    } catch {
+      setServerOnline(isNativeAuthMode());
+      return isNativeAuthMode();
+    } finally {
+      setCheckingServer(false);
+    }
+  }
 
   useEffect(() => {
-    authHealth()
-      .then((ok) => setServerOnline(ok))
-      .catch(() => setServerOnline(isNativeAuthMode()));
-  }, []);
+    void refreshServerStatus();
+    const timer = window.setInterval(() => {
+      if (serverOnline === false) void refreshServerStatus();
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [serverOnline]);
 
   if (user?.status === 'approved' || user?.role === 'admin' || (user?.status === 'pending' && user.trialActive)) {
     return <Navigate to="/dashboard" replace />;
@@ -36,6 +54,11 @@ export default function Login() {
     setSubmitting(true);
 
     try {
+      const online = await refreshServerStatus();
+      if (!online && !isNativeAuthMode()) {
+        return;
+      }
+
       await login(loginId.trim(), password);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -48,7 +71,11 @@ export default function Login() {
         } else if (err.code === 'SERVER_CONFIG') {
           setError(`${err.message}. Fix SUPABASE_SERVICE_ROLE_KEY in Vercel — use Secret key (sb_secret_…), then Redeploy.`);
         } else if (err.code === 'INVALID_CREDENTIALS') {
-          setError('Invalid email or password');
+          setError(
+            isLocalDevHost()
+              ? 'Invalid email or password'
+              : 'Invalid email or password. Online login uses Supabase — local accounts are not copied automatically. Use admin credentials from Vercel env (ADMIN_EMAIL / ADMIN_PASSWORD), register again on this site, or run npm run sync:users from your PC.',
+          );
         } else if (err.code === 'NETWORK_ERROR') {
           setError(friendlyAuthError(err));
           setServerOnline(false);
@@ -85,16 +112,35 @@ export default function Login() {
 
       {serverOnline === false && !isNativeAuthMode() && (
         <div className="auth-banner error">
-          API server offline. In terminal run: <code>cd ~/chai-khaata && npm run dev</code>
-          {getApiBase() && !/localhost|127\.0\.0\.1/.test(window.location.hostname) && (
-            <span> — or fix Cloud Sync URL in Settings.</span>
+          <strong>Server not running.</strong>{' '}
+          {isLocalDevHost() ? (
+            <>
+              Open a terminal and run: <code>cd ~/chai-khaata && npm run dev</code>
+              {' '}— then open <code>http://localhost:5173/login</code>
+            </>
+          ) : (
+            <>
+              Cannot reach the auth server.
+              {getApiBase() && !/localhost|127\.0\.0\.1/.test(window.location.hostname) && (
+                <span> Check Cloud Sync URL in Settings.</span>
+              )}
+            </>
           )}
+          {' '}
+          <button
+            type="button"
+            className="auth-inline-link"
+            onClick={() => void refreshServerStatus()}
+            disabled={checkingServer}
+          >
+            {checkingServer ? 'Checking…' : 'Check again'}
+          </button>
         </div>
       )}
 
       <form className="auth-form" onSubmit={handleSubmit}>
         {info && <div className="auth-banner info">{info}</div>}
-        {error && <div className="auth-banner error">{error}</div>}
+        {error && serverOnline !== false && <div className="auth-banner error">{error}</div>}
 
         <label className="auth-field animate-fade-in-up stagger-1">
           <span><Label k="auth.loginOrEmail" variant="compact" /></span>

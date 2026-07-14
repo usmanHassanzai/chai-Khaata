@@ -18,7 +18,8 @@ export default async function handler(req, res) {
     requiresApproval: base.requiresApproval,
     subscriptionPlans: getSubscriptionPlans(),
     otpDelivery: otpDeliveryStatus(),
-    publicServerUrl: process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+    publicServerUrl: process.env.PUBLIC_SERVER_URL?.trim()
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null),
     cloudSync: true,
     supabase: base.supabase,
   });

@@ -4,14 +4,33 @@ function normalizeUrl(url: string): string {
   return url.trim().replace(/\/$/, '');
 }
 
+function isLocalHostUrl(url: string): boolean {
+  return /localhost|127\.0\.0\.1/.test(url);
+}
+
+/** True when the app is served from a public deployed origin (not local dev). */
+function isDeployedWebOrigin(): boolean {
+  if (typeof window === 'undefined' || !window.location?.origin) return false;
+  return !isLocalHostUrl(window.location.origin);
+}
+
 export function getCloudApiUrl(): string {
   // Dev: always sync/auth via same-origin Vite proxy — ignore saved remote URLs
   if (import.meta.env.DEV && typeof window !== 'undefined') {
     return normalizeUrl(window.location.origin);
   }
 
+  // Live site (patiwala.pk, *.vercel.app): API is always same-origin.
+  // Ignore stale Cloud Sync URLs saved during local testing (e.g. localhost:5173).
+  if (isDeployedWebOrigin()) {
+    return normalizeUrl(window.location.origin);
+  }
+
   const saved = localStorage.getItem(CLOUD_URL_KEY)?.trim();
-  if (saved) return normalizeUrl(saved);
+  if (saved) {
+    const normalized = normalizeUrl(saved);
+    if (!isLocalHostUrl(normalized)) return normalized;
+  }
 
   const env = import.meta.env.VITE_API_URL as string | undefined;
   if (env?.trim()) return normalizeUrl(env);
@@ -20,15 +39,7 @@ export function getCloudApiUrl(): string {
   if (defaultCloud?.trim()) return normalizeUrl(defaultCloud);
 
   if (typeof window !== 'undefined' && window.location?.origin) {
-    const origin = window.location.origin;
-    // Local dev: sync via Vite proxy to auth server
-    if (import.meta.env.DEV && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
-      return normalizeUrl(origin);
-    }
-    // Production: API on same origin (Vercel / patiwala.pk)
-    if (!origin.includes('localhost') && !origin.includes('127.0.0.1')) {
-      return normalizeUrl(origin);
-    }
+    return normalizeUrl(window.location.origin);
   }
 
   return '';

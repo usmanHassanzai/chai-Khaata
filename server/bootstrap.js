@@ -4,6 +4,17 @@ import { isSupabaseEnabled, getStorageMode } from './supabase.js';
 import { isServerlessEnv } from './dataPaths.js';
 
 let bootstrapped = false;
+let cachedPasswordHash = null;
+let cachedPasswordEnv = null;
+
+async function adminPasswordHash() {
+  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+  if (adminPassword !== cachedPasswordEnv || !cachedPasswordHash) {
+    cachedPasswordEnv = adminPassword;
+    cachedPasswordHash = await bcrypt.hash(adminPassword, 10);
+  }
+  return cachedPasswordHash;
+}
 
 function formatError(err) {
   if (err instanceof Error) return err.message;
@@ -34,8 +45,7 @@ function supabaseConfigHint() {
 /** Creates default admin on first API call (Supabase or local file storage). */
 export async function ensureBootstrapAdmin() {
   const adminEmail = String(process.env.ADMIN_EMAIL || 'usmankhan14700@gmail.com').trim().toLowerCase();
-  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-  const passwordHash = await bcrypt.hash(adminPassword, 10);
+  const passwordHash = await adminPasswordHash();
 
   if (!isSupabaseEnabled()) {
     try {
@@ -74,14 +84,7 @@ export async function ensureBootstrapAdmin() {
     };
   }
 
-  if (bootstrapped) {
-    return { ok: true, storage: 'supabase', skipped: true };
-  }
-
   try {
-    const adminEmail = String(process.env.ADMIN_EMAIL || 'usmankhan14700@gmail.com').trim().toLowerCase();
-    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-    const passwordHash = await bcrypt.hash(adminPassword, 10);
     const admin = await ensureDefaultAdmin(adminEmail, passwordHash);
 
     bootstrapped = true;

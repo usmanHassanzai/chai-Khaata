@@ -71,7 +71,15 @@ Your app URL will be: ${APP_URL}
   → should show "ok": true
 
   ${APP_URL}/login
-  → login with admin email + password
+  → login with ADMIN_EMAIL + ADMIN_PASSWORD from Vercel env
+
+── Step 7: Move local users to Supabase (optional) ──
+
+  Local accounts (server/data/users.json) are NOT on Vercel automatically.
+  On your PC with SUPABASE_* in .env:
+  npm run sync:users
+
+  Or register again on ${APP_URL}/register
 
 ── STEP 6: Phones / APK ──
 

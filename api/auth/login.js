@@ -1,4 +1,5 @@
 import { performLogin } from '../../server/authLogin.js';
+import { ensureBootstrapAdmin } from '../../server/bootstrap.js';
 import { readJsonBody, sendJson, setCors, sanitizeAuthErrorMessage } from '../../server/httpUtils.js';
 
 export default async function handler(req, res) {
@@ -16,6 +17,16 @@ export default async function handler(req, res) {
   }
 
   try {
+    const bootstrap = await ensureBootstrapAdmin();
+    if (bootstrap.ok === false) {
+      sendJson(res, 503, {
+        error: 'SERVER_CONFIG',
+        message: bootstrap.error || 'Could not prepare admin account',
+        hint: bootstrap.hint || 'Fix Supabase env vars on Vercel, then Redeploy',
+      });
+      return;
+    }
+
     const body = await readJsonBody(req);
     const loginValue = body.login ?? body.email ?? body.username;
     const result = await performLogin(loginValue, body.password);

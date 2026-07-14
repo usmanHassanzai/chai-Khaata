@@ -362,7 +362,7 @@ export async function authHealth(): Promise<boolean> {
   }
 
   const bases: string[] = [];
-  if (import.meta.env.DEV && typeof window !== 'undefined') {
+  if (typeof window !== 'undefined') {
     bases.push(window.location.origin);
   }
   const primary = getApiBase();
