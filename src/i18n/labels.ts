@@ -391,6 +391,7 @@ export const labels = {
     },
     checkPayment: { ur: 'ادائیگی چیک کریں', en: 'Check if paid', roman: 'Payment check karein' },
     paymentScreenshot: { ur: 'ادائیگی کی اسکرین شاٹ', en: 'Payment Screenshot', roman: 'Payment Screenshot' },
+    paymentRefId: { ur: 'Payment ID', en: 'Payment ID', roman: 'Payment ID' },
     submitPaymentProof: { ur: 'اسکرین شاٹ جمع کریں', en: 'Submit Payment Proof', roman: 'Screenshot Submit Karein' },
     paymentProofHint: {
       ur: 'ادائیگی کریں، اسکرین شاٹ اپ لوڈ کریں، ای میل اور پاس ورڈ درج کریں',

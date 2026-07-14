@@ -43,6 +43,8 @@ import { ensureBootstrapAdmin } from './bootstrap.js';
 import { performLogin } from './authLogin.js';
 import { isSupabaseEnabled } from './supabase.js';
 import { ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET, PORT } from './env.js';
+import { getPaymentConfig } from './paymentConfig.js';
+import { isTrialActive } from './trialAccess.js';
 
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 const CORS_ALLOW_ALL = process.env.CORS_ALLOW_ALL === 'true' || process.env.NODE_ENV === 'production';
@@ -151,6 +153,7 @@ app.get('/api/auth/config', (_req, res) => {
     otpDelivery: otpDeliveryStatus(),
     publicServerUrl: PUBLIC_SERVER_URL || null,
     cloudSync: true,
+    payment: getPaymentConfig(),
   });
 });
 
@@ -214,13 +217,18 @@ app.post('/api/auth/register', async (req, res) => {
       role: 'user',
     });
 
-    console.log(`[Chai Khata] Signup saved: ${user.username} | phone=${user.phone} | plan=${plan.label} | fee date=${user.paymentFeeDate}`);
+    console.log(`[Chai Khata] Signup saved: ${user.username} | ref=${user.paymentRefId} | phone=${user.phone} | plan=${plan.label}`);
 
-    notifyAdminNewSignup(ADMIN_EMAIL, user, plainPassword, feeAmount, plan);
+    const notifyResult = await notifyAdminNewSignup(ADMIN_EMAIL, user, plainPassword, feeAmount, plan);
 
     res.status(201).json({
-      message: `Sign up successful. The admin (${ADMIN_EMAIL}) will approve your account before you can log in.`,
+      message: notifyResult.sent
+        ? `Sign up successful! Payment ID: ${user.paymentRefId}. Admin has been notified at ${ADMIN_EMAIL}. Send payment screenshot on WhatsApp with your Payment ID.`
+        : `Sign up successful! Send Rs ${feeAmount.toLocaleString()} via Easypaisa/UBL/Nayapay/JS Bank and WhatsApp your screenshot with Payment ID ${user.paymentRefId}. Admin will approve after verification.`,
       user: publicUser(user),
+      paymentRefId: user.paymentRefId,
+      payment: getPaymentConfig(),
+      adminNotified: notifyResult.sent === true,
     });
   } catch (err) {
     if (err instanceof Error && err.message === 'USERNAME_TAKEN') {
@@ -341,6 +349,73 @@ app.post('/api/auth/submit-payment-proof', async (req, res) => {
   } catch (err) {
     console.error('Submit payment proof error:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not submit payment proof' });
+  }
+});
+
+app.post('/api/auth/submit-signup-payment', async (req, res) => {
+  try {
+    const { login, email, username, password, screenshot } = req.body ?? {};
+    const loginValue = login ?? email ?? username;
+
+    if (!loginValue?.trim() || !password) {
+      return res.status(400).json({ error: 'VALIDATION', message: 'Email/username and password are required' });
+    }
+
+    if (!screenshot || typeof screenshot !== 'string' || !screenshot.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'VALIDATION', message: 'Payment screenshot image is required' });
+    }
+
+    if (screenshot.length > 4_000_000) {
+      return res.status(400).json({ error: 'VALIDATION', message: 'Image is too large. Use a smaller screenshot.' });
+    }
+
+    const user = await findUserByLogin(String(loginValue));
+    if (!user) {
+      return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password' });
+    }
+
+    const valid = await bcrypt.compare(String(password), user.passwordHash);
+    if (!valid) {
+      return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password' });
+    }
+
+    if (user.status !== 'pending') {
+      return res.status(400).json({ error: 'NOT_PENDING', message: 'Signup payment is only for pending new accounts' });
+    }
+
+    const existing = await findPendingByUserId(user.id);
+    if (existing) {
+      return res.status(409).json({
+        error: 'ALREADY_SUBMITTED',
+        message: 'Payment screenshot already submitted. Admin will review soon.',
+      });
+    }
+
+    const plan = getPlan(user.subscriptionPlan ?? 'monthly');
+    const amount = plan?.price ?? Number(user.registrationFee) || 0;
+
+    const submission = await createSubmission({
+      userId: user.id,
+      username: user.username,
+      email: user.email ?? '',
+      phone: user.phone ?? '',
+      paymentDue: amount,
+      subscriptionPlan: user.subscriptionPlan || '',
+      kind: 'signup_payment',
+      paymentRefId: user.paymentRefId ?? '',
+      screenshot,
+    });
+
+    console.log(`[Chai Khata] Signup payment proof: ${user.paymentRefId} — ${user.username}`);
+
+    res.status(201).json({
+      message: `Payment screenshot received for Payment ID ${user.paymentRefId}. Admin will verify and approve your account.`,
+      submission: publicSubmission(submission),
+      paymentRefId: user.paymentRefId,
+    });
+  } catch (err) {
+    console.error('Submit signup payment error:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not submit payment screenshot' });
   }
 });
 
@@ -495,6 +570,9 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     }
 
     if (user.status !== 'approved' && user.role !== 'admin') {
+      if (user.status === 'pending' && isTrialActive(user)) {
+        return res.json({ user: publicUser(user) });
+      }
       return res.status(403).json({
         error: user.status === 'pending' ? 'PENDING_APPROVAL' : 'REJECTED',
         message: user.status === 'pending'

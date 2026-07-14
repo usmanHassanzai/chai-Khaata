@@ -4,7 +4,9 @@ import AuthLayout from '../components/AuthLayout';
 import { useAuth } from '../context/AuthContext';
 import ImageUpload from '../components/ImageUpload';
 import { Label } from '../i18n/useLabel';
-import { ApiError, authApi } from '../services/authApi';
+import PaymentInstructions from '../components/PaymentInstructions';
+import { DEFAULT_PAYMENT_CONFIG, normalizePaymentConfig } from '../data/paymentPlans';
+import { ApiError, authApi, type PaymentConfig } from '../services/authApi';
 
 export default function PaymentDue() {
   const { user, logout, refreshUser } = useAuth();
@@ -18,9 +20,15 @@ export default function PaymentDue() {
   const [success, setSuccess] = useState('');
   const [pendingReview, setPendingReview] = useState(false);
   const [dueAmount, setDueAmount] = useState(user?.paymentDue ?? 0);
+  const [payment, setPayment] = useState<PaymentConfig>(DEFAULT_PAYMENT_CONFIG);
 
   useEffect(() => {
-    authApi.config().then((c) => setAdminEmail(c.adminEmail)).catch(() => {});
+    authApi.config()
+      .then((c) => {
+        setAdminEmail(c.adminEmail);
+        if (c.payment) setPayment(normalizePaymentConfig(c.payment));
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -94,6 +102,8 @@ export default function PaymentDue() {
         </div>
 
         <div className="payment-due-amount">Rs {dueAmount.toLocaleString()}</div>
+
+        <PaymentInstructions payment={payment} planPrice={dueAmount} planLabel="Amount due" compact />
 
         {user?.paymentDueNote && <p className="settings-note">{user.paymentDueNote}</p>}
 

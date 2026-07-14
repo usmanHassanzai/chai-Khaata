@@ -1,8 +1,12 @@
 import { Link, Navigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import AppLoading from '../components/AppLoading';
+import PaymentInstructions from '../components/PaymentInstructions';
 import { useAuth } from '../context/AuthContext';
+import { DEFAULT_PAYMENT_CONFIG, DEMO_PLAN, LANDING_PLANS, SUBSCRIPTION_PRICES, normalizePaymentConfig } from '../data/paymentPlans';
 import { TEA_GALLERY } from '../data/teaGallery';
 import { Label } from '../i18n/useLabel';
+import { authApi, type PaymentConfig } from '../services/authApi';
 
 const FEATURES = [
   {
@@ -56,23 +60,22 @@ const FEATURES = [
 ] as const;
 
 const STEPS = [
-  { n: '1', title: 'Sign up', body: 'Register your tea shop with username, email & subscription plan.' },
-  { n: '2', title: 'Get approved', body: 'Admin verifies your account — then log in from any device.' },
-  { n: '3', title: 'Run your khata', body: 'Add sales, purchases, customers & sync — your ledger stays safe.' },
+  { n: '1', title: 'Choose a plan', body: 'Monthly Rs 500 or Yearly Rs 5000. You get a unique Payment ID (PAT-XXXXXX).' },
+  { n: '2', title: 'Pay & send screenshot', body: 'Send via Easypaisa, UBL, Nayapay or JS Bank. WhatsApp screenshot with your Payment ID.' },
+  { n: '3', title: 'Admin approves', body: 'Admin gets email, verifies payment, approves — then full access. Pending users get 1-day preview on login.' },
 ] as const;
-
-const PLANS: { name: string; price: string; period: string; badge?: string }[] = [
-  { name: 'Monthly', price: 'Rs 1,000', period: '/ month' },
-  { name: '6 Months', price: 'Rs 5,000', period: '/ 6 mo', badge: 'Save' },
-  { name: 'Yearly', price: 'Rs 9,000', period: '/ year', badge: 'Best value' },
-];
 
 export default function Landing() {
   const { user, loading } = useAuth();
+  const [payment, setPayment] = useState<PaymentConfig>(DEFAULT_PAYMENT_CONFIG);
+
+  useEffect(() => {
+    authApi.config().then((c) => { if (c.payment) setPayment(normalizePaymentConfig(c.payment)); }).catch(() => {});
+  }, []);
 
   if (loading) return <AppLoading />;
 
-  if (user && (user.status === 'approved' || user.role === 'admin')) {
+  if (user && (user.status === 'approved' || user.role === 'admin' || (user.status === 'pending' && user.trialActive))) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -92,6 +95,7 @@ export default function Landing() {
           <a href="#features">Features</a>
           <a href="#modules">Modules</a>
           <a href="#pricing">Pricing</a>
+          <a href="#payment">Payment</a>
           <a href="#how">How it works</a>
         </nav>
         <div className="landing-nav-actions">
@@ -221,29 +225,39 @@ export default function Landing() {
         </div>
       </section>
 
-      <section id="pricing" className="landing-section">
+      <section id="pricing" className="landing-section landing-pricing-pro">
         <div className="landing-section-head">
-          <h2>Simple subscription plans</h2>
-          <p>Affordable plans for every chai shop — pay after admin approval</p>
+          <h2>Plans & payment</h2>
+          <p className="urdu-text" dir="rtl">ماہانہ Rs {SUBSCRIPTION_PRICES.monthly} · سالانہ Rs {SUBSCRIPTION_PRICES.yearly}</p>
         </div>
-        <div className="landing-pricing-grid">
-          {PLANS.map((plan) => (
-            <article key={plan.name} className={`landing-price-card${plan.badge ? ' featured' : ''}`}>
+        <div className="landing-pricing-grid landing-pricing-three">
+          <article className="landing-price-card landing-demo-card">
+            <span className="landing-price-badge demo">Demo</span>
+            <h3>{DEMO_PLAN.name}</h3>
+            <p className="landing-price">{DEMO_PLAN.price}</p>
+            <p className="landing-demo-disclaimer">{DEMO_PLAN.note}</p>
+            <Link to="/register" className="btn">Try signup flow</Link>
+          </article>
+          {LANDING_PLANS.map((plan) => (
+            <article key={plan.id} className={`landing-price-card${plan.badge ? ' featured' : ''}`}>
               {plan.badge && <span className="landing-price-badge">{plan.badge}</span>}
               <h3>{plan.name}</h3>
               <p className="landing-price">
-                {plan.price}
+                Rs {plan.price.toLocaleString()}
                 <small>{plan.period}</small>
               </p>
               <ul>
-                <li>Full app access</li>
-                <li>Cloud sync</li>
-                <li>PDF & CSV export</li>
-                <li>Support via admin</li>
+                {plan.features.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
               </ul>
-              <Link to="/register" className="btn primary">Sign up</Link>
+              <Link to="/register" className="btn primary">Sign up — {plan.name}</Link>
             </article>
           ))}
+        </div>
+
+        <div id="payment" className="landing-payment-block">
+          <PaymentInstructions payment={payment} showDemoNote showAllPlanPrices />
         </div>
       </section>
 

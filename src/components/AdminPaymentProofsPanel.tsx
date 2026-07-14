@@ -92,6 +92,7 @@ export default function AdminPaymentProofsPanel() {
               <th><Label k="auth.phone" variant="compact" /></th>
               <th><Label k="auth.renewalType" variant="compact" /></th>
               <th><Label k="auth.subscription" variant="compact" /></th>
+              <th><Label k="auth.paymentRefId" variant="compact" /></th>
               <th><Label k="auth.paymentDue" variant="compact" /></th>
               <th><Label k="auth.paymentScreenshot" variant="compact" /></th>
               <th>Date</th>
@@ -104,8 +105,9 @@ export default function AdminPaymentProofsPanel() {
                 <td><strong>{s.username}</strong></td>
                 <td>{s.email || '—'}</td>
                 <td>{s.phone || '—'}</td>
-                <td>{s.kind === 'subscription_renewal' ? 'Renewal' : 'Payment due'}</td>
+                <td>{s.kind === 'signup_payment' ? 'Signup' : s.kind === 'subscription_renewal' ? 'Renewal' : 'Payment due'}</td>
                 <td>{s.subscriptionPlan || '—'}</td>
+                <td><code>{s.paymentRefId || '—'}</code></td>
                 <td><strong className="due-amount">Rs {s.paymentDue.toLocaleString()}</strong></td>
                 <td><ImageThumb src={s.screenshot} alt="payment proof" /></td>
                 <td>{new Date(s.createdAt).toLocaleString()}</td>

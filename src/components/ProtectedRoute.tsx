@@ -30,6 +30,9 @@ export default function ProtectedRoute() {
   }
 
   if (user.status !== 'approved' && user.role !== 'admin') {
+    if (user.status === 'pending' && user.trialActive) {
+      return <Outlet />;
+    }
     return <Navigate to="/login" replace state={{ pending: user.status === 'pending' }} />;
   }
 

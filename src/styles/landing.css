@@ -755,4 +755,264 @@
   .landing-nav-actions .landing-btn-ghost {
     display: none;
   }
+
+  .landing-pricing-three {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─── Advanced landing enhancements ─── */
+.landing-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(45, 106, 79, 0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 90% 20%, rgba(212, 168, 83, 0.1) 0%, transparent 50%);
+}
+
+.landing-page > * {
+  position: relative;
+  z-index: 1;
+}
+
+.landing-hero {
+  background: var(--tea-deep);
+}
+
+.landing-feature-card {
+  backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(26, 61, 47, 0.06);
+}
+
+.landing-pricing-pro {
+  background: linear-gradient(180deg, var(--cream) 0%, #fff 40%, var(--surface-2) 100%);
+}
+
+.landing-pricing-three {
+  grid-template-columns: 1fr;
+  max-width: 1100px;
+}
+
+.landing-demo-card {
+  border-style: dashed;
+  border-color: var(--gold);
+  background: linear-gradient(135deg, #fffef8, #fff);
+}
+
+.landing-price-badge.demo {
+  background: var(--tea-soft);
+  color: var(--tea-deep);
+}
+
+.landing-demo-disclaimer {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 1rem;
+  min-height: 3.5rem;
+}
+
+.landing-payment-block {
+  max-width: 720px;
+  margin: 2.5rem auto 0;
+}
+
+/* ─── Payment instructions ─── */
+.payment-instructions {
+  background: linear-gradient(135deg, #f0f7f4, #fff);
+  border: 1px solid rgba(45, 106, 79, 0.15);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.35rem;
+  margin: 1rem 0;
+}
+
+.payment-instructions.compact {
+  padding: 1rem;
+}
+
+.payment-demo-note {
+  background: #fff8e6;
+  border: 1px solid rgba(212, 168, 83, 0.4);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+  color: #6b5a2e;
+}
+
+.payment-ref-box {
+  text-align: center;
+  background: white;
+  border: 2px dashed var(--tea-primary);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.payment-ref-label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.payment-ref-id {
+  display: block;
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--tea-deep);
+  letter-spacing: 0.06em;
+  margin: 0.35rem 0;
+}
+
+.payment-ref-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.payment-amount-due {
+  font-size: 1rem;
+  margin: 0 0 1rem;
+}
+
+.payment-accounts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.payment-account-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: white;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(26, 61, 47, 0.1);
+}
+
+.payment-account-card.wide {
+  grid-column: 1 / -1;
+}
+
+.payment-account-card strong {
+  display: block;
+  font-size: 0.88rem;
+  color: var(--tea-deep);
+}
+
+.payment-account-name {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0.15rem;
+}
+
+.payment-account-card code {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--tea-primary);
+}
+
+.payment-account-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+  border-radius: 8px;
+  padding: 4px;
+  background: #f8f6f2;
+  border: 1px solid rgba(26, 61, 47, 0.06);
+}
+
+.payment-account-logo--easypaisa {
+  width: 72px;
+  height: 48px;
+  padding: 2px;
+  background: transparent;
+  border: none;
+}
+
+.payment-account-icon {
+  font-size: 1.5rem;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.payment-whatsapp-row {
+  text-align: center;
+}
+
+.payment-wa-btn {
+  width: 100%;
+  margin-bottom: 0.75rem;
+}
+
+.payment-wa-steps {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0;
+  text-align: left;
+}
+
+.payment-footer-note {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 1rem 0 0;
+}
+
+.subscription-plans-two {
+  grid-template-columns: 1fr 1fr;
+}
+
+.register-upload-block {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--cream-dark);
+}
+
+.register-upload-block h3 {
+  margin: 0 0 0.5rem;
+  color: var(--tea-deep);
+}
+
+.trial-banner {
+  background: linear-gradient(90deg, #fff8e6, #fef3cd);
+  border-bottom: 1px solid rgba(212, 168, 83, 0.45);
+  padding: 0.65rem 1.25rem;
+  font-size: 0.88rem;
+  color: #5c4a1f;
+  position: relative;
+  z-index: 10;
+}
+
+.trial-banner code {
+  background: rgba(26, 61, 47, 0.08);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+@media (min-width: 640px) {
+  .payment-accounts-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .landing-pricing-three {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }

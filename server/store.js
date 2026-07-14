@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isSubscriptionExpired, subscriptionInfo } from './subscriptions.js';
 import { isSupabaseEnabled } from './supabase.js';
+import { generatePaymentRefId } from './paymentConfig.js';
+import { isTrialActive, trialFieldsForPublic } from './trialAccess.js';
 import * as sb from './persistence/supabase.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -35,6 +37,9 @@ const USERS_FILE = join(DATA_DIR, 'users.json');
  * @property {string} [subscriptionStartsAt]
  * @property {string} [subscriptionExpiresAt]
  * @property {SignupSnapshot} [signupSnapshot]
+ * @property {string} [paymentRefId]
+ * @property {string} [trialStartedAt]
+ * @property {string} [trialEndsAt]
  */
 
 /**
@@ -201,6 +206,8 @@ export async function createUser(user) {
     email: normalizedEmail,
   });
 
+  const paymentRefId = user.paymentRefId ?? generatePaymentRefId(users);
+
   /** @type {UserRecord} */
   const record = {
     id: user.id ?? randomUUID(),
@@ -213,6 +220,7 @@ export async function createUser(user) {
     registrationFee: signupSnapshot.registrationFee,
     paymentFeeDate: signupSnapshot.paymentFeeDate,
     subscriptionPlan: signupSnapshot.subscriptionPlan,
+    paymentRefId,
     status: user.status ?? 'pending',
     role: user.role ?? 'user',
     paymentDue: 0,
@@ -332,10 +340,12 @@ export function publicUser(user) {
     role: user.role,
     createdAt: user.createdAt,
     approvedAt: user.approvedAt,
+    paymentRefId: user.paymentRefId ?? '',
     paymentDue: due,
     paymentDueNote: user.paymentDueNote ?? '',
     paymentBlocked: isPaymentBlocked(user),
-    accessBlocked: isAccessBlocked(user),
+    accessBlocked: isAccessBlocked(user) && !isTrialActive(user),
+    ...trialFieldsForPublic(user),
     ...sub,
   };
 }
@@ -359,6 +369,7 @@ export function adminUser(user) {
     paymentFeeDate: signup.paymentFeeDate,
     paymentDueNote: user.paymentDueNote ?? '',
     lastPaidAt: user.lastPaidAt ?? '',
+    paymentRefId: user.paymentRefId ?? '',
     subscriptionPlan: signup.subscriptionPlan || sub.subscriptionPlan,
     subscriptionPlanLabel: signup.subscriptionPlanLabel || sub.subscriptionPlanLabel,
     subscriptionStartsAt: user.subscriptionStartsAt ?? sub.subscriptionStartsAt ?? '',

@@ -20,7 +20,8 @@ const FILE = join(DATA_DIR, 'payment-submissions.json');
  * @property {string} phone
  * @property {number} paymentDue
  * @property {string} [subscriptionPlan]
- * @property {'payment_due' | 'subscription_renewal'} [kind]
+ * @property {'payment_due' | 'subscription_renewal' | 'signup_payment'} [kind]
+ * @property {string} [paymentRefId]
  * @property {string} screenshot
  * @property {SubmissionStatus} status
  * @property {string} createdAt
@@ -111,6 +112,7 @@ export function publicSubmission(s) {
     paymentDue: s.paymentDue,
     subscriptionPlan: s.subscriptionPlan ?? '',
     kind: s.kind ?? 'payment_due',
+    paymentRefId: s.paymentRefId ?? '',
     screenshot: s.screenshot,
     status: s.status,
     createdAt: s.createdAt,

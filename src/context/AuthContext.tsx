@@ -31,7 +31,7 @@ type AuthState = {
     subscriptionPlan: SubscriptionPlanId,
     paymentFeeDate: string,
     shopName?: string,
-  ) => Promise<string>;
+  ) => Promise<{ message: string; paymentRefId: string; user: AuthUser }>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 };
@@ -122,8 +122,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     paymentFeeDate: string,
     shopName?: string,
   ) => {
-    const { message } = await authApi.register(username, email, phone, password, subscriptionPlan, paymentFeeDate, shopName);
-    return message;
+    const result = await authApi.register(username, email, phone, password, subscriptionPlan, paymentFeeDate, shopName);
+    return {
+      message: result.message,
+      paymentRefId: result.paymentRefId,
+      user: result.user,
+    };
   }, []);
 
   const logout = useCallback(() => {

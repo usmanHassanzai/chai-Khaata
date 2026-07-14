@@ -43,6 +43,9 @@ export default function AdminUserCard({ user }: Props) {
 
       <div className="admin-user-card-grid">
         <Field labelKey="auth.email">{user.email || '—'}</Field>
+        {!isAdmin && user.paymentRefId && (
+          <Field labelKey="auth.paymentRefId"><code className="payment-ref-id">{user.paymentRefId}</code></Field>
+        )}
         <Field labelKey="auth.phone">{displayValue(user.phone, !isAdmin && !user.phone ? missingHint : undefined)}</Field>
         <Field labelKey="auth.password">
           {isAdmin ? '—' : (

@@ -3,6 +3,7 @@ import { findUserById, isPaymentBlocked, publicUser } from '../../server/store.j
 import { isSubscriptionExpired } from '../../server/subscriptions.js';
 import { sendJson, setCors } from '../../server/httpUtils.js';
 import { ADMIN_EMAIL, JWT_SECRET } from '../../server/env.js';
+import { isTrialActive } from '../../server/trialAccess.js';
 
 export default async function handler(req, res) {
   setCors(res);
@@ -33,6 +34,10 @@ export default async function handler(req, res) {
     }
 
     if (user.status !== 'approved' && user.role !== 'admin') {
+      if (user.status === 'pending' && isTrialActive(user)) {
+        sendJson(res, 200, { user: publicUser(user) });
+        return;
+      }
       sendJson(res, 403, {
         error: user.status === 'pending' ? 'PENDING_APPROVAL' : 'REJECTED',
         message: user.status === 'pending'

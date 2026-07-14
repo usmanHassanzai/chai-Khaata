@@ -1,10 +1,12 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { ADMIN_EMAIL, JWT_SECRET } from './env.js';
-import { findUserByLogin, isPaymentBlocked, paymentDueAmount, publicUser } from './store.js';
+import { findUserByLogin, isPaymentBlocked, paymentDueAmount, publicUser, updateUser } from './store.js';
 import { isSubscriptionExpired } from './subscriptions.js';
 import { isSupabaseEnabled, validateSupabaseConfig } from './supabase.js';
 import { withTimeout } from './httpUtils.js';
+import { ensurePendingTrial } from './trialAccess.js';
+import { notifyAdminPendingLogin } from './authHelpers.js';
 
 function signToken(user) {
   return jwt.sign(
@@ -48,7 +50,13 @@ export async function performLogin(loginValue, password) {
   }
 
   if (user.status === 'pending') {
-    const err = new Error(`Your account is waiting for admin approval (${ADMIN_EMAIL}).`);
+    await notifyAdminPendingLogin(ADMIN_EMAIL, user);
+    const trial = await ensurePendingTrial(user, updateUser);
+    if (trial.active) {
+      const refreshed = await findUserByLogin(String(loginValue));
+      return { token: signToken(refreshed ?? user), user: publicUser(refreshed ?? user) };
+    }
+    const err = new Error(`Your account is waiting for admin approval (${ADMIN_EMAIL}). Your 1-day preview has ended — send payment screenshot on WhatsApp with Payment ID ${user.paymentRefId || '—'}.`);
     err.code = 'PENDING_APPROVAL';
     err.user = publicUser(user);
     throw err;

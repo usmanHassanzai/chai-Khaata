@@ -24,7 +24,7 @@ export default function Login() {
       .catch(() => setServerOnline(isNativeAuthMode()));
   }, []);
 
-  if (user?.status === 'approved' || user?.role === 'admin') {
+  if (user?.status === 'approved' || user?.role === 'admin' || (user?.status === 'pending' && user.trialActive)) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -131,9 +131,6 @@ export default function Login() {
         </p>
         <Link to="/forgot-password" className="auth-quick-link">
           <Label k="auth.forgotPassword" variant="compact" />
-        </Link>
-        <Link to="/payment-due" className="auth-quick-link">
-          <Label k="auth.submitPaymentProof" variant="compact" />
         </Link>
         <Link to="/subscription-renew" className="auth-quick-link">
           <Label k="auth.renewSubscription" variant="compact" />

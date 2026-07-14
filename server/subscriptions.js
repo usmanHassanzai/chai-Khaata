@@ -1,6 +1,6 @@
-/** @typedef {'monthly' | 'six_month' | 'yearly'} SubscriptionPlanId */
+/** @typedef {'monthly' | 'yearly'} SubscriptionPlanId */
 
-export const PLAN_IDS = ['monthly', 'six_month', 'yearly'];
+export const PLAN_IDS = ['monthly', 'yearly'];
 
 /** @returns {{ id: SubscriptionPlanId, label: string, months: number, price: number }[]} */
 export function getSubscriptionPlans() {
@@ -9,26 +9,27 @@ export function getSubscriptionPlans() {
       id: 'monthly',
       label: 'Monthly',
       months: 1,
-      price: Number(process.env.SUBSCRIPTION_MONTHLY_PRICE) || 1000,
-    },
-    {
-      id: 'six_month',
-      label: '6 Months',
-      months: 6,
-      price: Number(process.env.SUBSCRIPTION_SIX_MONTH_PRICE) || 5000,
+      price: Number(process.env.SUBSCRIPTION_MONTHLY_PRICE) || 500,
     },
     {
       id: 'yearly',
       label: 'Yearly',
       months: 12,
-      price: Number(process.env.SUBSCRIPTION_YEARLY_PRICE) || 9000,
+      price: Number(process.env.SUBSCRIPTION_YEARLY_PRICE) || 5000,
     },
   ];
 }
 
+/** Legacy plan support for existing records */
+const LEGACY_PLANS = {
+  six_month: { id: 'six_month', label: '6 Months (legacy)', months: 6, price: 5000 },
+};
+
 /** @param {string} planId */
 export function getPlan(planId) {
-  return getSubscriptionPlans().find((p) => p.id === planId) ?? null;
+  return getSubscriptionPlans().find((p) => p.id === planId)
+    ?? LEGACY_PLANS[planId]
+    ?? null;
 }
 
 /** @param {string} planId */

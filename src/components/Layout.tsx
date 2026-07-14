@@ -5,6 +5,7 @@ import { authApi } from '../services/authApi';
 import { isCloudSyncEnabled } from '../services/cloudConfig';
 import { onSyncStatus, type SyncStatus } from '../services/ledgerSync';
 import AppInterior from './AppInterior';
+import TrialBanner from './TrialBanner';
 import { TEA_GALLERY } from '../data/teaGallery';
 import { Label } from '../i18n/useLabel';
 import { getLabel } from '../i18n/labels';
@@ -191,6 +192,7 @@ export default function Layout() {
         </header>
 
         <main className="main-content">
+          <TrialBanner />
           <AppInterior />
           <div key={location.pathname} className="page-container page-enter">
             <Outlet />

@@ -1,7 +1,23 @@
 export type UserStatus = 'pending' | 'approved' | 'rejected';
 export type UserRole = 'user' | 'admin';
 
-export type SubscriptionPlanId = 'monthly' | 'six_month' | 'yearly';
+export type SubscriptionPlanId = 'monthly' | 'yearly' | 'six_month';
+
+export interface PaymentAccount {
+  id: string;
+  label: string;
+  number: string;
+  accountName: string;
+}
+
+export interface PaymentConfig {
+  accounts: PaymentAccount[];
+  whatsapp: string;
+  whatsappDisplay: string;
+  whatsappLink: string;
+  demoDaysMarketing: number;
+  pendingTrialHours: number;
+}
 
 export interface SubscriptionPlan {
   id: SubscriptionPlanId;
@@ -35,6 +51,10 @@ export interface AuthUser {
   paymentBlocked?: boolean;
   accessBlocked?: boolean;
   lastPaidAt?: string;
+  paymentRefId?: string;
+  trialActive?: boolean;
+  trialEndsAt?: string;
+  trialStartedAt?: string;
 }
 
 export interface PaymentSubmission {
@@ -45,7 +65,8 @@ export interface PaymentSubmission {
   phone: string;
   paymentDue: number;
   subscriptionPlan?: string;
-  kind?: 'payment_due' | 'subscription_renewal';
+  kind?: 'payment_due' | 'subscription_renewal' | 'signup_payment';
+  paymentRefId?: string;
   screenshot: string;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
@@ -69,6 +90,7 @@ export interface AuthConfig {
   adminEmail: string;
   requiresApproval: boolean;
   subscriptionPlans: SubscriptionPlan[];
+  payment?: PaymentConfig;
   otpDelivery?: {
     emailConfigured: boolean;
     smsConfigured: boolean;
@@ -183,9 +205,21 @@ export const remoteAuthApi = {
     paymentFeeDate: string,
     shopName?: string,
   ) {
-    return request<{ message: string; user: AuthUser }>('/api/auth/register', {
+    return request<{
+      message: string;
+      user: AuthUser;
+      paymentRefId: string;
+      payment: PaymentConfig;
+    }>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ username, email, phone, password, subscriptionPlan, paymentFeeDate, shopName }),
+    });
+  },
+
+  submitSignupPayment(login: string, password: string, screenshot: string) {
+    return request<{ message: string; paymentRefId: string }>('/api/auth/submit-signup-payment', {
+      method: 'POST',
+      body: JSON.stringify({ login, password, screenshot }),
     });
   },
 

@@ -278,6 +278,10 @@ export const localAuthApi = {
     }
   },
 
+  async submitSignupPayment(_login: string, _password: string, _screenshot: string) {
+    throw new ApiError('NETWORK_ERROR', 'Payment upload requires the online server.');
+  },
+
   async subscriptionPlans() {
     return { plans: getSubscriptionPlans() };
   },

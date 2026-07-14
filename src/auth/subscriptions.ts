@@ -1,9 +1,8 @@
 import type { SubscriptionPlan, SubscriptionPlanId } from '../services/authApi';
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
-  { id: 'monthly', label: 'Monthly', months: 1, price: 1000 },
-  { id: 'six_month', label: '6 Months', months: 6, price: 5000 },
-  { id: 'yearly', label: 'Yearly', months: 12, price: 9000 },
+  { id: 'monthly', label: 'Monthly', months: 1, price: 500 },
+  { id: 'yearly', label: 'Yearly', months: 12, price: 5000 },
 ];
 
 export function getSubscriptionPlans(): SubscriptionPlan[] {

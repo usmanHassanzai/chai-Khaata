@@ -4,11 +4,14 @@ import AuthLayout from '../components/AuthLayout';
 import { useAuth } from '../context/AuthContext';
 import ImageUpload from '../components/ImageUpload';
 import { Label } from '../i18n/useLabel';
-import { ApiError, authApi, type SubscriptionPlan, type SubscriptionPlanId } from '../services/authApi';
+import { DEFAULT_PAYMENT_CONFIG, normalizePaymentConfig, normalizeSubscriptionPlans } from '../data/paymentPlans';
+import PaymentInstructions from '../components/PaymentInstructions';
+import { ApiError, authApi, type PaymentConfig, type SubscriptionPlan, type SubscriptionPlanId } from '../services/authApi';
 
 export default function SubscriptionRenew() {
   const { user, logout, refreshUser } = useAuth();
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [payment, setPayment] = useState<PaymentConfig>(DEFAULT_PAYMENT_CONFIG);
   const [subscriptionPlan, setSubscriptionPlan] = useState<SubscriptionPlanId>('monthly');
   const [loginId, setLoginId] = useState(user?.email || user?.username || '');
   const [password, setPassword] = useState('');
@@ -21,9 +24,13 @@ export default function SubscriptionRenew() {
   const [expiresAt, setExpiresAt] = useState(user?.subscriptionExpiresAt ?? '');
 
   useEffect(() => {
+    authApi.config()
+      .then((c) => { if (c.payment) setPayment(normalizePaymentConfig(c.payment)); })
+      .catch(() => {});
     authApi.subscriptionPlans().then(({ plans: list }) => {
-      setPlans(list);
-      if (list.length) setSubscriptionPlan(list[0].id);
+      const normalized = normalizeSubscriptionPlans(list);
+      setPlans(normalized);
+      if (normalized.length) setSubscriptionPlan(normalized[0].id);
     }).catch(() => {});
   }, []);
 
@@ -128,10 +135,12 @@ export default function SubscriptionRenew() {
             ))}
           </div>
           {selectedPlan && (
-            <p className="subscription-selected-note">
-              <Label k="auth.renewalAmount" variant="compact" />:{' '}
-              <strong>Rs {selectedPlan.price.toLocaleString()}</strong>
-            </p>
+            <PaymentInstructions
+              payment={payment}
+              planPrice={selectedPlan.price}
+              planLabel={selectedPlan.label}
+              compact
+            />
           )}
         </fieldset>
 
