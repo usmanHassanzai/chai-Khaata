@@ -31,7 +31,7 @@ type AuthState = {
     subscriptionPlan: SubscriptionPlanId,
     paymentFeeDate: string,
     shopName?: string,
-  ) => Promise<{ message: string; paymentRefId: string; user: AuthUser }>;
+  ) => Promise<{ message: string; paymentRefId: string; user: AuthUser; adminNotified?: boolean }>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 };
@@ -127,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       message: result.message,
       paymentRefId: result.paymentRefId,
       user: result.user,
+      adminNotified: result.adminNotified,
     };
   }, []);
 

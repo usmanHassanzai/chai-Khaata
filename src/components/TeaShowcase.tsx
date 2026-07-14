@@ -39,7 +39,6 @@ export default function TeaShowcase() {
             <div className="tea-showcase-body">
               <strong>{tea.name}</strong>
               <span className="tea-showcase-ur">{tea.nameUr}</span>
-              {tea.region && <span className="tea-showcase-region">{tea.region}</span>}
               <p>{tea.description}</p>
             </div>
           </article>

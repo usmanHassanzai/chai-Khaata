@@ -24,7 +24,8 @@ create table if not exists public.users (
   signup_snapshot jsonb,
   payment_ref_id text,
   trial_started_at timestamptz,
-  trial_ends_at timestamptz
+  trial_ends_at timestamptz,
+  last_expiry_reminder_date text
 );
 
 -- Migration for existing projects (run if table already exists):

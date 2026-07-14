@@ -1,4 +1,4 @@
-import { useAuth } from '../context/AuthContext';
+import { useShopPrintProfile } from '../hooks/useShopPrintProfile';
 import { Label } from '../i18n/useLabel';
 import {
   downloadCsv,
@@ -29,8 +29,7 @@ export default function ExportToolbar({
   disabled,
   compact,
 }: ExportToolbarProps) {
-  const { user } = useAuth();
-  const shopName = user?.shopName || 'Patiwala';
+  const shopProfile = useShopPrintProfile();
   const stamp = new Date().toISOString().slice(0, 10);
   const base = `${filenamePrefix}-${stamp}`;
   const noData = rows.length === 0;
@@ -40,11 +39,11 @@ export default function ExportToolbar({
   }
 
   function exportPdf() {
-    downloadPdf({ filename: base, title, shopName, subtitle, columns, rows });
+    downloadPdf({ filename: base, title, shopProfile, subtitle, columns, rows });
   }
 
   function exportPrint() {
-    printTable({ title, shopName, subtitle, columns, rows });
+    printTable({ title, shopProfile, subtitle, columns, rows });
   }
 
   function exportJson() {

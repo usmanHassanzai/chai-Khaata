@@ -33,6 +33,7 @@ export function rowToUser(row) {
     paymentRefId: row.payment_ref_id ?? undefined,
     trialStartedAt: row.trial_started_at ?? undefined,
     trialEndsAt: row.trial_ends_at ?? undefined,
+    lastExpiryReminderDate: row.last_expiry_reminder_date ?? undefined,
   };
 }
 
@@ -62,6 +63,7 @@ export function userToRow(user) {
     payment_ref_id: user.paymentRefId ?? null,
     trial_started_at: user.trialStartedAt ?? null,
     trial_ends_at: user.trialEndsAt ?? null,
+    last_expiry_reminder_date: user.lastExpiryReminderDate ?? null,
   };
 }
 
@@ -136,6 +138,9 @@ export async function sbUpdateUser(id, patch) {
   if (patch.username) merged.username = String(patch.username).trim().toLowerCase();
   if ('registrationPassword' in patch && patch.registrationPassword === undefined) {
     delete merged.registrationPassword;
+  }
+  if ('lastExpiryReminderDate' in patch && patch.lastExpiryReminderDate === undefined) {
+    delete merged.lastExpiryReminderDate;
   }
 
   const { data, error } = await getSupabase()

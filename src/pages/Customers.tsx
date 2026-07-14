@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import FormField, { FieldLabel, ReadOnlyField } from '../components/FormField';
 import ImageUpload, { ImageThumb } from '../components/ImageUpload';
 import PageBanner from '../components/PageBanner';
+import PhoneLink from '../components/PhoneLink';
 import ExportToolbar from '../components/ExportToolbar';
 import TextAreaField from '../components/TextAreaField';
 import { db, nextCustomerId } from '../db/database';
@@ -11,12 +12,16 @@ import type { Customer, Sale } from '../models/types';
 import {
   computeCustomerSummary,
   computeSaleProfit,
+  DEFAULT_BAG_WEIGHT_KG,
+  formatBags,
   formatCurrency,
   formatKg,
   getGodaamPurchasePrice,
   getStockForTea,
   getTeaNames,
+  kgFromBags,
   profitPerKg,
+  saleBagsSold,
   saleTotal,
   todayISO,
 } from '../services/calculations';
@@ -65,6 +70,8 @@ export default function Customers() {
   const [saleCustomerId, setSaleCustomerId] = useState('');
   const [saleDate, setSaleDate] = useState(todayISO());
   const [saleTea, setSaleTea] = useState('');
+  const [saleBags, setSaleBags] = useState('');
+  const [saleBagWeight, setSaleBagWeight] = useState(String(DEFAULT_BAG_WEIGHT_KG));
   const [saleQty, setSaleQty] = useState('');
   const [salePrice, setSalePrice] = useState('');
   const [saleReceived, setSaleReceived] = useState('');
@@ -77,7 +84,7 @@ export default function Customers() {
 
   const teaNames = useMemo(() => getTeaNames(purchases), [purchases]);
 
-  const quickSaleQty = parseFloat(saleQty) || 0;
+  const quickSaleQty = parseFloat(saleQty) || (parseFloat(saleBags) || 0) * (parseFloat(saleBagWeight) || DEFAULT_BAG_WEIGHT_KG);
   const quickSalePrice = parseFloat(salePrice) || 0;
   const quickGodaam = saleTea ? getGodaamPurchasePrice(saleTea, purchases) : {
     avgCostPerKg: 0,
@@ -191,7 +198,9 @@ export default function Customers() {
     e.preventDefault();
     setSaleError('');
     const cid = parseInt(saleCustomerId, 10);
-    const qty = parseFloat(saleQty) || 0;
+    const qty = parseFloat(saleQty) || kgFromBags(parseFloat(saleBags) || 0, parseFloat(saleBagWeight) || DEFAULT_BAG_WEIGHT_KG);
+    const bags = Math.round(parseFloat(saleBags) || 0);
+    const bagWeight = parseFloat(saleBagWeight) || DEFAULT_BAG_WEIGHT_KG;
     const price = parseFloat(salePrice) || 0;
     if (!cid || !saleTea.trim() || qty <= 0 || price <= 0) return;
 
@@ -215,6 +224,8 @@ export default function Customers() {
       date: saleDate,
       teaName: saleTea.trim(),
       quantityKg: qty,
+      bagsSold: bags > 0 ? bags : undefined,
+      bagWeightKg: bags > 0 ? bagWeight : undefined,
       salePricePerKg: price,
       purchasePricePerKg: purchasePrice || undefined,
       customerId: cid,
@@ -224,6 +235,8 @@ export default function Customers() {
     });
 
     setSaleTea('');
+    setSaleBags('');
+    setSaleBagWeight(String(DEFAULT_BAG_WEIGHT_KG));
     setSaleQty('');
     setSalePrice('');
     setSaleReceived('');
@@ -300,6 +313,18 @@ export default function Customers() {
               {teaNames.map((n) => <option key={n} value={n} />)}
             </datalist>
           </label>
+          <FormField labelKey="customers.bagsSold" value={saleBags} onChange={(v) => {
+            setSaleBags(v);
+            const b = Math.round(parseFloat(v) || 0);
+            const bw = parseFloat(saleBagWeight) || DEFAULT_BAG_WEIGHT_KG;
+            if (b > 0) setSaleQty(String(kgFromBags(b, bw)));
+          }} type="number" min={0} step={1} placeholder="0" />
+          <FormField labelKey="customers.bagQuantity" value={saleBagWeight} onChange={(v) => {
+            setSaleBagWeight(v);
+            const b = Math.round(parseFloat(saleBags) || 0);
+            const bw = parseFloat(v) || DEFAULT_BAG_WEIGHT_KG;
+            if (b > 0) setSaleQty(String(kgFromBags(b, bw)));
+          }} type="number" min={0} step={0.01} />
           <FormField labelKey="dukaan.quantityKg" value={saleQty} onChange={setSaleQty} type="number" min={0} step={0.01} required />
           <ReadOnlyField
             labelKey="dukaan.purchasePricePerKg"
@@ -343,6 +368,7 @@ export default function Customers() {
                 <th><Label k="common.address" variant="compact" /></th>
                 <th><Label k="customers.registerDate" variant="compact" /></th>
                 <th><Label k="customers.totalMaal" variant="compact" /></th>
+                <th><Label k="customers.totalBagsSold" variant="compact" /></th>
                 <th><Label k="customers.totalAmount" variant="compact" /></th>
                 <th><Label k="customers.receivingAmount" variant="compact" /></th>
                 <th><Label k="customers.totalDues" variant="compact" /></th>
@@ -355,7 +381,7 @@ export default function Customers() {
             </thead>
             <tbody>
               {customers.length === 0 ? (
-                <tr><td colSpan={14} className="empty">{l('common.noData')}</td></tr>
+                <tr><td colSpan={15} className="empty">{l('common.noData')}</td></tr>
               ) : (
                 customers.map((c) => {
                   const s = computeCustomerSummary(c, sales, payments);
@@ -363,10 +389,11 @@ export default function Customers() {
                     <tr key={c.id}>
                       <td>{c.customerId}</td>
                       <td><strong>{c.name}</strong></td>
-                      <td>{c.phone ?? '—'}</td>
+                      <td><PhoneLink phone={c.phone} /></td>
                       <td className="truncate-cell">{c.address ?? '—'}</td>
                       <td>{c.registerDate ?? '—'}</td>
                       <td>{formatKg(s.totalMaalKg)}</td>
+                      <td>{formatBags(s.totalBagsSold)}</td>
                       <td>{formatCurrency(s.totalSale)}</td>
                       <td>{formatCurrency(s.receivingAmount)}</td>
                       <td className={s.pendingAmount > 0 ? 'warn-text' : ''}>{formatCurrency(s.pendingAmount)}</td>
@@ -413,6 +440,7 @@ export default function Customers() {
                 <th><Label k="common.phone" variant="compact" /></th>
                 <th><Label k="dukaan.teaName" variant="compact" /></th>
                 <th><Label k="customers.totalMaal" variant="compact" /></th>
+                <th><Label k="customers.totalBagsSold" variant="compact" /></th>
                 <th><Label k="dukaan.purchasePricePerKg" variant="compact" /></th>
                 <th><Label k="customers.salePricePerKg" variant="compact" /></th>
                 <th><Label k="customers.totalAmount" variant="compact" /></th>
@@ -425,7 +453,7 @@ export default function Customers() {
             </thead>
             <tbody>
               {filteredLedger.length === 0 ? (
-                <tr><td colSpan={14} className="empty">{l('common.noData')}</td></tr>
+                <tr><td colSpan={15} className="empty">{l('common.noData')}</td></tr>
               ) : (
                 filteredLedger.map((s) => {
                   const c = customerForSale(s);
@@ -435,9 +463,10 @@ export default function Customers() {
                       <td>{s.date}</td>
                       <td>{c?.customerId ?? '—'}</td>
                       <td>{c?.name ?? '—'}</td>
-                      <td>{c?.phone ?? '—'}</td>
+                      <td><PhoneLink phone={c?.phone} /></td>
                       <td>{s.teaName}</td>
                       <td>{formatKg(s.quantityKg)}</td>
+                      <td>{formatBags(saleBagsSold(s))}</td>
                       <td>{s.purchasePricePerKg != null ? formatCurrency(s.purchasePricePerKg) : '—'}</td>
                       <td>{formatCurrency(s.salePricePerKg)}</td>
                       <td>{formatCurrency(saleTotal(s))}</td>
@@ -468,7 +497,7 @@ export default function Customers() {
               <div>
                 <h3>{detailCustomer.name}</h3>
                 <p><Label k="customers.customerId" variant="compact" />: <strong>{detailCustomer.customerId}</strong></p>
-                <p><Label k="common.phone" variant="compact" />: {detailCustomer.phone ?? '—'}</p>
+                <p><Label k="common.phone" variant="compact" />: <PhoneLink phone={detailCustomer.phone} /></p>
                 <p><Label k="common.address" variant="compact" />: {detailCustomer.address ?? '—'}</p>
                 <p><Label k="customers.registerDate" variant="compact" />: {detailCustomer.registerDate ?? '—'}</p>
               </div>
@@ -476,6 +505,7 @@ export default function Customers() {
 
             <div className="detail-grid">
               <div className="detail-stat"><Label k="customers.totalMaal" variant="compact" /><strong>{formatKg(detailSummary.totalMaalKg)}</strong></div>
+              <div className="detail-stat"><Label k="customers.totalBagsSold" variant="compact" /><strong>{formatBags(detailSummary.totalBagsSold)}</strong></div>
               <div className="detail-stat"><Label k="customers.totalAmount" variant="compact" /><strong>{formatCurrency(detailSummary.totalSale)}</strong></div>
               <div className="detail-stat"><Label k="customers.receivingAmount" variant="compact" /><strong>{formatCurrency(detailSummary.receivingAmount)}</strong></div>
               <div className="detail-stat"><Label k="customers.totalDues" variant="compact" /><strong className={detailSummary.pendingAmount > 0 ? 'warn-text' : ''}>{formatCurrency(detailSummary.pendingAmount)}</strong></div>
@@ -492,6 +522,7 @@ export default function Customers() {
                     <th><Label k="common.date" variant="compact" /></th>
                     <th><Label k="dukaan.teaName" variant="compact" /></th>
                     <th>kg</th>
+                    <th><Label k="customers.bagsSold" variant="compact" /></th>
                     <th><Label k="dukaan.purchasePricePerKg" variant="compact" /></th>
                     <th><Label k="customers.salePricePerKg" variant="compact" /></th>
                     <th><Label k="customers.totalAmount" variant="compact" /></th>
@@ -510,6 +541,7 @@ export default function Customers() {
                         <td>{s.date}</td>
                         <td>{s.teaName}</td>
                         <td>{s.quantityKg}</td>
+                        <td>{formatBags(saleBagsSold(s))}</td>
                         <td>{s.purchasePricePerKg != null ? formatCurrency(s.purchasePricePerKg) : '—'}</td>
                         <td>{formatCurrency(s.salePricePerKg)}</td>
                         <td>{formatCurrency(saleTotal(s))}</td>

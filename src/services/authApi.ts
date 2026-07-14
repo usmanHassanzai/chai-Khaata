@@ -93,6 +93,7 @@ export interface AuthConfig {
   payment?: PaymentConfig;
   otpDelivery?: {
     emailConfigured: boolean;
+    adminNotificationsConfigured?: boolean;
     smsConfigured: boolean;
     twilio?: {
       configured: boolean;
@@ -209,6 +210,7 @@ export const remoteAuthApi = {
       user: AuthUser;
       paymentRefId: string;
       payment: PaymentConfig;
+      adminNotified?: boolean;
     }>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ username, email, phone, password, subscriptionPlan, paymentFeeDate, shopName }),
@@ -240,10 +242,27 @@ export const remoteAuthApi = {
     });
   },
 
+  recoverPasswordByEmail(email: string) {
+    return request<{ message: string; sent?: boolean; maskedEmail?: string }>(
+      '/api/auth/recover-password-by-email',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      },
+    );
+  },
+
   resetPassword(login: string, otp: string, newPassword: string) {
     return request<{ message: string }>('/api/auth/reset-password', {
       method: 'POST',
       body: JSON.stringify({ login, otp, newPassword }),
+    });
+  },
+
+  changePassword(currentPassword: string, newPassword: string) {
+    return request<{ message: string }>('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
     });
   },
 
@@ -335,6 +354,12 @@ export const remoteAuthApi = {
     return request<{ message: string; otp: string; sentTo: string }>(`/api/admin/users/${id}/send-otp`, {
       method: 'POST',
       body: JSON.stringify({ channel }),
+    });
+  },
+
+  sendPasswordToUser(id: string) {
+    return request<{ message: string; sent?: boolean }>(`/api/admin/users/${id}/send-password`, {
+      method: 'POST',
     });
   },
 };

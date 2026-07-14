@@ -1,4 +1,4 @@
-import { sendOtpEmail, isEmailConfigured } from './email.js';
+import { sendOtpEmail, isAdminNotificationConfigured } from './email.js';
 import { sendOtpSms, isSmsConfigured, twilioConfigSummary } from './twilio.js';
 
 /**
@@ -48,7 +48,8 @@ export async function deliverOtp({ channel, email, phone, username, otp }) {
 
 export function otpDeliveryStatus() {
   return {
-    emailConfigured: isEmailConfigured(),
+    emailConfigured: isAdminNotificationConfigured(),
+    adminNotificationsConfigured: isAdminNotificationConfigured(),
     smsConfigured: isSmsConfigured(),
     twilio: twilioConfigSummary(),
   };

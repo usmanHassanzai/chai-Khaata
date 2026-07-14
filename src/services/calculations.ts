@@ -23,7 +23,27 @@ export function purchaseDue(p: Purchase): number {
 }
 
 export function purchasePendingBags(p: Purchase): number {
-  return p.bagsOrdered - p.bagsReceived;
+  return Math.max(0, p.bagsOrdered - p.bagsReceived);
+}
+
+export const DEFAULT_BAG_WEIGHT_KG = 62;
+
+export function saleBagWeightKg(s: Sale): number {
+  return s.bagWeightKg && s.bagWeightKg > 0 ? s.bagWeightKg : DEFAULT_BAG_WEIGHT_KG;
+}
+
+/** Bags sold — only when entered on sale; kg-only sales show 0. */
+export function saleBagsSold(s: Sale): number {
+  if (s.bagsSold == null || s.bagsSold <= 0) return 0;
+  return Math.round(s.bagsSold);
+}
+
+export function formatBags(count: number): string {
+  return `${Math.round(count).toLocaleString('en-PK')} bags`;
+}
+
+export function kgFromBags(bags: number, bagWeightKg = DEFAULT_BAG_WEIGHT_KG): number {
+  return Math.round(bags * bagWeightKg * 100) / 100;
 }
 
 export function saleTotal(s: Sale): number {
@@ -202,7 +222,24 @@ export function computeDealerSummary(
   const totalPaid = depositFromPurchases + standalonePayments;
   const currentDue = dealer.openingDue + totalPurchased - totalPaid;
 
-  return { dealer, totalPurchased, totalPaid, currentDue };
+  const totalReceivedMaalKg = dealerPurchases.reduce((sum, p) => sum + purchaseNetWeight(p), 0);
+  const totalPendingBags = dealerPurchases.reduce((sum, p) => sum + purchasePendingBags(p), 0);
+  const totalPendingMaalKg = dealerPurchases.reduce(
+    (sum, p) => sum + purchasePendingBags(p) * p.bagWeightKg,
+    0,
+  );
+  const totalBagsReceived = dealerPurchases.reduce((sum, p) => sum + p.bagsReceived, 0);
+
+  return {
+    dealer,
+    totalPurchased,
+    totalPaid,
+    currentDue,
+    totalReceivedMaalKg,
+    totalPendingBags,
+    totalPendingMaalKg,
+    totalBagsReceived,
+  };
 }
 
 export function computeCustomerSummary(
@@ -213,6 +250,7 @@ export function computeCustomerSummary(
   const customerSales = sales.filter((s) => s.customerId === customer.id);
   const totalSale = customerSales.reduce((sum, s) => sum + saleTotal(s), 0);
   const totalMaalKg = customerSales.reduce((sum, s) => sum + s.quantityKg, 0);
+  const totalBagsSold = customerSales.reduce((sum, s) => sum + saleBagsSold(s), 0);
   const fromSales = customerSales.reduce((sum, s) => sum + s.amountReceived, 0);
   const standalonePayments = payments
     .filter((p) => p.customerId === customer.id)
@@ -221,7 +259,7 @@ export function computeCustomerSummary(
   const pendingAmount = totalSale - receivingAmount;
   const teaNames = [...new Set(customerSales.map((s) => s.teaName.trim()).filter(Boolean))];
 
-  return { customer, totalSale, totalMaalKg, receivingAmount, pendingAmount, teaNames };
+  return { customer, totalSale, totalMaalKg, totalBagsSold, receivingAmount, pendingAmount, teaNames };
 }
 
 export function formatCurrency(amount: number): string {

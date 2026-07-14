@@ -3,11 +3,15 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { Label, PageTitle, SectionTitle, useLabel, useLabelMode } from '../i18n/useLabel';
 import { setLabelMode, type LabelMode } from '../i18n/labels';
 import { useAuth } from '../context/AuthContext';
+import ChangePasswordForm from '../components/ChangePasswordForm';
+import AdminAllUsersPanel from '../components/AdminAllUsersPanel';
 import AdminUsersPanel from '../components/AdminUsersPanel';
 import CloudSyncPanel from '../components/CloudSyncPanel';
 import PageBanner from '../components/PageBanner';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AdminPaymentProofsPanel from '../components/AdminPaymentProofsPanel';
+import FormField from '../components/FormField';
+import ImageUpload from '../components/ImageUpload';
 import { useAppDb } from '../hooks/useAppDb';
 import { getSettingsQuery } from '../db/database';
 import {
@@ -25,11 +29,13 @@ import {
   type ResetScope,
   type ThemeMode,
 } from '../services/appPreferences';
+import type { AppSettings } from '../models/types';
+import { buildPrintHeaderHtml, resolveShopPrintProfile } from '../services/shopProfile';
 
-const DEFAULT_SETTINGS = {
-  id: 'settings' as const,
+const DEFAULT_SETTINGS: AppSettings = {
+  id: 'settings',
   lowStockThresholdKg: 50,
-  language: 'ur-roman' as const,
+  language: 'ur-roman',
 };
 
 const MODES: { mode: LabelMode; labelKey: string; flag: string }[] = [
@@ -83,6 +89,10 @@ export default function Settings() {
 
   const [tab, setTab] = useState<TabId>('general');
   const [threshold, setThreshold] = useState('50');
+  const [shopName, setShopName] = useState('');
+  const [shopPhone, setShopPhone] = useState('');
+  const [shopAddress, setShopAddress] = useState('');
+  const [shopLogo, setShopLogo] = useState<string | undefined>();
   const [toast, setToast] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ scope: ResetScope; title: string; message: string } | null>(null);
@@ -94,12 +104,41 @@ export default function Settings() {
 
   useEffect(() => {
     setThreshold(String(settings.lowStockThresholdKg));
-  }, [settings.lowStockThresholdKg]);
+    setShopName(settings.shopName ?? user?.shopName ?? '');
+    setShopPhone(settings.shopPhone ?? user?.phone ?? '');
+    setShopAddress(settings.shopAddress ?? '');
+    setShopLogo(settings.shopLogo);
+  }, [settings, user?.shopName, user?.phone]);
+
+  const printPreviewProfile = resolveShopPrintProfile(
+    {
+      shopName,
+      shopLogo,
+      shopPhone,
+      shopAddress,
+    },
+    user,
+  );
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(''), 3200);
   }, []);
+
+  async function saveShopProfile() {
+    if (!appDb) {
+      showToast(l('settings.dbNotReady'));
+      return;
+    }
+    await appDb.settings.put({
+      ...settings,
+      shopName: shopName.trim() || undefined,
+      shopPhone: shopPhone.trim() || undefined,
+      shopAddress: shopAddress.trim() || undefined,
+      shopLogo,
+    });
+    showToast(l('settings.shopProfileSaved'));
+  }
 
   async function saveThreshold() {
     if (!appDb) {
@@ -237,6 +276,30 @@ export default function Settings() {
           {tab === 'business' && (
             <div className="settings-panel animate-fade-in-up">
               <section className="card settings-card">
+                <SectionTitle k="settings.shopProfile" />
+                <p className="settings-hint"><Label k="settings.shopProfileHint" variant="compact" /></p>
+
+                <div className="form-grid">
+                  <FormField labelKey="settings.shopName" value={shopName} onChange={setShopName} placeholder="My Tea Shop" />
+                  <FormField labelKey="settings.shopPhone" value={shopPhone} onChange={setShopPhone} placeholder="03xx-xxxxxxx" />
+                  <FormField labelKey="settings.shopAddress" value={shopAddress} onChange={setShopAddress} placeholder="City, area" />
+                  <ImageUpload labelKey="settings.shopLogo" value={shopLogo} onChange={setShopLogo} />
+                </div>
+
+                <button type="button" className="btn primary" onClick={saveShopProfile} disabled={!appDb}>
+                  <Label k="common.save" variant="compact" />
+                </button>
+
+                <div className="settings-print-preview">
+                  <span className="settings-info-label"><Label k="settings.printPreview" variant="compact" /></span>
+                  <div
+                    className="settings-print-preview-box"
+                    dangerouslySetInnerHTML={{ __html: buildPrintHeaderHtml(printPreviewProfile) }}
+                  />
+                </div>
+              </section>
+
+              <section className="card settings-card">
                 <SectionTitle k="settings.businessRules" />
                 <p className="settings-hint"><Label k="settings.businessHint" variant="compact" /></p>
 
@@ -326,6 +389,8 @@ export default function Settings() {
                   </div>
                 )}
               </section>
+
+              <ChangePasswordForm />
             </div>
           )}
 
@@ -412,6 +477,7 @@ export default function Settings() {
             <div className="settings-panel animate-fade-in-up">
               <AdminPaymentProofsPanel />
               <AdminUsersPanel />
+              <AdminAllUsersPanel />
             </div>
           )}
 

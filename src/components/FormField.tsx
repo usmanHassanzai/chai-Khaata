@@ -9,6 +9,7 @@ interface Props {
   required?: boolean;
   min?: number;
   step?: number;
+  autoComplete?: string;
 }
 
 export default function FormField({
@@ -20,6 +21,7 @@ export default function FormField({
   required,
   min,
   step,
+  autoComplete,
 }: Props) {
   return (
     <label className="form-field">
@@ -34,6 +36,7 @@ export default function FormField({
         required={required}
         min={min}
         step={step}
+        autoComplete={autoComplete}
       />
     </label>
   );

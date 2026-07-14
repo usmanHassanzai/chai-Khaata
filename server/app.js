@@ -8,6 +8,8 @@ import { readLedger, writeLedger, shouldAcceptIncoming, deleteLedger } from './l
 import { deliverOtp, otpDeliveryStatus } from './otpDelivery.js';
 import { clearOtp, createOtp, getOtpForUser, listActiveOtps, verifyOtp } from './otpStore.js';
 import { notifyAdminNewSignup } from './authHelpers.js';
+import { recoverPasswordByEmail, adminSendPasswordToUser } from './passwordRecovery.js';
+import { clearExpiryReminderFields, runSubscriptionExpiryReminders } from './subscriptionReminders.js';
 import {
   clearSubmissionsForUser,
   createSubmission,
@@ -154,6 +156,31 @@ app.get('/api/health', async (_req, res) => {
     publicUrl: PUBLIC_SERVER_URL || null,
     bootstrap,
   });
+});
+
+function cronAuthorized(req) {
+  const secret = String(process.env.CRON_SECRET || '').trim();
+  if (!secret) return process.env.NODE_ENV !== 'production';
+  const auth = String(req.headers.authorization || '');
+  if (auth === `Bearer ${secret}`) return true;
+  return req.query?.secret === secret;
+}
+
+app.get('/api/cron/subscription-reminders', async (req, res) => {
+  if (!cronAuthorized(req)) {
+    return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Invalid or missing CRON_SECRET' });
+  }
+  try {
+    const result = await runSubscriptionExpiryReminders();
+    res.json({
+      ok: true,
+      message: `Expiry reminders: ${result.sent} sent, ${result.skipped} skipped`,
+      ...result,
+    });
+  } catch (err) {
+    console.error('Subscription reminder cron error:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Reminder job failed' });
+  }
 });
 
 app.get('/api/auth/config', (_req, res) => {
@@ -497,9 +524,11 @@ app.patch('/api/admin/payment-submissions/:id/approve', authMiddleware, adminMid
     const renewalPlan = submission.subscriptionPlan || user.subscriptionPlan;
     if (submission.kind === 'subscription_renewal' && renewalPlan && isValidPlanId(renewalPlan)) {
       Object.assign(patch, extendSubscription(user, renewalPlan));
+      Object.assign(patch, clearExpiryReminderFields());
       patch.registrationFee = getPlan(renewalPlan).price;
     } else if (user.status === 'approved' && renewalPlan && isValidPlanId(renewalPlan) && isSubscriptionExpired(user)) {
       Object.assign(patch, extendSubscription(user, renewalPlan));
+      Object.assign(patch, clearExpiryReminderFields());
     }
 
     await updateUser(user.id, patch);
@@ -688,6 +717,23 @@ app.post('/api/admin/users/:id/send-otp', authMiddleware, adminMiddleware, async
   }
 });
 
+app.post('/api/admin/users/:id/send-password', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const result = await adminSendPasswordToUser(req.params.id);
+    if (!result.ok) {
+      const status = result.error === 'NOT_FOUND' ? 404 : result.error === 'EMAIL_FAILED' ? 503 : 400;
+      return res.status(status).json({ error: result.error, message: result.message });
+    }
+    res.json({
+      message: result.message || `Password sent to user's registered email.`,
+      sent: result.sent,
+    });
+  } catch (err) {
+    console.error('Admin send password error:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not send password email' });
+  }
+});
+
 app.delete('/api/admin/users/:id', authMiddleware, adminMiddleware, deleteUserHandler);
 app.post('/api/admin/users/:id/delete', authMiddleware, adminMiddleware, deleteUserHandler);
 
@@ -739,6 +785,25 @@ async function deleteUserHandler(req, res) {
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not delete user from database' });
   }
 }
+
+app.post('/api/auth/recover-password-by-email', async (req, res) => {
+  try {
+    const { email } = req.body ?? {};
+    const result = await recoverPasswordByEmail(email);
+    if (!result.ok) {
+      const status = result.error === 'EMAIL_FAILED' ? 503 : 400;
+      return res.status(status).json({ error: result.error, message: result.message });
+    }
+    res.json({
+      message: result.message,
+      sent: result.sent,
+      maskedEmail: result.maskedEmail,
+    });
+  } catch (err) {
+    console.error('Recover password by email error:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not process password recovery' });
+  }
+});
 
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
@@ -838,6 +903,51 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
+app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body ?? {};
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        error: 'VALIDATION',
+        message: 'Current password and new password are required',
+      });
+    }
+
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ error: 'VALIDATION', message: 'Password must be at least 6 characters' });
+    }
+
+    if (String(currentPassword) === String(newPassword)) {
+      return res.status(400).json({
+        error: 'VALIDATION',
+        message: 'New password must be different from current password',
+      });
+    }
+
+    const user = await findUserById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found' });
+    }
+
+    const valid = await bcrypt.compare(String(currentPassword), user.passwordHash);
+    if (!valid) {
+      return res.status(401).json({ error: 'INVALID_CURRENT_PASSWORD', message: 'Current password is incorrect' });
+    }
+
+    const passwordHash = await bcrypt.hash(String(newPassword), 10);
+    await updateUser(user.id, {
+      passwordHash,
+      registrationPassword: user.role === 'admin' ? undefined : String(newPassword),
+    });
+
+    res.json({ message: 'Password changed successfully.' });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not change password' });
+  }
+});
+
 function maskContact(value, channel) {
   if (channel === 'email') {
     const [local, domain] = value.split('@');
@@ -868,6 +978,7 @@ app.patch('/api/admin/users/:id/approve', authMiddleware, adminMiddleware, async
     if (planId && isValidPlanId(planId)) {
       approvePatch.subscriptionStartsAt = now;
       approvePatch.subscriptionExpiresAt = computeExpiryFrom(now, planId);
+      Object.assign(approvePatch, clearExpiryReminderFields());
     }
 
     const updated = await updateUser(user.id, approvePatch);

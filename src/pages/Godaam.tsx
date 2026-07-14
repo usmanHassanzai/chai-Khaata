@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import FormField, { FieldLabel, ReadOnlyField } from '../components/FormField';
 import ImageUpload, { ImageThumb } from '../components/ImageUpload';
 import PageBanner from '../components/PageBanner';
+import PhoneLink from '../components/PhoneLink';
 import ExportToolbar from '../components/ExportToolbar';
 import TextAreaField from '../components/TextAreaField';
 import { db } from '../db/database';
@@ -10,6 +11,7 @@ import { Label, PageTitle, SectionTitle, useLabel } from '../i18n/useLabel';
 import type { Dealer, Purchase } from '../models/types';
 import {
   computeDealerSummary,
+  formatBags,
   formatCurrency,
   formatKg,
   purchaseDue,
@@ -24,6 +26,52 @@ import {
   DEALER_EXPORT_COLUMNS,
   PURCHASE_EXPORT_COLUMNS,
 } from '../services/export';
+
+function cell(value?: string) {
+  return value?.trim() || '—';
+}
+
+function purchaseMatchesSearch(p: Purchase, q: string, dealerName?: string): boolean {
+  if (!q) return true;
+  const haystack = [
+    p.teaName,
+    dealerName,
+    p.contNo,
+    p.lotNo,
+    p.country,
+    p.grade,
+    p.invoiceNumber,
+    p.notes,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(q);
+}
+
+function PurchaseShipmentHeaders() {
+  return (
+    <>
+      <th><Label k="godaam.contNo" variant="compact" /></th>
+      <th><Label k="godaam.lotNo" variant="compact" /></th>
+      <th><Label k="godaam.country" variant="compact" /></th>
+      <th><Label k="godaam.grade" variant="compact" /></th>
+      <th><Label k="godaam.invoiceNumber" variant="compact" /></th>
+    </>
+  );
+}
+
+function PurchaseShipmentCells({ p }: { p: Purchase }) {
+  return (
+    <>
+      <td>{cell(p.contNo)}</td>
+      <td>{cell(p.lotNo)}</td>
+      <td>{cell(p.country)}</td>
+      <td>{cell(p.grade)}</td>
+      <td>{cell(p.invoiceNumber)}</td>
+    </>
+  );
+}
 
 export default function Godaam() {
   const l = useLabel();
@@ -48,8 +96,15 @@ export default function Godaam() {
   const [pricePerKg, setPricePerKg] = useState('');
   const [depositPaid, setDepositPaid] = useState('');
   const [purchaseSearch, setPurchaseSearch] = useState('');
+  const [dealerFilterId, setDealerFilterId] = useState('');
+  const [detailDealerId, setDetailDealerId] = useState<number | null>(null);
   const [billImage, setBillImage] = useState<string | undefined>();
   const [purchaseNotes, setPurchaseNotes] = useState('');
+  const [contNo, setContNo] = useState('');
+  const [lotNo, setLotNo] = useState('');
+  const [country, setCountry] = useState('');
+  const [grade, setGrade] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
 
   const previewPurchase: Purchase = useMemo(
     () => ({
@@ -81,14 +136,21 @@ export default function Godaam() {
 
   const filteredPurchases = useMemo(() => {
     const q = purchaseSearch.toLowerCase();
+    const dealerId = dealerFilterId ? parseInt(dealerFilterId, 10) : null;
     return [...purchases]
       .filter((p) => {
-        if (!q) return true;
+        if (dealerId && p.dealerId !== dealerId) return false;
         const dealer = dealers.find((d) => d.id === p.dealerId);
-        return p.teaName.toLowerCase().includes(q) || (dealer?.name.toLowerCase().includes(q) ?? false);
+        return purchaseMatchesSearch(p, q, dealer?.name);
       })
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [purchases, purchaseSearch, dealers]);
+  }, [purchases, purchaseSearch, dealerFilterId, dealers]);
+
+  const detailDealer = detailDealerId ? dealers.find((d) => d.id === detailDealerId) : null;
+  const detailSummary = detailDealer ? computeDealerSummary(detailDealer, purchases, payments) : null;
+  const detailPurchases = detailDealer
+    ? purchases.filter((p) => p.dealerId === detailDealer.id).sort((a, b) => b.date.localeCompare(a.date))
+    : [];
 
   const dealerExportRows = useMemo(
     () => buildDealerExportRows(activeDealers, purchases, payments),
@@ -128,6 +190,11 @@ export default function Godaam() {
     await db.purchases.add({
       ...previewPurchase,
       teaName: pTeaName.trim(),
+      contNo: contNo.trim() || undefined,
+      lotNo: lotNo.trim() || undefined,
+      country: country.trim() || undefined,
+      grade: grade.trim() || undefined,
+      invoiceNumber: invoiceNumber.trim() || undefined,
       billImage,
       notes: purchaseNotes.trim() || undefined,
     });
@@ -137,6 +204,11 @@ export default function Godaam() {
     setMissWeight('0');
     setPricePerKg('');
     setDepositPaid('');
+    setContNo('');
+    setLotNo('');
+    setCountry('');
+    setGrade('');
+    setInvoiceNumber('');
     setBillImage(undefined);
     setPurchaseNotes('');
   }
@@ -184,6 +256,11 @@ export default function Godaam() {
             </select>
           </label>
           <FormField labelKey="godaam.teaName" value={pTeaName} onChange={setPTeaName} required />
+          <FormField labelKey="godaam.contNo" value={contNo} onChange={setContNo} />
+          <FormField labelKey="godaam.lotNo" value={lotNo} onChange={setLotNo} />
+          <FormField labelKey="godaam.country" value={country} onChange={setCountry} />
+          <FormField labelKey="godaam.grade" value={grade} onChange={setGrade} />
+          <FormField labelKey="godaam.invoiceNumber" value={invoiceNumber} onChange={setInvoiceNumber} />
           <FormField labelKey="godaam.bagsOrdered" value={bagsOrdered} onChange={setBagsOrdered} type="number" min={0} required />
           <FormField labelKey="godaam.bagsReceived" value={bagsReceived} onChange={setBagsReceived} type="number" min={0} required />
           <FormField labelKey="godaam.bagWeight" value={bagWeight} onChange={setBagWeight} type="number" min={0} step={0.01} />
@@ -213,11 +290,16 @@ export default function Godaam() {
             compact
           />
         </div>
-        <div className="table-wrap">
+        <div className="table-wrap wide-table">
           <table>
             <thead>
               <tr>
                 <th><Label k="godaam.dealerName" variant="compact" /></th>
+                <th><Label k="common.phone" variant="compact" /></th>
+                <th><Label k="common.address" variant="compact" /></th>
+                <th><Label k="godaam.receivedMaal" variant="compact" /></th>
+                <th><Label k="godaam.pendingBags" variant="compact" /></th>
+                <th><Label k="godaam.pendingMaal" variant="compact" /></th>
                 <th><Label k="godaam.totalPurchased" variant="compact" /></th>
                 <th><Label k="godaam.totalPaid" variant="compact" /></th>
                 <th><Label k="godaam.currentDue" variant="compact" /></th>
@@ -226,17 +308,24 @@ export default function Godaam() {
             </thead>
             <tbody>
               {activeDealers.length === 0 ? (
-                <tr><td colSpan={5} className="empty">{l('common.noData')}</td></tr>
+                <tr><td colSpan={10} className="empty">{l('common.noData')}</td></tr>
               ) : (
                 activeDealers.map((d) => {
                   const s = computeDealerSummary(d, purchases, payments);
                   return (
                     <tr key={d.id}>
-                      <td>{d.name}</td>
+                      <td><strong>{d.name}</strong></td>
+                      <td><PhoneLink phone={d.phone} /></td>
+                      <td className="truncate-cell">{d.address ?? '—'}</td>
+                      <td>{formatKg(s.totalReceivedMaalKg)}</td>
+                      <td className={s.totalPendingBags > 0 ? 'warn-text' : ''}>{formatBags(s.totalPendingBags)}</td>
+                      <td className={s.totalPendingMaalKg > 0 ? 'warn-text' : ''}>{formatKg(s.totalPendingMaalKg)}</td>
                       <td>{formatCurrency(s.totalPurchased)}</td>
                       <td>{formatCurrency(s.totalPaid)}</td>
                       <td className={s.currentDue > 0 ? 'warn-text' : ''}>{formatCurrency(s.currentDue)}</td>
                       <td className="action-cell">
+                        <button type="button" className="btn sm" onClick={() => setDetailDealerId(d.id!)}>{l('godaam.viewHistory')}</button>
+                        <button type="button" className="btn sm" onClick={() => { setDealerFilterId(String(d.id)); setPurchaseSearch(''); }}>{l('godaam.dealerHistory')}</button>
                         <button type="button" className="btn sm" onClick={() => handleDealerPayment(d.id!)}>{l('common.addPayment')}</button>
                         <button type="button" className="btn danger sm" onClick={() => handleRemoveDealer(d.id!)}>{l('godaam.removeDealer')}</button>
                       </td>
@@ -262,34 +351,53 @@ export default function Godaam() {
           />
         </div>
         <input className="search-input" placeholder={l('common.search')} value={purchaseSearch} onChange={(e) => setPurchaseSearch(e.target.value)} />
-        <div className="table-wrap">
+        {dealerFilterId && (
+          <div className="filter-chip-row">
+            <span className="chip active">
+              {dealers.find((d) => d.id === parseInt(dealerFilterId, 10))?.name ?? l('godaam.dealer')}
+              <button type="button" className="chip-clear" onClick={() => setDealerFilterId('')} aria-label="Clear">×</button>
+            </span>
+          </div>
+        )}
+        <div className="table-wrap wide-table">
           <table>
             <thead>
               <tr>
                 <th><Label k="common.date" variant="compact" /></th>
                 <th><Label k="godaam.dealer" variant="compact" /></th>
                 <th><Label k="godaam.teaName" variant="compact" /></th>
-                <th><Label k="godaam.standardWeight" variant="compact" /></th>
+                <PurchaseShipmentHeaders />
+                <th><Label k="godaam.bagsOrderedCol" variant="compact" /></th>
+                <th><Label k="godaam.bagsReceivedCol" variant="compact" /></th>
+                <th><Label k="godaam.pendingBags" variant="compact" /></th>
+                <th><Label k="godaam.receivedMaal" variant="compact" /></th>
+                <th><Label k="godaam.pendingMaal" variant="compact" /></th>
                 <th><Label k="godaam.missWeight" variant="compact" /></th>
-                <th><Label k="godaam.netWeight" variant="compact" /></th>
                 <th><Label k="godaam.totalPrice" variant="compact" /></th>
                 <th><Label k="godaam.billImage" variant="compact" /></th>
               </tr>
             </thead>
             <tbody>
               {filteredPurchases.length === 0 ? (
-                <tr><td colSpan={8} className="empty">{l('common.noData')}</td></tr>
+                <tr><td colSpan={16} className="empty">{l('common.noData')}</td></tr>
               ) : (
                 filteredPurchases.map((p) => {
                   const dealer = dealers.find((d) => d.id === p.dealerId);
+                  const pending = purchasePendingBags(p);
+                  const receivedMaal = purchaseNetWeight(p);
+                  const pendingMaal = pending * p.bagWeightKg;
                   return (
                     <tr key={p.id}>
                       <td>{p.date}</td>
                       <td>{dealer?.name ?? '—'}</td>
                       <td>{p.teaName}{p.notes ? <small className="row-note">{p.notes}</small> : null}</td>
-                      <td>{formatKg(p.bagsReceived * p.bagWeightKg)}</td>
+                      <PurchaseShipmentCells p={p} />
+                      <td>{p.bagsOrdered}</td>
+                      <td>{p.bagsReceived}</td>
+                      <td className={pending > 0 ? 'warn-text' : ''}>{pending}</td>
+                      <td>{formatKg(receivedMaal)}</td>
+                      <td className={pendingMaal > 0 ? 'warn-text' : ''}>{formatKg(pendingMaal)}</td>
                       <td>{formatKg(p.missWeightKg)}</td>
-                      <td>{formatKg(purchaseNetWeight(p))}</td>
                       <td>{formatCurrency(purchaseTotalPrice(p))}</td>
                       <td><ImageThumb src={p.billImage} /></td>
                     </tr>
@@ -300,6 +408,66 @@ export default function Godaam() {
           </table>
         </div>
       </section>
+
+      {detailDealer && detailSummary && (
+        <div className="modal-overlay" onClick={() => setDetailDealerId(null)}>
+          <div className="modal card modal-wide" onClick={(e) => e.stopPropagation()}>
+            <h3>{detailDealer.name}</h3>
+            <p><Label k="common.phone" variant="compact" />: <PhoneLink phone={detailDealer.phone} /></p>
+            <p><Label k="common.address" variant="compact" />: {detailDealer.address ?? '—'}</p>
+
+            <div className="detail-grid">
+              <div className="detail-stat"><Label k="godaam.receivedMaal" variant="compact" /><strong>{formatKg(detailSummary.totalReceivedMaalKg)}</strong></div>
+              <div className="detail-stat"><Label k="godaam.pendingBags" variant="compact" /><strong className={detailSummary.totalPendingBags > 0 ? 'warn-text' : ''}>{formatBags(detailSummary.totalPendingBags)}</strong></div>
+              <div className="detail-stat"><Label k="godaam.pendingMaal" variant="compact" /><strong className={detailSummary.totalPendingMaalKg > 0 ? 'warn-text' : ''}>{formatKg(detailSummary.totalPendingMaalKg)}</strong></div>
+              <div className="detail-stat"><Label k="godaam.currentDue" variant="compact" /><strong className={detailSummary.currentDue > 0 ? 'warn-text' : ''}>{formatCurrency(detailSummary.currentDue)}</strong></div>
+            </div>
+
+            <h4><Label k="godaam.dealerHistory" variant="compact" /></h4>
+            <div className="table-wrap wide-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th><Label k="common.date" variant="compact" /></th>
+                    <th><Label k="godaam.teaName" variant="compact" /></th>
+                    <PurchaseShipmentHeaders />
+                    <th><Label k="godaam.bagsOrderedCol" variant="compact" /></th>
+                    <th><Label k="godaam.bagsReceivedCol" variant="compact" /></th>
+                    <th><Label k="godaam.pendingBags" variant="compact" /></th>
+                    <th><Label k="godaam.receivedMaal" variant="compact" /></th>
+                    <th><Label k="godaam.pendingMaal" variant="compact" /></th>
+                    <th><Label k="godaam.totalPrice" variant="compact" /></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailPurchases.length === 0 ? (
+                    <tr><td colSpan={13} className="empty">{l('common.noData')}</td></tr>
+                  ) : (
+                    detailPurchases.map((p) => {
+                      const pending = purchasePendingBags(p);
+                      return (
+                        <tr key={p.id}>
+                          <td>{p.date}</td>
+                          <td>{p.teaName}</td>
+                          <PurchaseShipmentCells p={p} />
+                          <td>{p.bagsOrdered}</td>
+                          <td>{p.bagsReceived}</td>
+                          <td className={pending > 0 ? 'warn-text' : ''}>{pending}</td>
+                          <td>{formatKg(purchaseNetWeight(p))}</td>
+                          <td className={pending > 0 ? 'warn-text' : ''}>{formatKg(pending * p.bagWeightKg)}</td>
+                          <td>{formatCurrency(purchaseTotalPrice(p))}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <button type="button" className="btn" onClick={() => setDetailDealerId(null)}>{l('common.cancel')}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

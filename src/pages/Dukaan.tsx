@@ -11,13 +11,17 @@ import { Label, PageTitle, SectionTitle, useLabel } from '../i18n/useLabel';
 import type { Sale, SaleFilter } from '../models/types';
 import {
   computeSaleProfit,
+  DEFAULT_BAG_WEIGHT_KG,
   filterSales,
+  formatBags,
   formatCurrency,
   formatKg,
   getGodaamPurchasePrice,
   getStockForTea,
   getTeaNames,
+  kgFromBags,
   profitPerKg,
+  saleBagsSold,
   saleTotal,
   todayISO,
 } from '../services/calculations';
@@ -26,6 +30,7 @@ import {
   printTable,
   SALES_EXPORT_COLUMNS,
 } from '../services/export';
+import { useShopPrintProfile } from '../hooks/useShopPrintProfile';
 
 const FILTERS: SaleFilter[] = ['today', 'month', 'year', 'all'];
 const FILTER_KEYS: Record<SaleFilter, string> = {
@@ -37,12 +42,15 @@ const FILTER_KEYS: Record<SaleFilter, string> = {
 
 export default function Dukaan() {
   const l = useLabel();
+  const shopProfile = useShopPrintProfile();
   const sales = useLiveQuery(() => db.sales.toArray(), []) ?? [];
   const purchases = useLiveQuery(() => db.purchases.toArray(), []) ?? [];
   const customers = useLiveQuery(() => db.customers.toArray(), []) ?? [];
 
   const [date, setDate] = useState(todayISO());
   const [teaName, setTeaName] = useState('');
+  const [bagsSold, setBagsSold] = useState('');
+  const [bagWeightKg, setBagWeightKg] = useState(String(DEFAULT_BAG_WEIGHT_KG));
   const [quantityKg, setQuantityKg] = useState('');
   const [salePricePerKg, setSalePricePerKg] = useState('');
   const [customerId, setCustomerId] = useState('');
@@ -54,7 +62,7 @@ export default function Dukaan() {
   const [error, setError] = useState('');
 
   const teaNames = useMemo(() => getTeaNames(purchases), [purchases]);
-  const qty = parseFloat(quantityKg) || 0;
+  const qty = parseFloat(quantityKg) || kgFromBags(parseFloat(bagsSold) || 0, parseFloat(bagWeightKg) || DEFAULT_BAG_WEIGHT_KG);
   const price = parseFloat(salePricePerKg) || 0;
   const stockInfo = teaName ? getStockForTea(teaName, purchases, sales) : { currentStock: 0, avgCostPerKg: 0 };
   const godaamPrice = teaName ? getGodaamPurchasePrice(teaName, purchases) : {
@@ -116,10 +124,14 @@ export default function Dukaan() {
       return;
     }
     const received = selectedCustomer ? parseFloat(amountReceived) || 0 : saleValue;
+    const bagCount = Math.round(parseFloat(bagsSold) || 0);
+    const bagW = parseFloat(bagWeightKg) || DEFAULT_BAG_WEIGHT_KG;
     await db.sales.add({
       date,
       teaName: teaName.trim(),
       quantityKg: qty,
+      bagsSold: bagCount > 0 ? bagCount : undefined,
+      bagWeightKg: bagCount > 0 ? bagW : undefined,
       salePricePerKg: price,
       purchasePricePerKg: effectivePurchasePrice || undefined,
       customerId: selectedCustomer,
@@ -128,6 +140,8 @@ export default function Dukaan() {
       notes: notes.trim() || undefined,
     });
     setTeaName('');
+    setBagsSold('');
+    setBagWeightKg(String(DEFAULT_BAG_WEIGHT_KG));
     setQuantityKg('');
     setSalePricePerKg('');
     setCustomerId('');
@@ -159,6 +173,7 @@ export default function Dukaan() {
     printTable({
       title: `Sale — ${s.teaName} (${s.date})`,
       subtitle: customerLabel(s),
+      shopProfile,
       columns: SALES_EXPORT_COLUMNS,
       rows,
     });
@@ -187,6 +202,18 @@ export default function Dukaan() {
               ))}
             </datalist>
           </label>
+          <FormField labelKey="dukaan.bagsSold" value={bagsSold} onChange={(v) => {
+            setBagsSold(v);
+            const b = Math.round(parseFloat(v) || 0);
+            const bw = parseFloat(bagWeightKg) || DEFAULT_BAG_WEIGHT_KG;
+            if (b > 0) setQuantityKg(String(kgFromBags(b, bw)));
+          }} type="number" min={0} step={1} placeholder="0" />
+          <FormField labelKey="dukaan.bagWeight" value={bagWeightKg} onChange={(v) => {
+            setBagWeightKg(v);
+            const b = Math.round(parseFloat(bagsSold) || 0);
+            const bw = parseFloat(v) || DEFAULT_BAG_WEIGHT_KG;
+            if (b > 0) setQuantityKg(String(kgFromBags(b, bw)));
+          }} type="number" min={0} step={0.01} />
           <FormField labelKey="dukaan.quantityKg" value={quantityKg} onChange={setQuantityKg} type="number" min={0} step={0.01} required />
           <FormField labelKey="dukaan.salePricePerKg" value={salePricePerKg} onChange={setSalePricePerKg} type="number" min={0} step={0.01} required />
           <ReadOnlyField
@@ -287,6 +314,7 @@ export default function Dukaan() {
               <tr>
                 <th><Label k="common.date" variant="compact" /></th>
                 <th><Label k="dukaan.teaName" variant="compact" /></th>
+                <th><Label k="dukaan.bagsSold" variant="compact" /></th>
                 <th>kg</th>
                 <th><Label k="dukaan.purchasePricePerKg" variant="compact" /></th>
                 <th><Label k="dukaan.salePricePerKg" variant="compact" /></th>
@@ -300,7 +328,7 @@ export default function Dukaan() {
             </thead>
             <tbody>
               {filteredSales.length === 0 ? (
-                <tr><td colSpan={11} className="empty">{l('common.noData')}</td></tr>
+                <tr><td colSpan={12} className="empty">{l('common.noData')}</td></tr>
               ) : (
                 filteredSales.map((s) => {
                   const profit = rowProfit(s);
@@ -310,6 +338,7 @@ export default function Dukaan() {
                     <tr key={s.id}>
                       <td>{s.date}</td>
                       <td>{s.teaName}{s.notes ? <small className="row-note">{s.notes}</small> : null}</td>
+                      <td>{formatBags(saleBagsSold(s))}</td>
                       <td>{s.quantityKg}</td>
                       <td>{s.purchasePricePerKg != null ? formatCurrency(s.purchasePricePerKg) : formatCurrency(cost)}</td>
                       <td>{formatCurrency(s.salePricePerKg)}</td>

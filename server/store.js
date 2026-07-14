@@ -73,6 +73,7 @@ async function ensureDataFile() {
  * @property {string} [paymentRefId]
  * @property {string} [trialStartedAt]
  * @property {string} [trialEndsAt]
+ * @property {string} [lastExpiryReminderDate] YYYY-MM-DD — last daily expiry email sent
  */
 
 /**
@@ -307,6 +308,9 @@ export async function updateUser(id, patch) {
   if ('registrationPassword' in patch && patch.registrationPassword === undefined) {
     delete next.registrationPassword;
   }
+  if ('lastExpiryReminderDate' in patch && patch.lastExpiryReminderDate === undefined) {
+    delete next.lastExpiryReminderDate;
+  }
 
   users[index] = next;
   await writeUsers(users);
@@ -320,9 +324,11 @@ export async function ensureDefaultAdmin(email, passwordHash) {
   const existingAdmin = users.find((u) => u.role === 'admin');
 
   if (existingAdmin) {
+    /** Only sync password when explicitly requested — avoids Vercel env overwriting a working hash. */
+    const syncPassword = process.env.ADMIN_SYNC_PASSWORD === 'true';
     return updateUser(existingAdmin.id, {
       email: normalizedEmail,
-      passwordHash,
+      ...(syncPassword ? { passwordHash } : {}),
       status: 'approved',
       role: 'admin',
       approvedAt: existingAdmin.approvedAt || new Date().toISOString(),
@@ -341,7 +347,10 @@ export async function ensureDefaultAdmin(email, passwordHash) {
   }
 
   const localPart = normalizedEmail.split('@')[0] || 'admin';
-  let username = localPart.replace(/[^a-z0-9._-]/g, '') || 'admin';
+  let username = 'admin';
+  if (users.some((u) => u.username === username)) {
+    username = localPart.replace(/[^a-z0-9._-]/g, '') || 'admin';
+  }
   if (users.some((u) => u.username === username)) {
     username = `admin_${Date.now().toString(36)}`;
   }

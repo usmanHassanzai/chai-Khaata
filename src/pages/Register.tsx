@@ -28,6 +28,8 @@ export default function Register() {
   const [registered, setRegistered] = useState(false);
   const [paymentRefId, setPaymentRefId] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [adminNotified, setAdminNotified] = useState(false);
+  const [adminNotificationsConfigured, setAdminNotificationsConfigured] = useState(false);
   const [savedLogin, setSavedLogin] = useState('');
   const [savedPassword, setSavedPassword] = useState('');
   const [screenshot, setScreenshot] = useState<string | undefined>();
@@ -38,6 +40,7 @@ export default function Register() {
     authApi.config()
       .then((c) => {
         setAdminEmail(c.adminEmail);
+        setAdminNotificationsConfigured(c.otpDelivery?.adminNotificationsConfigured ?? c.otpDelivery?.emailConfigured ?? false);
         if (c.subscriptionPlans?.length) setPlans(normalizeSubscriptionPlans(c.subscriptionPlans));
         if (c.payment) setPayment(normalizePaymentConfig(c.payment));
       })
@@ -83,6 +86,7 @@ export default function Register() {
       setSavedPassword(password);
       setPaymentRefId(result.paymentRefId);
       setSuccessMessage(result.message);
+      setAdminNotified(Boolean(result.adminNotified));
       setRegistered(true);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -121,6 +125,20 @@ export default function Register() {
           <p className="auth-tagline">{successMessage}</p>
         </div>
 
+        {adminNotified ? (
+          <div className="auth-banner success">
+            Admin notification sent to <strong>{adminEmail}</strong>. You will be approved after payment verification.
+          </div>
+        ) : adminNotificationsConfigured ? (
+          <div className="auth-banner info">
+            Registration saved. If admin email was not received, contact <strong>{adminEmail}</strong> with your Payment ID.
+          </div>
+        ) : (
+          <div className="auth-banner info">
+            Registration saved. Admin email alerts are not configured on the server yet — contact <strong>{adminEmail}</strong> with Payment ID <code>{paymentRefId}</code>.
+          </div>
+        )}
+
         <PaymentInstructions
           payment={payment}
           paymentRefId={paymentRefId}
@@ -154,7 +172,11 @@ export default function Register() {
 
       {adminEmail && (
         <p className="auth-approval-hint">
-          Admin email for approval: <strong>{adminEmail}</strong>
+          {adminNotificationsConfigured ? (
+            <>Admin receives an email at <strong>{adminEmail}</strong> when someone registers.</>
+          ) : (
+            <>Admin email for approval: <strong>{adminEmail}</strong></>
+          )}
         </p>
       )}
 

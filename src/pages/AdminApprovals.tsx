@@ -1,4 +1,5 @@
 import { PageTitle } from '../i18n/useLabel';
+import AdminAllUsersPanel from '../components/AdminAllUsersPanel';
 import AdminUsersPanel from '../components/AdminUsersPanel';
 import AdminPaymentProofsPanel from '../components/AdminPaymentProofsPanel';
 import PageBanner from '../components/PageBanner';
@@ -28,6 +29,7 @@ export default function AdminApprovals() {
       <PageTitle k="auth.adminUsers" />
       <AdminPaymentProofsPanel />
       <AdminUsersPanel />
+      <AdminAllUsersPanel />
     </div>
   );
 }

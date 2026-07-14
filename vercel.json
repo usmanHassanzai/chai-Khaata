@@ -1,11 +1,18 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "crons": [
+    {
+      "path": "/api/cron/subscription-reminders",
+      "schedule": "0 4 * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/api/health", "destination": "/api/health" },
     { "source": "/api/auth/login", "destination": "/api/auth/login" },
     { "source": "/api/auth/config", "destination": "/api/auth/config" },
     { "source": "/api/auth/me", "destination": "/api/auth/me" },
+    { "source": "/api/cron/subscription-reminders", "destination": "/api/cron/subscription-reminders" },
     { "source": "/api/admin/(.*)", "destination": "/api/admin/$1" },
     { "source": "/api/sync/(.*)", "destination": "/api/sync/$1" },
     { "source": "/api/(.*)", "destination": "/api/server?__vercel_path=$1" },

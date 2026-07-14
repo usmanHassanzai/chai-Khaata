@@ -31,6 +31,13 @@ export interface Purchase {
   depositPaid: number;
   billImage?: string;
   notes?: string;
+  /** Container number */
+  contNo?: string;
+  /** Lot number */
+  lotNo?: string;
+  country?: string;
+  grade?: string;
+  invoiceNumber?: string;
 }
 
 export interface Sale {
@@ -38,6 +45,10 @@ export interface Sale {
   date: string;
   teaName: string;
   quantityKg: number;
+  /** Number of bags sold (optional — derived from kg if missing). */
+  bagsSold?: number;
+  /** Weight per bag in kg (default 62). */
+  bagWeightKg?: number;
   salePricePerKg: number;
   purchasePricePerKg?: number;
   customerId?: number;
@@ -59,6 +70,12 @@ export interface AppSettings {
   id: 'settings';
   lowStockThresholdKg: number;
   language: 'en' | 'ur-roman';
+  /** Shop name on receipts, exports & prints */
+  shopName?: string;
+  /** Base64 data URL for shop logo */
+  shopLogo?: string;
+  shopPhone?: string;
+  shopAddress?: string;
 }
 
 export interface TeaStock {
@@ -76,12 +93,17 @@ export interface DealerSummary {
   totalPurchased: number;
   totalPaid: number;
   currentDue: number;
+  totalReceivedMaalKg: number;
+  totalPendingBags: number;
+  totalPendingMaalKg: number;
+  totalBagsReceived: number;
 }
 
 export interface CustomerSummary {
   customer: Customer;
   totalSale: number;
   totalMaalKg: number;
+  totalBagsSold: number;
   receivingAmount: number;
   pendingAmount: number;
   teaNames: string[];

@@ -152,6 +152,21 @@ export default function AdminUsersPanel() {
     }
   }
 
+  async function emailPassword(id: string, username: string) {
+    if (!window.confirm(`Send password to "${username}" registered email?`)) return;
+    setBusyId(`${id}-pwd`);
+    setMessage('');
+    setError('');
+    try {
+      const res = await authApi.sendPasswordToUser(id);
+      setMessage(res.message);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not send password email');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const pending = users.filter((u) => u.status === 'pending' && u.role !== 'admin');
   const regularUsers = users.filter((u) => u.role !== 'admin');
 
@@ -184,6 +199,9 @@ export default function AdminUsersPanel() {
         </button>
         <button type="button" className="btn sm" disabled={busyId === `${u.id}-phone`} onClick={() => sendOtp(u.id, 'phone')}>
           OTP 📱
+        </button>
+        <button type="button" className="btn sm" disabled={busyId === `${u.id}-pwd`} onClick={() => emailPassword(u.id, u.username)}>
+          ✉ <Label k="auth.sendPasswordToUser" variant="compact" />
         </button>
         <button type="button" className="btn sm danger" disabled={busyId === u.id} onClick={() => removeUser(u.id, u.username)}>
           <Label k="auth.removeUser" variant="compact" />
@@ -285,16 +303,10 @@ export default function AdminUsersPanel() {
         </>
       )}
 
-      {!loading && !error && users.length > 0 && (
-        <div className="admin-user-list">
-          <h4 className="admin-all-users-title"><Label k="auth.allUsers" variant="compact" /></h4>
-          {users.map((u) => (
-            <div key={u.id} className={`admin-user-card-wrap${u.status === 'pending' ? ' row-pending' : ''}${u.subscriptionExpired ? ' row-payment-blocked' : ''}`}>
-              <AdminUserCard user={u} />
-              {u.role !== 'admin' && <UserActions u={u} />}
-            </div>
-          ))}
-        </div>
+      {!loading && !error && pending.length > 0 && (
+        <p className="settings-note">
+          <Label k="auth.seeAllUsersBelow" variant="compact" />
+        </p>
       )}
 
       {detailsUser && (

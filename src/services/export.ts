@@ -12,13 +12,22 @@ import {
   computeCustomerSummary,
   computeDealerSummary,
   computeSaleProfit,
+  formatBags,
   formatCurrency,
   formatKg,
   profitPerKg,
   purchaseNetWeight,
+  purchasePendingBags,
   purchaseTotalPrice,
+  saleBagsSold,
   saleTotal,
 } from './calculations';
+import {
+  buildPrintHeaderHtml,
+  formatShopContact,
+  logoImageFormat,
+  type ShopPrintProfile,
+} from './shopProfile';
 
 export type ExportColumn = { key: string; header: string };
 
@@ -53,30 +62,58 @@ function stamp() {
 export function downloadPdf(options: {
   filename: string;
   title: string;
+  shopProfile?: ShopPrintProfile;
+  /** @deprecated use shopProfile.shopName */
   shopName?: string;
   subtitle?: string;
   columns: ExportColumn[];
   rows: Record<string, string | number>[];
 }) {
-  const { filename, title, shopName, subtitle, columns, rows } = options;
+  const { filename, title, subtitle, columns, rows } = options;
+  const profile: ShopPrintProfile = options.shopProfile ?? {
+    shopName: options.shopName || 'Chai Khata',
+  };
   const doc = new jsPDF({ orientation: columns.length > 6 ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
 
   let y = 14;
+  let textX = 14;
+
+  if (profile.shopLogo) {
+    try {
+      const fmt = logoImageFormat(profile.shopLogo);
+      doc.addImage(profile.shopLogo, fmt, 14, y - 2, 16, 16);
+      textX = 34;
+    } catch {
+      /* skip logo if unsupported */
+    }
+  }
+
   doc.setFontSize(16);
-  doc.text(shopName || 'Patiwala — Chai Khata', 14, y);
-  y += 7;
-  doc.setFontSize(12);
-  doc.text(title, 14, y);
+  doc.text(profile.shopName, textX, y);
   y += 6;
+
+  const contact = formatShopContact(profile);
+  if (contact) {
+    doc.setFontSize(9);
+    doc.setTextColor(80);
+    doc.text(contact, textX, y);
+    doc.setTextColor(0);
+    y += 5;
+  }
+
+  doc.setFontSize(12);
+  doc.text(title, textX, y + 2);
+  y += 8;
+
   if (subtitle) {
     doc.setFontSize(9);
     doc.setTextColor(80);
-    doc.text(subtitle, 14, y);
+    doc.text(subtitle, textX, y);
     y += 5;
   }
   doc.setFontSize(8);
   doc.setTextColor(120);
-  doc.text(`Generated: ${stamp()}`, 14, y);
+  doc.text(`Generated: ${stamp()}`, textX, y);
   doc.setTextColor(0);
 
   autoTable(doc, {
@@ -93,12 +130,17 @@ export function downloadPdf(options: {
 
 export function printTable(options: {
   title: string;
+  shopProfile?: ShopPrintProfile;
+  /** @deprecated use shopProfile.shopName */
   shopName?: string;
   subtitle?: string;
   columns: ExportColumn[];
   rows: Record<string, string | number>[];
 }) {
-  const { title, shopName, subtitle, columns, rows } = options;
+  const { title, subtitle, columns, rows } = options;
+  const profile: ShopPrintProfile = options.shopProfile ?? {
+    shopName: options.shopName || 'Chai Khata',
+  };
   const win = window.open('', '_blank', 'width=900,height=700');
   if (!win) return;
 
@@ -107,17 +149,23 @@ export function printTable(options: {
     .map((row) => `<tr>${columns.map((c) => `<td>${row[c.key] ?? ''}</td>`).join('')}</tr>`)
     .join('');
 
+  const headerHtml = buildPrintHeaderHtml(profile);
+
   win.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
 <style>
 body{font-family:system-ui,sans-serif;padding:24px;color:#1a1a1a}
-h1{font-size:1.25rem;margin:0 0 4px}
+.print-header{display:flex;align-items:center;gap:16px;margin-bottom:12px}
+.print-logo{width:64px;height:64px;object-fit:contain;border-radius:8px}
+.print-header-text h1{font-size:1.35rem;margin:0 0 4px}
+.print-contact{color:#444;font-size:0.9rem;margin:0}
+h2{font-size:1.05rem;margin:0 0 8px}
 .meta{color:#666;font-size:0.85rem;margin-bottom:16px}
 table{width:100%;border-collapse:collapse;font-size:0.85rem}
 th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}
 th{background:#1a3d2f;color:#fff}
-@media print{body{padding:0}}
+@media print{body{padding:12px}}
 </style></head><body>
-<h1>${shopName || 'Patiwala — Chai Khata'}</h1>
+${headerHtml}
 <h2>${title}</h2>
 <p class="meta">${subtitle ? `${subtitle} · ` : ''}Generated: ${stamp()}</p>
 <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
@@ -147,6 +195,7 @@ export function buildSalesExportRows(
     return {
       date: s.date,
       tea: s.teaName,
+      bags: formatBags(saleBagsSold(s)),
       kg: formatKg(s.quantityKg),
       purchasePrice: formatCurrency(cost),
       salePrice: formatCurrency(s.salePricePerKg),
@@ -162,6 +211,7 @@ export function buildSalesExportRows(
 export const SALES_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'date', header: 'Date' },
   { key: 'tea', header: 'Tea' },
+  { key: 'bags', header: 'Bags' },
   { key: 'kg', header: 'Kg' },
   { key: 'purchasePrice', header: 'Purchase/kg' },
   { key: 'salePrice', header: 'Sale/kg' },
@@ -177,6 +227,16 @@ export function buildPurchaseExportRows(purchases: Purchase[], dealers: Dealer[]
     date: p.date,
     dealer: dealerName(dealers, p.dealerId),
     tea: p.teaName,
+    contNo: p.contNo ?? '',
+    lotNo: p.lotNo ?? '',
+    country: p.country ?? '',
+    grade: p.grade ?? '',
+    invoiceNumber: p.invoiceNumber ?? '',
+    bagsOrdered: String(p.bagsOrdered),
+    bagsReceived: String(p.bagsReceived),
+    pendingBags: String(purchasePendingBags(p)),
+    receivedMaal: formatKg(purchaseNetWeight(p)),
+    pendingMaal: formatKg(purchasePendingBags(p) * p.bagWeightKg),
     standardKg: formatKg(p.bagsReceived * p.bagWeightKg),
     missKg: formatKg(p.missWeightKg),
     netKg: formatKg(purchaseNetWeight(p)),
@@ -189,8 +249,16 @@ export const PURCHASE_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'date', header: 'Date' },
   { key: 'dealer', header: 'Dealer' },
   { key: 'tea', header: 'Tea' },
-  { key: 'standardKg', header: 'Standard kg' },
-  { key: 'missKg', header: 'Miss kg' },
+  { key: 'contNo', header: 'Cont No' },
+  { key: 'lotNo', header: 'Lot No' },
+  { key: 'country', header: 'Country' },
+  { key: 'grade', header: 'Grade' },
+  { key: 'invoiceNumber', header: 'Invoice Number' },
+  { key: 'bagsOrdered', header: 'Bags ordered' },
+  { key: 'bagsReceived', header: 'Bags received' },
+  { key: 'pendingBags', header: 'Pending bags' },
+  { key: 'receivedMaal', header: 'Received maal (kg)' },
+  { key: 'pendingMaal', header: 'Pending maal (kg)' },
   { key: 'netKg', header: 'Net kg' },
   { key: 'totalPrice', header: 'Total price' },
   { key: 'notes', header: 'Notes' },
@@ -202,6 +270,10 @@ export function buildDealerExportRows(dealers: Dealer[], purchases: Purchase[], 
     return {
       name: d.name,
       phone: d.phone ?? '',
+      address: d.address ?? '',
+      receivedMaal: formatKg(s.totalReceivedMaalKg),
+      pendingBags: String(s.totalPendingBags),
+      pendingMaal: formatKg(s.totalPendingMaalKg),
       totalPurchased: formatCurrency(s.totalPurchased),
       totalPaid: formatCurrency(s.totalPaid),
       currentDue: formatCurrency(s.currentDue),
@@ -212,6 +284,10 @@ export function buildDealerExportRows(dealers: Dealer[], purchases: Purchase[], 
 export const DEALER_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'name', header: 'Dealer' },
   { key: 'phone', header: 'Phone' },
+  { key: 'address', header: 'Address' },
+  { key: 'receivedMaal', header: 'Received maal (kg)' },
+  { key: 'pendingBags', header: 'Pending bags' },
+  { key: 'pendingMaal', header: 'Pending maal (kg)' },
   { key: 'totalPurchased', header: 'Total purchased' },
   { key: 'totalPaid', header: 'Total paid' },
   { key: 'currentDue', header: 'Current due' },
@@ -230,6 +306,7 @@ export function buildCustomerSummaryExportRows(customers: Customer[], sales: Sal
       address: c.address ?? '',
       registerDate: c.registerDate ?? '',
       totalMaal: formatKg(s.totalMaalKg),
+      totalBags: formatBags(s.totalBagsSold),
       totalAmount: formatCurrency(s.totalSale),
       received: formatCurrency(s.receivingAmount),
       dues: formatCurrency(s.pendingAmount),
@@ -246,6 +323,7 @@ export const CUSTOMER_SUMMARY_COLUMNS: ExportColumn[] = [
   { key: 'address', header: 'Address' },
   { key: 'registerDate', header: 'Register date' },
   { key: 'totalMaal', header: 'Total maal (kg)' },
+  { key: 'totalBags', header: 'Sold bags' },
   { key: 'totalAmount', header: 'Total amount' },
   { key: 'received', header: 'Received' },
   { key: 'dues', header: 'Dues' },
@@ -270,6 +348,7 @@ export function buildCustomerLedgerExportRows(
       name: c?.name ?? '—',
       phone: c?.phone ?? '',
       tea: s.teaName,
+      bags: formatBags(saleBagsSold(s)),
       kg: formatKg(s.quantityKg),
       salePrice: formatCurrency(s.salePricePerKg),
       total: formatCurrency(total),
@@ -287,6 +366,7 @@ export const CUSTOMER_LEDGER_COLUMNS: ExportColumn[] = [
   { key: 'name', header: 'Name' },
   { key: 'phone', header: 'Phone' },
   { key: 'tea', header: 'Tea' },
+  { key: 'bags', header: 'Bags' },
   { key: 'kg', header: 'Kg' },
   { key: 'salePrice', header: 'Sale/kg' },
   { key: 'total', header: 'Total' },

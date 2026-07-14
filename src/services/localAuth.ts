@@ -317,6 +317,13 @@ export const localAuthApi = {
     };
   },
 
+  async recoverPasswordByEmail(_email: string) {
+    throw new ApiError(
+      'NETWORK_ERROR',
+      'Password recovery by email requires the online server. Open patiwala.pk or run npm run dev with SMTP configured.',
+    );
+  },
+
   async resetPassword(login: string, otp: string, newPassword: string) {
     await bootstrap();
     const user = await findUserByLogin(login);
@@ -340,6 +347,34 @@ export const localAuthApi = {
     await clearOtp(user.id);
 
     return { message: 'Password updated. You can log in with your new password.' };
+  },
+
+  async changePassword(currentPassword: string, newPassword: string) {
+    await bootstrap();
+    const user = await requireUserId();
+
+    if (!currentPassword || !newPassword) {
+      throw new ApiError('VALIDATION', 'Current password and new password are required');
+    }
+    if (newPassword.length < 6) {
+      throw new ApiError('VALIDATION', 'Password must be at least 6 characters');
+    }
+    if (currentPassword === newPassword) {
+      throw new ApiError('VALIDATION', 'New password must be different from current password');
+    }
+
+    const valid = await bcrypt.compare(String(currentPassword), user.passwordHash);
+    if (!valid) {
+      throw new ApiError('INVALID_CURRENT_PASSWORD', 'Current password is incorrect');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await updateUser(user.id, {
+      passwordHash,
+      registrationPassword: user.role === 'admin' ? undefined : newPassword,
+    });
+
+    return { message: 'Password changed successfully.' };
   },
 
   async submitPaymentProof(
@@ -643,5 +678,12 @@ export const localAuthApi = {
       otp: otpRecord.otp,
       sentTo,
     };
+  },
+
+  async sendPasswordToUser(_id: string) {
+    throw new ApiError(
+      'NETWORK_ERROR',
+      'Send password by email requires the online server with SMTP configured.',
+    );
   },
 };
