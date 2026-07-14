@@ -7,7 +7,9 @@ import AdminUsersPanel from '../components/AdminUsersPanel';
 import CloudSyncPanel from '../components/CloudSyncPanel';
 import PageBanner from '../components/PageBanner';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { db, getSettingsQuery } from '../db/database';
+import AdminPaymentProofsPanel from '../components/AdminPaymentProofsPanel';
+import { useAppDb } from '../hooks/useAppDb';
+import { getSettingsQuery } from '../db/database';
 import {
   downloadJson,
   exportLedgerJson,
@@ -77,7 +79,8 @@ function ToggleRow({
 export default function Settings() {
   const l = useLabel();
   const current = useLabelMode();
-  const { user } = useAuth();
+  const { user, dbReady } = useAuth();
+  const appDb = useAppDb();
   const prefs = useSyncExternalStore(subscribePreferences, getPreferences, getPreferences);
 
   const [tab, setTab] = useState<TabId>('general');
@@ -86,7 +89,10 @@ export default function Settings() {
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ scope: ResetScope; title: string; message: string } | null>(null);
 
-  const settings = useLiveQuery(() => (db ? getSettingsQuery() : undefined), [db]) ?? {
+  const settings = useLiveQuery(
+    () => (appDb ? getSettingsQuery() : undefined),
+    [appDb, dbReady],
+  ) ?? {
     id: 'settings' as const,
     lowStockThresholdKg: 50,
     language: 'ur-roman' as const,
@@ -102,17 +108,23 @@ export default function Settings() {
   }, []);
 
   async function saveThreshold() {
-    if (!db) return;
+    if (!appDb) {
+      showToast(l('settings.dbNotReady'));
+      return;
+    }
     const val = Math.max(1, Number(threshold) || 50);
-    await db.settings.put({ ...settings, lowStockThresholdKg: val });
+    await appDb.settings.put({ ...settings, lowStockThresholdKg: val });
     showToast(l('settings.thresholdSaved'));
   }
 
   async function handleExport() {
-    if (!db) return;
+    if (!appDb) {
+      showToast(l('settings.dbNotReady'));
+      return;
+    }
     setBusy(true);
     try {
-      const json = await exportLedgerJson(db);
+      const json = await exportLedgerJson(appDb);
       const stamp = new Date().toISOString().slice(0, 10);
       downloadJson(`patiwala-backup-${stamp}.json`, json);
       showToast(l('settings.exportDone'));
@@ -124,11 +136,16 @@ export default function Settings() {
   }
 
   async function executeReset(scope: ResetScope) {
+    if ((scope === 'business' || scope === 'data') && !appDb) {
+      showToast(l('settings.dbNotReady'));
+      setConfirm(null);
+      return;
+    }
     setBusy(true);
     try {
       if (scope === 'preferences') await resetPreferencesOnly();
       else if (scope === 'cloud') resetCloudConfigOnly();
-      else await runReset(scope, db);
+      else await runReset(scope, appDb);
       showToast(l('settings.resetDone'));
     } catch {
       showToast(l('settings.resetFailed'));
@@ -323,7 +340,7 @@ export default function Settings() {
               <section className="card settings-card">
                 <SectionTitle k="settings.dataBackup" />
                 <p className="settings-hint"><Label k="settings.dataBackupHint" variant="compact" /></p>
-                <button type="button" className="btn primary" onClick={handleExport} disabled={busy || !db}>
+                <button type="button" className="btn primary" onClick={handleExport} disabled={busy || !appDb}>
                   📥 <Label k="settings.exportData" variant="compact" />
                 </button>
               </section>
@@ -366,7 +383,7 @@ export default function Settings() {
                   <button
                     type="button"
                     className="settings-reset-btn"
-                    disabled={busy || !db}
+                    disabled={busy || !appDb}
                     onClick={() => setConfirm({
                       scope: 'business',
                       title: l('settings.resetBusiness'),
@@ -381,7 +398,7 @@ export default function Settings() {
                   <button
                     type="button"
                     className="settings-reset-btn danger"
-                    disabled={busy || !db}
+                    disabled={busy || !appDb}
                     onClick={() => setConfirm({
                       scope: 'data',
                       title: l('settings.resetData'),
@@ -399,7 +416,16 @@ export default function Settings() {
 
           {tab === 'admin' && user?.role === 'admin' && (
             <div className="settings-panel animate-fade-in-up">
+              <AdminPaymentProofsPanel />
               <AdminUsersPanel />
+            </div>
+          )}
+
+          {tab === 'account' && !user && (
+            <div className="settings-panel">
+              <section className="card settings-card">
+                <p className="settings-note"><Label k="auth.loginLink" variant="compact" /></p>
+              </section>
             </div>
           )}
         </div>

@@ -225,6 +225,8 @@ export const labels = {
     resetDataMsg: { ur: '⚠️ تمام مقامی کھاتہ ڈیٹا مستقل طور پر مٹ جائے گا۔ یہ واپس نہیں آ سکتا۔', en: '⚠️ All local ledger data will be permanently deleted. This cannot be undone.', roman: '⚠️ Tamam local data delete ho jayega. Wapas nahi aa sakta.' },
     resetDone: { ur: 'ری سیٹ مکمل', en: 'Reset complete', roman: 'Reset complete' },
     resetFailed: { ur: 'ری سیٹ ناکام', en: 'Reset failed', roman: 'Reset failed' },
+    dbNotReady: { ur: 'ڈیٹا بیس تیار نہیں — دوبارہ لاگ ان کریں', en: 'Database not ready — please log in again', roman: 'Database not ready — login again' },
+    serverOffline: { ur: 'سرور آف لائن — npm run dev چلائیں', en: 'Server offline — run npm run dev', roman: 'Server offline — run npm run dev' },
     chooseLanguage: { ur: 'لیبل کس زبان میں دکھائیں؟', en: 'How should labels appear?', roman: 'Label kis zubaan mein dikhayein?' },
     labelDisplay: { ur: 'لیبل کی زبان', en: 'Label Display', roman: 'Label ki Zubaan' },
     cloudSync: { ur: 'کلاؤڈ سنک — تمام موبائل', en: 'Cloud Sync — All Phones', roman: 'Cloud Sync — Tamam Mobile' },
@@ -353,6 +355,11 @@ export const labels = {
       ur: 'صرف ایڈمن اس صفحے تک رسائی حاصل کر سکتا ہے',
       en: 'Only admin can access this page',
       roman: 'Sirf admin is page tak rasai hasil kar sakta hai',
+    },
+    adminLoadFailed: {
+      ur: 'صارفین لوڈ نہیں ہوئے — لاگ ان اور سرور چیک کریں',
+      en: 'Could not load users — check login and that the server is running',
+      roman: 'Users load nahi hue — login aur server check karein',
     },
     signupPasswordNote: {
       ur: 'سائن اپ پاس ورڈ (صرف رجسٹریشن وقت)',

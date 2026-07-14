@@ -3,6 +3,15 @@ import { ImageThumb } from './ImageUpload';
 import { Label, SectionTitle } from '../i18n/useLabel';
 import { ApiError, authApi, type PaymentSubmission } from '../services/authApi';
 
+function formatPanelError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.code === 'FORBIDDEN') return 'Admin access required.';
+    if (err.code === 'NETWORK_ERROR') return err.message;
+    return err.message;
+  }
+  return 'Could not load payment proofs.';
+}
+
 export default function AdminPaymentProofsPanel() {
   const [submissions, setSubmissions] = useState<PaymentSubmission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,7 +26,7 @@ export default function AdminPaymentProofsPanel() {
       const { submissions: list } = await authApi.listPaymentSubmissions();
       setSubmissions(list);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load payment proofs');
+      setError(formatPanelError(err));
     } finally {
       setLoading(false);
     }

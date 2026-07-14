@@ -89,6 +89,7 @@ export async function ensureSettings(): Promise<AppSettings> {
 }
 
 export function getSettingsQuery(): Promise<AppSettings | undefined> {
+  if (!db) return Promise.resolve(undefined);
   return db.settings.get('settings');
 }
 

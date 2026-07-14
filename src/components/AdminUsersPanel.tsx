@@ -2,9 +2,21 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminUserCard from './AdminUserCard';
 import AdminUserDetailsModal from './AdminUserDetailsModal';
 import { Label, SectionTitle } from '../i18n/useLabel';
-import { ApiError, authApi, type AuthUser, type OtpRequest } from '../services/authApi';
+import { useAuth } from '../context/AuthContext';
+import { ApiError, authApi, getApiBase, type AuthUser, type OtpRequest } from '../services/authApi';
+
+function formatLoadError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.code === 'FORBIDDEN') return 'Admin access required. Log in with the admin account.';
+    if (err.code === 'UNAUTHORIZED' || err.code === 'INVALID_TOKEN') return 'Session expired. Please log out and log in again.';
+    if (err.code === 'NETWORK_ERROR') return err.message;
+    return err.message;
+  }
+  return 'Could not load users. Run npm run dev and log in as admin.';
+}
 
 export default function AdminUsersPanel() {
+  const { user } = useAuth();
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [otpRequests, setOtpRequests] = useState<OtpRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -14,14 +26,20 @@ export default function AdminUsersPanel() {
   const [detailsUser, setDetailsUser] = useState<AuthUser | null>(null);
 
   const load = useCallback(async () => {
+    if (user?.role !== 'admin') {
+      setLoading(false);
+      setError('Admin access required.');
+      setUsers([]);
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
       const { users: list } = await authApi.listUsers();
       setUsers(list);
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Could not load users — log in as admin and run npm run dev';
-      setError(msg);
+      setError(formatLoadError(err));
       setUsers([]);
     }
 
@@ -33,7 +51,7 @@ export default function AdminUsersPanel() {
     }
 
     setLoading(false);
-  }, []);
+  }, [user?.role]);
 
   useEffect(() => {
     load();
@@ -174,6 +192,12 @@ export default function AdminUsersPanel() {
         </button>
       </div>
 
+      {user?.role !== 'admin' && (
+        <div className="auth-banner error">
+          <Label k="auth.adminOnly" variant="compact" />
+        </div>
+      )}
+
       {pending.length > 0 && (
         <div className="admin-pending-badge">{pending.length} pending</div>
       )}
@@ -184,7 +208,14 @@ export default function AdminUsersPanel() {
 
       {message && <div className="auth-banner success">{message}</div>}
       {loading && <p className="settings-note">Loading users…</p>}
-      {error && <div className="auth-banner error">{error}</div>}
+      {error && (
+        <div className="auth-banner error">
+          {error}
+          <p className="settings-note" style={{ marginTop: '0.5rem' }}>
+            API: {getApiBase() || 'same origin'} — ensure <code>npm run dev</code> is running.
+          </p>
+        </div>
+      )}
 
       {!loading && !error && pending.length === 0 && regularUsers.length === 0 && (
         <p className="settings-note"><Label k="auth.noPendingUsers" variant="compact" /></p>

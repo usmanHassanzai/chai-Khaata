@@ -6,6 +6,8 @@
     { "source": "/api/auth/login", "destination": "/api/auth/login" },
     { "source": "/api/auth/config", "destination": "/api/auth/config" },
     { "source": "/api/auth/me", "destination": "/api/auth/me" },
+    { "source": "/api/admin/(.*)", "destination": "/api/admin/$1" },
+    { "source": "/api/sync/(.*)", "destination": "/api/sync/$1" },
     { "source": "/api/(.*)", "destination": "/api/server?__vercel_path=$1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],

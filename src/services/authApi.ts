@@ -116,16 +116,33 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${apiBase()}${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${apiBase()}${path}`, { ...options, headers });
+  } catch (err) {
+    const isLocal = typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.hostname);
+    throw new ApiError(
+      'NETWORK_ERROR',
+      isLocal
+        ? 'Cannot reach server. Run: npm run dev'
+        : 'Cannot reach server. Check internet or Cloud Sync URL in Settings.',
+    );
+  }
+
   const text = await res.text();
   let data: Record<string, unknown> = {};
   if (text) {
     try {
       data = JSON.parse(text) as Record<string, unknown>;
     } catch {
+      const isHtml = text.trimStart().startsWith('<!');
       throw new ApiError(
         'REQUEST_FAILED',
-        res.ok ? 'Invalid server response' : `Server error (${res.status}). Is auth server running?`,
+        isHtml
+          ? `API not found (${res.status}). Redeploy the app or run npm run dev locally.`
+          : res.ok
+            ? 'Invalid server response'
+            : `Server error (${res.status}). Is auth server running?`,
       );
     }
   }
