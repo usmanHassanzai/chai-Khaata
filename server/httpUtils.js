@@ -33,8 +33,14 @@ export async function readJsonBody(req) {
 /** Map internal errors to safe login messages for the client. */
 export function sanitizeAuthErrorMessage(err) {
   const msg = err instanceof Error ? err.message : String(err || '');
-  if (/fetch failed|econnrefused|enotfound|etimedout|network/i.test(msg)) {
-    return 'Server could not reach the database. Please try again in a moment.';
+  if (/fetch failed|econnrefused|enotfound|etimedout|network|abort/i.test(msg)) {
+    if (process.env.VERCEL) {
+      return 'Database connection failed. Set valid SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel, run supabase/schema.sql, then Redeploy.';
+    }
+    return 'Database connection failed. Run: npm run seed:local-admin && npm run dev';
+  }
+  if (/supabase|relation.*does not exist|permission denied|invalid api key/i.test(msg)) {
+    return 'Database setup incomplete. Run supabase/schema.sql in Supabase SQL Editor, or use local file storage (npm run dev without SUPABASE_* in .env).';
   }
   return msg || 'Could not login';
 }

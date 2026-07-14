@@ -2,8 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 
 let client = null;
 
-export function isSupabaseEnabled() {
-  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+const PLACEHOLDER_PATTERN = /YOUR_PROJECT|your-service-role|your-project|example\.com|placeholder|change-me/i;
+
+export function supabaseEnvPresent() {
+  return Boolean(process.env.SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
 }
 
 /** Fail fast with a clear message before any DB call. */
@@ -16,6 +18,14 @@ export function validateSupabaseConfig() {
       ok: false,
       error: 'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in Vercel',
       hint: 'Supabase → Project Settings → API → copy Project URL + Secret key',
+    };
+  }
+
+  if (PLACEHOLDER_PATTERN.test(url) || PLACEHOLDER_PATTERN.test(key)) {
+    return {
+      ok: false,
+      error: 'Supabase credentials are still placeholders — replace with real values',
+      hint: 'Copy Project URL + Secret key from Supabase dashboard into .env or Vercel env vars',
     };
   }
 
@@ -36,6 +46,16 @@ export function validateSupabaseConfig() {
   }
 
   return { ok: true };
+}
+
+/** Use Supabase only when credentials are real and valid (not .env placeholders). */
+export function isSupabaseEnabled() {
+  if (!supabaseEnvPresent()) return false;
+  return validateSupabaseConfig().ok;
+}
+
+export function getStorageMode() {
+  return isSupabaseEnabled() ? 'supabase' : 'file';
 }
 
 function fetchWithTimeout(url, options = {}) {
@@ -63,4 +83,21 @@ export function getSupabase() {
   }
 
   return client;
+}
+
+/** Quick connectivity check (used on health / bootstrap). */
+export async function testSupabaseConnection() {
+  if (!isSupabaseEnabled()) {
+    return { ok: false, reason: 'Supabase not configured — using local file storage' };
+  }
+  try {
+    const { error } = await getSupabase().from('users').select('id').limit(1);
+    if (error) {
+      return { ok: false, reason: error.message || 'Supabase query failed' };
+    }
+    return { ok: true };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : 'Connection failed';
+    return { ok: false, reason };
+  }
 }

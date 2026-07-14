@@ -112,13 +112,10 @@ import { ApiError, getStoredToken, notifyAuthSessionInvalid } from './authCommon
 import { getCloudApiUrl } from './cloudConfig';
 import { isLocalDevHost } from '../utils/authErrors';
 
+/** Auth API base — in dev always same-origin (never a broken remote URL from Settings). */
 function apiBase(): string {
-  // Vite dev/preview: always use same-origin proxy (localhost, LAN IP, etc.)
   if (import.meta.env.DEV && typeof window !== 'undefined') {
-    const { origin, port } = window.location;
-    if (port === '5173' || port === '5174' || port === '4173' || isLocalDevHost()) {
-      return origin;
-    }
+    return window.location.origin;
   }
 
   const cloud = getCloudApiUrl();
@@ -366,10 +363,7 @@ export async function authHealth(): Promise<boolean> {
 
   const bases: string[] = [];
   if (import.meta.env.DEV && typeof window !== 'undefined') {
-    const { origin, port } = window.location;
-    if (port === '5173' || port === '5174' || port === '4173' || isLocalDevHost()) {
-      bases.push(origin);
-    }
+    bases.push(window.location.origin);
   }
   const primary = getApiBase();
   if (primary && !bases.includes(primary)) bases.push(primary);

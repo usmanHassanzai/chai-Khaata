@@ -30,6 +30,9 @@ export function rowToUser(row) {
     subscriptionStartsAt: row.subscription_starts_at ?? undefined,
     subscriptionExpiresAt: row.subscription_expires_at ?? undefined,
     signupSnapshot: row.signup_snapshot ?? undefined,
+    paymentRefId: row.payment_ref_id ?? undefined,
+    trialStartedAt: row.trial_started_at ?? undefined,
+    trialEndsAt: row.trial_ends_at ?? undefined,
   };
 }
 
@@ -56,6 +59,9 @@ export function userToRow(user) {
     subscription_starts_at: user.subscriptionStartsAt ?? null,
     subscription_expires_at: user.subscriptionExpiresAt ?? null,
     signup_snapshot: user.signupSnapshot ?? null,
+    payment_ref_id: user.paymentRefId ?? null,
+    trial_started_at: user.trialStartedAt ?? null,
+    trial_ends_at: user.trialEndsAt ?? null,
   };
 }
 

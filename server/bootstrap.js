@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { ensureDefaultAdmin } from './store.js';
-import { isSupabaseEnabled } from './supabase.js';
+import { isSupabaseEnabled, getStorageMode } from './supabase.js';
 
 let bootstrapped = false;
 

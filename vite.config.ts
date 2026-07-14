@@ -18,6 +18,13 @@ export default defineConfig({
   preview: {
     host: true,
     port: 4173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   plugins: [
     react(),

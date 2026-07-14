@@ -5,6 +5,11 @@ function normalizeUrl(url: string): string {
 }
 
 export function getCloudApiUrl(): string {
+  // Dev: always sync/auth via same-origin Vite proxy — ignore saved remote URLs
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    return normalizeUrl(window.location.origin);
+  }
+
   const saved = localStorage.getItem(CLOUD_URL_KEY)?.trim();
   if (saved) return normalizeUrl(saved);
 

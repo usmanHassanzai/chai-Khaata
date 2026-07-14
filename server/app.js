@@ -41,7 +41,7 @@ import {
 } from './subscriptions.js';
 import { ensureBootstrapAdmin } from './bootstrap.js';
 import { performLogin } from './authLogin.js';
-import { isSupabaseEnabled } from './supabase.js';
+import { isSupabaseEnabled, getStorageMode, testSupabaseConnection, validateSupabaseConfig } from './supabase.js';
 import { ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET, PORT } from './env.js';
 import { getPaymentConfig } from './paymentConfig.js';
 import { isTrialActive } from './trialAccess.js';
@@ -135,11 +135,22 @@ function adminMiddleware(req, res, next) {
 
 app.get('/api/health', async (_req, res) => {
   const bootstrap = await ensureBootstrapAdmin();
+  const storage = getStorageMode();
+  const supabaseCheck = storage === 'supabase' ? await testSupabaseConnection() : null;
+  const configCheck = validateSupabaseConfig();
+
   res.json({
-    ok: true,
+    ok: bootstrap.ok !== false && (storage !== 'supabase' || supabaseCheck?.ok !== false),
     service: 'chai-khata-auth',
     sync: true,
-    storage: isSupabaseEnabled() ? 'supabase' : 'file',
+    storage,
+    supabase: {
+      envSet: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+      valid: configCheck.ok,
+      connected: supabaseCheck?.ok ?? null,
+      error: supabaseCheck?.ok === false ? supabaseCheck.reason : (configCheck.ok ? null : configCheck.error),
+      hint: configCheck.hint ?? null,
+    },
     publicUrl: PUBLIC_SERVER_URL || null,
     bootstrap,
   });

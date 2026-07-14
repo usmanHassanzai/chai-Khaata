@@ -17,11 +17,14 @@ function signToken(user) {
 }
 
 export async function performLogin(loginValue, password) {
-  const config = validateSupabaseConfig();
-  if (isSupabaseEnabled() && !config.ok) {
-    const err = new Error(config.error || 'Database not configured');
-    err.code = 'SERVER_CONFIG';
-    throw err;
+  if (isSupabaseEnabled()) {
+    const config = validateSupabaseConfig();
+    if (!config.ok) {
+      const err = new Error(config.error || 'Database not configured');
+      err.code = 'SERVER_CONFIG';
+      err.hint = config.hint;
+      throw err;
+    }
   }
 
   if (!loginValue?.trim() || !password) {

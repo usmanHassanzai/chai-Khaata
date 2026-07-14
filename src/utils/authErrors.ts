@@ -17,9 +17,11 @@ export function friendlyAuthError(err: unknown, fallback = 'Could not sign in. P
   }
 
   if (code === 'INVALID_CREDENTIALS') return 'Invalid email or password';
-  if (code === 'SERVER_CONFIG') return msg || 'Server configuration error. Contact admin.';
-  if (code === 'SERVER_ERROR' && /fetch failed|database|supabase|timed out/i.test(msg)) {
-    return 'Server could not connect to the database. Try again in a moment.';
+  if (code === 'SERVER_CONFIG') return msg || 'Server database is not configured. Contact admin.';
+  if (code === 'SERVER_ERROR' && /database|supabase|fetch failed|timed out|connection/i.test(msg)) {
+    return isLocalDevHost()
+      ? 'Auth server database error. Stop the app, run: npm run seed:local-admin && npm run dev'
+      : 'Server database is unavailable. Admin must configure Supabase on Vercel.';
   }
 
   if (/fetch failed|typeerror/i.test(msg)) return fallback;
