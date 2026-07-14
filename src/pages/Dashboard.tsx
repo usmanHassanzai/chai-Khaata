@@ -4,6 +4,7 @@ import MobileSaleCards from '../components/MobileSaleCards';
 import TeaHero from '../components/TeaHero';
 import TeaShowcase from '../components/TeaShowcase';
 import QuickActions from '../components/QuickActions';
+import ExportToolbar from '../components/ExportToolbar';
 import { db, getSettingsQuery } from '../db/database';
 import { Label, SectionTitle, useLabel } from '../i18n/useLabel';
 import {
@@ -14,6 +15,12 @@ import {
   saleProfit,
   saleTotal,
 } from '../services/calculations';
+import {
+  buildDashboardExportRows,
+  buildSalesExportRows,
+  DASHBOARD_EXPORT_COLUMNS,
+  SALES_EXPORT_COLUMNS,
+} from '../services/export';
 
 export default function Dashboard() {
   const l = useLabel();
@@ -38,10 +45,24 @@ export default function Dashboard() {
     settings.lowStockThresholdKg,
   );
 
+  const dashboardRows = buildDashboardExportRows(stats);
+  const recentExportRows = buildSalesExportRows(stats.recentSales, purchases, sales, customers);
+
   return (
     <div className="page">
       <TeaHero todaySale={formatCurrency(stats.todaySale)} />
       <QuickActions />
+
+      <div className="section-header-row" style={{ marginBottom: '1rem' }}>
+        <SectionTitle k="dashboard.title" />
+        <ExportToolbar
+          filenamePrefix="dashboard-summary"
+          title="Dashboard Summary"
+          columns={DASHBOARD_EXPORT_COLUMNS}
+          rows={dashboardRows}
+          compact
+        />
+      </div>
 
       <div className="stat-grid">
         <StatCard labelKey="dashboard.todaySale" value={formatCurrency(stats.todaySale)} accent="green" delay={0} />
@@ -62,7 +83,16 @@ export default function Dashboard() {
       <TeaShowcase />
 
       <section className="card-section dashboard-recent pak-accent-border card-premium animate-fade-in-up stagger-4">
-        <SectionTitle k="dashboard.recentSales" />
+        <div className="section-header-row">
+          <SectionTitle k="dashboard.recentSales" />
+          <ExportToolbar
+            filenamePrefix="dashboard-recent-sales"
+            title="Recent Sales"
+            columns={SALES_EXPORT_COLUMNS}
+            rows={recentExportRows}
+            compact
+          />
+        </div>
         {stats.recentSales.length === 0 ? (
           <p className="empty">{l('common.noData')}</p>
         ) : (

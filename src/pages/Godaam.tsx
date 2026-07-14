@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import FormField, { FieldLabel, ReadOnlyField } from '../components/FormField';
 import ImageUpload, { ImageThumb } from '../components/ImageUpload';
 import PageBanner from '../components/PageBanner';
+import ExportToolbar from '../components/ExportToolbar';
 import TextAreaField from '../components/TextAreaField';
 import { db } from '../db/database';
 import { Label, PageTitle, SectionTitle, useLabel } from '../i18n/useLabel';
@@ -17,6 +18,12 @@ import {
   purchaseTotalPrice,
   todayISO,
 } from '../services/calculations';
+import {
+  buildDealerExportRows,
+  buildPurchaseExportRows,
+  DEALER_EXPORT_COLUMNS,
+  PURCHASE_EXPORT_COLUMNS,
+} from '../services/export';
 
 export default function Godaam() {
   const l = useLabel();
@@ -82,6 +89,16 @@ export default function Godaam() {
       })
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [purchases, purchaseSearch, dealers]);
+
+  const dealerExportRows = useMemo(
+    () => buildDealerExportRows(activeDealers, purchases, payments),
+    [activeDealers, purchases, payments],
+  );
+
+  const purchaseExportRows = useMemo(
+    () => buildPurchaseExportRows(filteredPurchases, dealers),
+    [filteredPurchases, dealers],
+  );
 
   async function handleAddDealer(e: React.FormEvent) {
     e.preventDefault();
@@ -186,7 +203,16 @@ export default function Godaam() {
       </form>
 
       <section className="card-section">
-        <SectionTitle k="godaam.dealerSummary" />
+        <div className="section-header-row">
+          <SectionTitle k="godaam.dealerSummary" />
+          <ExportToolbar
+            filenamePrefix="godaam-dealers"
+            title="Godaam — Dealer Summary"
+            columns={DEALER_EXPORT_COLUMNS}
+            rows={dealerExportRows}
+            compact
+          />
+        </div>
         <div className="table-wrap">
           <table>
             <thead>
@@ -224,7 +250,17 @@ export default function Godaam() {
       </section>
 
       <section className="card-section">
-        <SectionTitle k="godaam.purchaseHistory" />
+        <div className="section-header-row">
+          <SectionTitle k="godaam.purchaseHistory" />
+          <ExportToolbar
+            filenamePrefix="godaam-purchases"
+            title="Godaam — Purchase History"
+            subtitle={purchaseSearch ? `Search: ${purchaseSearch}` : undefined}
+            columns={PURCHASE_EXPORT_COLUMNS}
+            rows={purchaseExportRows}
+            compact
+          />
+        </div>
         <input className="search-input" placeholder={l('common.search')} value={purchaseSearch} onChange={(e) => setPurchaseSearch(e.target.value)} />
         <div className="table-wrap">
           <table>

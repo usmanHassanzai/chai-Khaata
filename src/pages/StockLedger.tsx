@@ -2,9 +2,11 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import FormField from '../components/FormField';
 import PageBanner from '../components/PageBanner';
+import ExportToolbar from '../components/ExportToolbar';
 import { db, getSettingsQuery } from '../db/database';
-import { Label, PageTitle, useLabel } from '../i18n/useLabel';
+import { Label, PageTitle, SectionTitle, useLabel } from '../i18n/useLabel';
 import { computeTeaStocks, formatCurrency, formatKg } from '../services/calculations';
+import { buildStockExportRows, STOCK_EXPORT_COLUMNS } from '../services/export';
 
 export default function StockLedger() {
   const l = useLabel();
@@ -23,6 +25,7 @@ export default function StockLedger() {
   }, [settings.lowStockThresholdKg]);
 
   const stocks = computeTeaStocks(purchases, sales, settings.lowStockThresholdKg);
+  const stockExportRows = buildStockExportRows(stocks);
 
   async function saveThreshold(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +44,17 @@ export default function StockLedger() {
       </form>
 
       <section className="card-section">
+        <div className="section-header-row">
+          <SectionTitle k="stock.title" />
+          <ExportToolbar
+            filenamePrefix="godaam-stock"
+            title="Godaam Stock Ledger"
+            subtitle={`Low stock threshold: ${settings.lowStockThresholdKg} kg`}
+            columns={STOCK_EXPORT_COLUMNS}
+            rows={stockExportRows}
+            compact
+          />
+        </div>
         <div className="table-wrap">
           <table>
             <thead>

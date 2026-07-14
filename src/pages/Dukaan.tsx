@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import FormField, { FieldLabel, ReadOnlyField } from '../components/FormField';
 import ImageUpload, { ImageThumb } from '../components/ImageUpload';
 import PageBanner from '../components/PageBanner';
+import ExportToolbar from '../components/ExportToolbar';
 import StatCard from '../components/StatCard';
 import TextAreaField from '../components/TextAreaField';
 import { db } from '../db/database';
@@ -20,6 +21,11 @@ import {
   saleTotal,
   todayISO,
 } from '../services/calculations';
+import {
+  buildSalesExportRows,
+  printTable,
+  SALES_EXPORT_COLUMNS,
+} from '../services/export';
 
 const FILTERS: SaleFilter[] = ['today', 'month', 'year', 'all'];
 const FILTER_KEYS: Record<SaleFilter, string> = {
@@ -143,6 +149,21 @@ export default function Dukaan() {
     return computeSaleProfit(s, purchases, sales);
   }
 
+  const exportRows = useMemo(
+    () => buildSalesExportRows(filteredSales, purchases, sales, customers),
+    [filteredSales, purchases, sales, customers],
+  );
+
+  function printOneSale(s: Sale) {
+    const rows = buildSalesExportRows([s], purchases, sales, customers);
+    printTable({
+      title: `Sale — ${s.teaName} (${s.date})`,
+      subtitle: customerLabel(s),
+      columns: SALES_EXPORT_COLUMNS,
+      rows,
+    });
+  }
+
   return (
     <div className="page">
       <PageBanner titleKey="dukaan.title" subtitle="Record sales & track daily profit" icon="🏪" accent="green" />
@@ -234,6 +255,13 @@ export default function Dukaan() {
       <section className="card-section">
         <div className="section-header">
           <SectionTitle k="dukaan.salesHistory" />
+          <ExportToolbar
+            filenamePrefix={`dukaan-sales-${filter}`}
+            title="Dukaan Sales Report"
+            subtitle={`Filter: ${filter}${search ? ` · Search: ${search}` : ''}`}
+            columns={SALES_EXPORT_COLUMNS}
+            rows={exportRows}
+          />
           <div className="filter-row">
             {FILTERS.map((f) => (
               <button key={f} type="button" className={`chip${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>
@@ -291,6 +319,7 @@ export default function Dukaan() {
                       <td>{customerLabel(s)}</td>
                       <td><ImageThumb src={s.billImage} /></td>
                       <td>
+                        <button type="button" className="btn sm" onClick={() => printOneSale(s)} title="Print">🖨</button>
                         <button type="button" className="btn danger sm" onClick={() => handleDelete(s.id!)}>{l('common.delete')}</button>
                       </td>
                     </tr>

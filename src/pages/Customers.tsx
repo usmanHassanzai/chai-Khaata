@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import FormField, { FieldLabel, ReadOnlyField } from '../components/FormField';
 import ImageUpload, { ImageThumb } from '../components/ImageUpload';
 import PageBanner from '../components/PageBanner';
+import ExportToolbar from '../components/ExportToolbar';
 import TextAreaField from '../components/TextAreaField';
 import { db, nextCustomerId } from '../db/database';
 import { Label, PageTitle, SectionTitle, useLabel } from '../i18n/useLabel';
@@ -19,6 +20,12 @@ import {
   saleTotal,
   todayISO,
 } from '../services/calculations';
+import {
+  buildCustomerLedgerExportRows,
+  buildCustomerSummaryExportRows,
+  CUSTOMER_LEDGER_COLUMNS,
+  CUSTOMER_SUMMARY_COLUMNS,
+} from '../services/export';
 
 function ReadOnlyDisplay({ labelKey, value }: { labelKey: string; value: string }) {
   return (
@@ -101,6 +108,16 @@ export default function Customers() {
       );
     });
   }, [customerSales, ledgerSearch, customers]);
+
+  const customerSummaryRows = useMemo(
+    () => buildCustomerSummaryExportRows(customers, sales, payments),
+    [customers, sales, payments],
+  );
+
+  const customerLedgerRows = useMemo(
+    () => buildCustomerLedgerExportRows(filteredLedger, customers, purchases, sales),
+    [filteredLedger, customers, purchases, sales],
+  );
 
   async function refreshPreviewId() {
     setPreviewId(await nextCustomerId());
@@ -306,7 +323,16 @@ export default function Customers() {
 
       {/* ── CUSTOMER SUMMARY TABLE ── */}
       <section className="card-section">
-        <SectionTitle k="customers.customerRecord" />
+        <div className="section-header-row">
+          <SectionTitle k="customers.customerRecord" />
+          <ExportToolbar
+            filenamePrefix="customers-summary"
+            title="Customer Summary — Dues & Amounts"
+            columns={CUSTOMER_SUMMARY_COLUMNS}
+            rows={customerSummaryRows}
+            compact
+          />
+        </div>
         <div className="table-wrap wide-table">
           <table>
             <thead>
@@ -365,7 +391,17 @@ export default function Customers() {
 
       {/* ── FULL SALES LEDGER (all fields visible) ── */}
       <section className="card-section">
-        <SectionTitle k="customers.allSalesLedger" />
+        <div className="section-header-row">
+          <SectionTitle k="customers.allSalesLedger" />
+          <ExportToolbar
+            filenamePrefix="customers-ledger"
+            title="Customer Sales Ledger"
+            subtitle={ledgerSearch ? `Search: ${ledgerSearch}` : undefined}
+            columns={CUSTOMER_LEDGER_COLUMNS}
+            rows={customerLedgerRows}
+            compact
+          />
+        </div>
         <input className="search-input" placeholder={l('common.search')} value={ledgerSearch} onChange={(e) => setLedgerSearch(e.target.value)} />
         <div className="table-wrap wide-table">
           <table>

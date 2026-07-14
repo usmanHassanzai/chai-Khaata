@@ -21,6 +21,13 @@ let hooksAttached = false;
 let statusListeners = new Set<(s: SyncStatus) => void>();
 let lastStatus: SyncStatus = 'idle';
 let syncing = false;
+let pendingPush = false;
+let syncDb: ChaiKhataDB | null = null;
+let onlineListenerAttached = false;
+
+export function hasPendingSyncPush(): boolean {
+  return pendingPush;
+}
 
 export function onSyncStatus(listener: (status: SyncStatus) => void) {
   statusListeners.add(listener);
@@ -182,9 +189,11 @@ export async function pushLedgerToCloud(db: ChaiKhataDB) {
     }
 
     setStatus('synced');
+    pendingPush = false;
     return { pushed: true as const };
   } catch {
     setStatus('error');
+    pendingPush = true;
     return { pushed: false as const, error: true as const };
   } finally {
     syncing = false;
@@ -227,11 +236,13 @@ export async function syncLedgerWithCloud(db: ChaiKhataDB) {
 }
 
 export function startLedgerSyncLoop(db: ChaiKhataDB) {
+  syncDb = db;
   if (pollTimer) clearInterval(pollTimer);
   if (!isCloudSyncEnabled()) return;
 
   pollTimer = setInterval(() => {
     void pullLedgerFromCloud(db);
+    if (pendingPush) void pushLedgerToCloud(db);
   }, 20000);
 
   const onVisible = () => {
@@ -240,6 +251,15 @@ export function startLedgerSyncLoop(db: ChaiKhataDB) {
     }
   };
   document.addEventListener('visibilitychange', onVisible);
+
+  if (!onlineListenerAttached) {
+    onlineListenerAttached = true;
+    window.addEventListener('online', () => {
+      if (!syncDb) return;
+      void syncLedgerWithCloud(syncDb);
+      if (pendingPush) void pushLedgerToCloud(syncDb);
+    });
+  }
 }
 
 export function stopLedgerSyncLoop() {

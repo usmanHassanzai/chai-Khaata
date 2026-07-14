@@ -1,0 +1,71 @@
+import { useAuth } from '../context/AuthContext';
+import { Label } from '../i18n/useLabel';
+import {
+  downloadCsv,
+  downloadJson,
+  downloadPdf,
+  printTable,
+  type ExportColumn,
+} from '../services/export';
+
+type ExportToolbarProps = {
+  filenamePrefix: string;
+  title: string;
+  subtitle?: string;
+  columns: ExportColumn[];
+  rows: Record<string, string | number>[];
+  jsonData?: unknown;
+  disabled?: boolean;
+  compact?: boolean;
+};
+
+export default function ExportToolbar({
+  filenamePrefix,
+  title,
+  subtitle,
+  columns,
+  rows,
+  jsonData,
+  disabled,
+  compact,
+}: ExportToolbarProps) {
+  const { user } = useAuth();
+  const shopName = user?.shopName || 'Patiwala';
+  const stamp = new Date().toISOString().slice(0, 10);
+  const base = `${filenamePrefix}-${stamp}`;
+  const noData = rows.length === 0;
+
+  function exportCsv() {
+    downloadCsv(base, columns, rows);
+  }
+
+  function exportPdf() {
+    downloadPdf({ filename: base, title, shopName, subtitle, columns, rows });
+  }
+
+  function exportPrint() {
+    printTable({ title, shopName, subtitle, columns, rows });
+  }
+
+  function exportJson() {
+    const payload = jsonData ?? { exportedAt: new Date().toISOString(), title, rows };
+    downloadJson(base, JSON.stringify(payload, null, 2));
+  }
+
+  return (
+    <div className={`export-toolbar${compact ? ' compact' : ''}`}>
+      <button type="button" className="btn sm" disabled={disabled || noData} onClick={exportCsv} title="Download CSV">
+        📥 <Label k="export.csv" variant="compact" />
+      </button>
+      <button type="button" className="btn sm" disabled={disabled || noData} onClick={exportPdf} title="Download PDF">
+        📄 <Label k="export.pdf" variant="compact" />
+      </button>
+      <button type="button" className="btn sm" disabled={disabled || noData} onClick={exportPrint} title="Print">
+        🖨 <Label k="export.print" variant="compact" />
+      </button>
+      <button type="button" className="btn sm" disabled={disabled || noData} onClick={exportJson} title="Download JSON">
+        {`{ }`} <Label k="export.json" variant="compact" />
+      </button>
+    </div>
+  );
+}

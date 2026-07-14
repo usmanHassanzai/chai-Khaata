@@ -56,6 +56,14 @@ export const labels = {
     bilingual: { ur: 'اردو + انگریزی', en: 'Urdu + English', roman: 'Urdu + English' },
   },
 
+  export: {
+    csv: { ur: 'CSV', en: 'CSV', roman: 'CSV' },
+    pdf: { ur: 'PDF', en: 'PDF', roman: 'PDF' },
+    print: { ur: 'پرنٹ', en: 'Print', roman: 'Print' },
+    json: { ur: 'ڈیٹا', en: 'Data', roman: 'Data' },
+    download: { ur: 'ڈاؤن لوڈ', en: 'Download', roman: 'Download' },
+  },
+
   dashboard: {
     title: { ur: 'ڈیش بورڈ', en: 'Dashboard', roman: 'Khulasaa' },
     todaySale: { ur: 'آج کی فروخت', en: "Today's Sale", roman: 'Aaj ki Sale' },
