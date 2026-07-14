@@ -410,9 +410,9 @@ export const labels = {
       roman: 'Password aap ke register email par bheja jayega. Admin ko bhi khabar milegi.',
     },
     forgotEmailNeedsSmtp: {
-      ur: 'ای میل بھیجنے کے لیے سرور پر SMTP سیٹ ہونا چاہیے — ورنہ ایڈمن سے رابطہ کریں',
-      en: 'Server needs SMTP configured to send email — otherwise contact admin',
-      roman: 'Email ke liye SMTP chahiye — warna admin se rabta karein',
+      ur: 'لائیو سرور (patiwala.pk) پر SMTP سیٹ نہیں — Vercel میں SMTP_* شامل کریں اور Redeploy کریں۔ لوکل .env صرف آپ کے PC پر کام کرتا ہے',
+      en: 'Email is NOT configured on the live server (patiwala.pk). Add SMTP_HOST, SMTP_USER, SMTP_PASS in Vercel → Environment Variables → Redeploy. Your local .env file only works on your computer, not for other users online.',
+      roman: 'Live server par SMTP nahi — Vercel mein SMTP vars add karein aur redeploy. Local .env sirf aap ke PC par kaam karta hai.',
     },
     sendPasswordToEmail: { ur: 'پاس ورڈ ای میل کریں', en: 'Email my password', roman: 'Email my password' },
     useOtpInstead: { ur: 'OTP سے نیا پاس ورڈ بنائیں', en: 'Reset with OTP instead', roman: 'OTP se naya password' },

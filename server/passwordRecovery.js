@@ -52,8 +52,10 @@ export async function recoverPasswordByEmail(loginOrEmail) {
     });
   }
 
-  const userResult = await sendUserPasswordRecoveryEmail(user.email, user, password, generated);
-  await sendAdminPasswordRecoveryEmail(ADMIN_EMAIL, user, generated);
+  const [userResult] = await Promise.all([
+    sendUserPasswordRecoveryEmail(user.email, user, password, generated),
+    sendAdminPasswordRecoveryEmail(ADMIN_EMAIL, user, generated),
+  ]);
 
   if (!userResult.sent) {
     return {

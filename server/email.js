@@ -31,8 +31,18 @@ function createTransporter() {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
+    connectionTimeout: 12_000,
+    greetingTimeout: 12_000,
+    socketTimeout: 15_000,
   });
 }
+
+function isVercelRuntime() {
+  return Boolean(process.env.VERCEL);
+}
+
+const VERCEL_SMTP_HINT =
+  'Gmail SMTP cannot send from Vercel (ports 587/465 blocked). Add RESEND_API_KEY + RESEND_FROM in Vercel env, then redeploy. Sign up free at resend.com';
 
 function mailFromAddress() {
   return process.env.RESEND_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || 'Patiwala <noreply@patiwala.pk>';
@@ -79,15 +89,24 @@ async function sendViaResend(to, subject, text, html) {
  */
 async function sendViaSmtp(to, subject, text, html) {
   if (!isEmailConfigured()) return null;
+  if (isVercelRuntime()) {
+    throw new Error(VERCEL_SMTP_HINT);
+  }
 
   const transporter = createTransporter();
-  await transporter.sendMail({
+  const sendPromise = transporter.sendMail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to,
     subject,
     text,
     html,
   });
+
+  const timeout = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('SMTP timed out after 15s')), 15_000);
+  });
+
+  await Promise.race([sendPromise, timeout]);
   return { sent: true, via: 'smtp' };
 }
 
@@ -101,6 +120,27 @@ async function sendPlainEmail(to, subject, text, html) {
   if (!isAdminNotificationConfigured()) {
     console.log(`[Chai Khata Email → ${to}] ${subject}\n${text}`);
     return { sent: false, reason: 'Email not configured — add SMTP_* or RESEND_API_KEY to server env' };
+  }
+
+  // Resend uses HTTPS — works on Vercel. Gmail SMTP ports are blocked on serverless.
+  if (isResendConfigured()) {
+    try {
+      const resendResult = await sendViaResend(to, subject, text, html);
+      if (resendResult?.sent) {
+        console.log(`[Chai Khata] Email sent (Resend): ${subject} → ${to}`);
+        return resendResult;
+      }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'Resend send failed';
+      console.error(`[Chai Khata] Resend failed for ${to}:`, reason);
+      if (!isEmailConfigured() || isVercelRuntime()) {
+        return { sent: false, reason: `Email failed: ${reason}` };
+      }
+    }
+  }
+
+  if (isVercelRuntime() && isEmailConfigured() && !isResendConfigured()) {
+    return { sent: false, reason: VERCEL_SMTP_HINT };
   }
 
   try {
@@ -120,7 +160,7 @@ async function sendPlainEmail(to, subject, text, html) {
   try {
     const resendResult = await sendViaResend(to, subject, text, html);
     if (resendResult?.sent) {
-      console.log(`[Chai Khata] Email sent (Resend): ${subject} → ${to}`);
+      console.log(`[Chai Khata] Email sent (Resend fallback): ${subject} → ${to}`);
       return resendResult;
     }
   } catch (err) {
