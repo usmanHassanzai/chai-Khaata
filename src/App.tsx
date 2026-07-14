@@ -8,6 +8,7 @@ import Dukaan from './pages/Dukaan';
 import Godaam from './pages/Godaam';
 import AdminApprovals from './pages/AdminApprovals';
 import ForgotPassword from './pages/ForgotPassword';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import PaymentDue from './pages/PaymentDue';
 import Register from './pages/Register';
@@ -20,6 +21,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -28,7 +30,7 @@ export default function App() {
 
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/dukaan" element={<Dukaan />} />
               <Route path="/godaam" element={<Godaam />} />
               <Route path="/customers" element={<Customers />} />

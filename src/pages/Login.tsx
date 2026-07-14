@@ -25,7 +25,7 @@ export default function Login() {
   }, []);
 
   if (user?.status === 'approved' || user?.role === 'admin') {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -138,6 +138,7 @@ export default function Login() {
         <Link to="/subscription-renew" className="auth-quick-link">
           <Label k="auth.renewSubscription" variant="compact" />
         </Link>
+        <Link to="/" className="auth-quick-link">← Back to home</Link>
       </div>
     </AuthLayout>
   );

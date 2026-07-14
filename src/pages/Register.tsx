@@ -36,7 +36,7 @@ export default function Register() {
   const selectedPlan = plans.find((p) => p.id === subscriptionPlan);
 
   if (user?.status === 'approved' || user?.role === 'admin') {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   async function handleSubmit(e: FormEvent) {

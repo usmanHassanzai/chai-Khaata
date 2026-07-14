@@ -11,7 +11,7 @@ import { getLabel } from '../i18n/labels';
 import { useLabelMode } from '../i18n/useLabel';
 
 const mainLinks = [
-  { to: '/', key: 'dashboard', icon: '📊' },
+  { to: '/dashboard', key: 'dashboard', icon: '📊' },
   { to: '/dukaan', key: 'dukaan', icon: '🏪' },
   { to: '/godaam', key: 'godaam', icon: '📦' },
   { to: '/customers', key: 'customers', icon: '👥' },
@@ -35,6 +35,7 @@ function pageTitleFromPath(pathname: string, mode: ReturnType<typeof useLabelMod
   if (pathname.startsWith('/stock')) return navShortLabel('stock', mode);
   if (pathname.startsWith('/settings')) return navShortLabel('settings', mode);
   if (pathname.startsWith('/admin')) return navShortLabel('approvals', mode);
+  if (pathname.startsWith('/dashboard')) return navShortLabel('dashboard', mode);
   return navShortLabel('dashboard', mode);
 }
 
@@ -117,7 +118,7 @@ export default function Layout() {
               <NavLink
                 key={to}
                 to={to}
-                end={to === '/'}
+                end={to === '/dashboard'}
                 className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
               >
                 <span className="nav-icon-wrap">{icon}</span>
@@ -203,7 +204,7 @@ export default function Layout() {
             <NavLink
               key={to}
               to={to}
-              end={to === '/'}
+              end={to === '/dashboard'}
               className={({ isActive }) => `bottom-link${isActive ? ' active' : ''}`}
             >
               <span className="bottom-icon-wrap">
