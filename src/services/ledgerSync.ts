@@ -311,11 +311,8 @@ export function attachLedgerSyncHooks(db: ChaiKhataDB, userId: string) {
   for (const table of tables) {
     // Post-commit hooks — data is saved locally before we push to Supabase
     table.hook('creating', () => { scheduleLedgerPush(db); });
-    table.hook('created', () => { scheduleLedgerPush(db); });
     table.hook('updating', () => { scheduleLedgerPush(db); });
-    table.hook('updated', () => { scheduleLedgerPush(db); });
     table.hook('deleting', () => { scheduleLedgerPush(db); });
-    table.hook('deleted', () => { scheduleLedgerPush(db); });
   }
 }
 
