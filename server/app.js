@@ -1023,6 +1023,34 @@ app.put('/api/sync/ledger', authMiddleware, async (req, res) => {
   }
 });
 
+app.patch('/api/sync/ledger', authMiddleware, async (req, res) => {
+  try {
+    if (!isSupabaseEnabled() && isServerlessEnv()) {
+      return res.status(503).json({
+        error: 'SERVER_CONFIG',
+        message: 'Cloud database not configured. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel, run supabase/schema.sql, then redeploy.',
+      });
+    }
+
+    const { applyLedgerChanges } = await import('./ledgerStore.js');
+    const changes = Array.isArray(req.body?.changes) ? req.body.changes : [];
+    if (!changes.length) {
+      return res.status(400).json({ error: 'VALIDATION', message: 'changes array required' });
+    }
+
+    const result = await applyLedgerChanges(req.userId, changes);
+    res.json({
+      accepted: true,
+      applied: result.applied,
+      skipped: result.skipped,
+      ledger: result.ledger,
+    });
+  } catch (err) {
+    console.error('Sync patch error:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not sync row changes' });
+  }
+});
+
 async function startServer() {
   await ensureBootstrapAdmin();
   const admin = await findUserByLogin(ADMIN_EMAIL);

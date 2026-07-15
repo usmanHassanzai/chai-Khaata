@@ -4,6 +4,7 @@ import { JWT_SECRET, ADMIN_EMAIL } from '../../server/env.js';
 import { findUserById, isPaymentBlocked, paymentDueAmount, publicUser } from '../../server/store.js';
 import { isSubscriptionAccessBlocked } from '../../server/renewalGrace.js';
 import { isTrialActive } from '../../server/trialAccess.js';
+import { handleSyncLedgerRequest, isLedgerSyncRequest } from '../../server/syncLedgerApi.js';
 
 function readUserId(req) {
   const header = req.headers.authorization || req.headers.Authorization;
@@ -22,6 +23,11 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     res.end();
+    return;
+  }
+
+  if (isLedgerSyncRequest(req)) {
+    await handleSyncLedgerRequest(req, res);
     return;
   }
 
@@ -89,4 +95,4 @@ export default async function handler(req, res) {
   }
 }
 
-export const config = { maxDuration: 15 };
+export const config = { maxDuration: 60 };

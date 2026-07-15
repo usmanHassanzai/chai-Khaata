@@ -125,7 +125,15 @@ if (pingError) {
 }
 
 console.log('✓ Connected to Supabase');
-console.log('✓ users table exists\n');
+console.log('✓ users table exists');
+
+const { error: ledgerTableError } = await supabase.from('ledger_snapshots').select('user_id').limit(1);
+if (ledgerTableError) {
+  console.log(`\n✗ ledger_snapshots table missing or inaccessible: ${ledgerTableError.message}\n`);
+  console.log('→ Run supabase/schema.sql in Supabase SQL Editor (includes ledger_snapshots), then try again.\n');
+  process.exit(1);
+}
+console.log('✓ ledger_snapshots table exists\n');
 
 console.log('Creating admin user in Supabase...');
 

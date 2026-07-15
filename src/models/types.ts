@@ -5,6 +5,7 @@ export interface Dealer {
   address?: string;
   openingDue: number;
   removed?: boolean;
+  updatedAt?: string;
 }
 
 export interface Customer {
@@ -16,6 +17,7 @@ export interface Customer {
   profilePicture?: string;
   notes?: string;
   registerDate?: string;
+  updatedAt?: string;
 }
 
 export interface Purchase {
@@ -38,6 +40,7 @@ export interface Purchase {
   country?: string;
   grade?: string;
   invoiceNumber?: string;
+  updatedAt?: string;
 }
 
 export interface Sale {
@@ -55,6 +58,7 @@ export interface Sale {
   amountReceived: number;
   billImage?: string;
   notes?: string;
+  updatedAt?: string;
 }
 
 export interface Payment {
@@ -64,6 +68,7 @@ export interface Payment {
   dealerId?: number;
   amount: number;
   note?: string;
+  updatedAt?: string;
 }
 
 export interface AppSettings {
@@ -76,6 +81,7 @@ export interface AppSettings {
   shopLogo?: string;
   shopPhone?: string;
   shopAddress?: string;
+  updatedAt?: string;
 }
 
 export interface TeaStock {

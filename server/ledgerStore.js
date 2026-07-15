@@ -46,6 +46,18 @@ export function shouldAcceptIncoming(incoming, existing) {
   return new Date(incoming.updatedAt).getTime() >= new Date(existing.updatedAt).getTime();
 }
 
+/**
+ * @param {string} userId
+ * @param {Array<{ table: string, op: 'upsert'|'delete', row?: Record<string, unknown>, id?: number|string, updatedAt?: string }>} changes
+ */
+export async function applyLedgerChanges(userId, changes) {
+  if (isSupabaseEnabled()) {
+    const { sbApplyLedgerChanges } = await import('./persistence/ledgerTables.js');
+    return sbApplyLedgerChanges(userId, changes);
+  }
+  throw new Error('Row-level sync requires Supabase');
+}
+
 /** @param {string} userId */
 export async function deleteLedger(userId) {
   if (isSupabaseEnabled()) {

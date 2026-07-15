@@ -51,7 +51,7 @@ export default function CloudSyncPanel() {
       const pull = await pullLedgerFromCloud(db, user.id);
       const push = await pushLedgerToCloud(db, user.id);
       const errMsg = ('message' in pull && pull.message) || ('message' in push && push.message);
-      if (pull.error || push.error) {
+      if (('error' in pull && pull.error) || ('error' in push && push.error)) {
         showMessage(
           errMsg || 'Sync failed. Check internet and that Supabase is configured on the server.',
           'error',

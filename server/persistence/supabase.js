@@ -564,45 +564,32 @@ export async function sbClearSubmissionsForUser(userId) {
 }
 
 export async function sbReadLedger(userId) {
-  const { data, error } = await getSupabase()
-    .from('ledger_snapshots')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle();
+  const {
+    sbReadLedgerTables,
+    sbReadLedgerSnapshotOnly,
+    sbMigrateSnapshotToTables,
+    sbCountLedgerRows,
+  } = await import('./ledgerTables.js');
 
-  if (error) throwSupabaseError(error);
-  if (!data) return null;
+  const rowCount = await sbCountLedgerRows(userId);
+  if (rowCount > 0) {
+    return sbReadLedgerTables(userId);
+  }
 
-  const payload = data.payload ?? {};
-  return {
-    ...payload,
-    userId: data.user_id,
-    updatedAt: data.updated_at,
-  };
+  const snapshot = await sbReadLedgerSnapshotOnly(userId);
+  if (!snapshot) return null;
+
+  const migrated = await sbMigrateSnapshotToTables(userId, snapshot);
+  return migrated || snapshot;
 }
 
 export async function sbWriteLedger(userId, snapshot) {
-  const record = {
-    ...snapshot,
-    userId,
-    updatedAt: snapshot.updatedAt || new Date().toISOString(),
-  };
-
-  const { dealers, customers, purchases, sales, payments, settings, updatedAt } = record;
-  const payload = { dealers, customers, purchases, sales, payments, settings, updatedAt };
-
-  const { error } = await getSupabase()
-    .from('ledger_snapshots')
-    .upsert({
-      user_id: userId,
-      updated_at: updatedAt,
-      payload,
-    }, { onConflict: 'user_id' });
-
-  if (error) throwSupabaseError(error);
-  return record;
+  const { sbWriteLedgerTables } = await import('./ledgerTables.js');
+  return sbWriteLedgerTables(userId, snapshot);
 }
 
 export async function sbDeleteLedger(userId) {
+  const { sbDeleteLedgerTables } = await import('./ledgerTables.js');
+  await sbDeleteLedgerTables(userId);
   await getSupabase().from('ledger_snapshots').delete().eq('user_id', userId);
 }

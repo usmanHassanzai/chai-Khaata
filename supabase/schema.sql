@@ -78,8 +78,112 @@ create table if not exists public.ledger_snapshots (
 
 create index if not exists ledger_snapshots_updated_at_idx on public.ledger_snapshots (updated_at);
 
+-- Normalized per-user ledger tables (row-level sync; replaces snapshot-only storage)
+create table if not exists public.ledger_dealers (
+  user_id text not null references public.users (id) on delete cascade,
+  id bigint not null,
+  name text not null,
+  phone text default '',
+  address text default '',
+  opening_due numeric not null default 0,
+  removed boolean not null default false,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, id)
+);
+
+create table if not exists public.ledger_customers (
+  user_id text not null references public.users (id) on delete cascade,
+  id bigint not null,
+  customer_id text not null,
+  name text not null,
+  phone text default '',
+  address text default '',
+  profile_picture text,
+  notes text default '',
+  register_date text,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, id)
+);
+
+create table if not exists public.ledger_purchases (
+  user_id text not null references public.users (id) on delete cascade,
+  id bigint not null,
+  date text not null,
+  dealer_id bigint not null,
+  tea_name text not null,
+  bags_ordered numeric not null default 0,
+  bags_received numeric not null default 0,
+  bag_weight_kg numeric not null default 0,
+  miss_weight_kg numeric not null default 0,
+  price_per_kg numeric not null default 0,
+  deposit_paid numeric not null default 0,
+  bill_image text,
+  notes text default '',
+  cont_no text,
+  lot_no text,
+  country text,
+  grade text,
+  invoice_number text,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, id)
+);
+
+create table if not exists public.ledger_sales (
+  user_id text not null references public.users (id) on delete cascade,
+  id bigint not null,
+  date text not null,
+  tea_name text not null,
+  quantity_kg numeric not null default 0,
+  bags_sold numeric,
+  bag_weight_kg numeric,
+  sale_price_per_kg numeric not null default 0,
+  purchase_price_per_kg numeric,
+  customer_id bigint,
+  amount_received numeric not null default 0,
+  bill_image text,
+  notes text default '',
+  updated_at timestamptz not null default now(),
+  primary key (user_id, id)
+);
+
+create table if not exists public.ledger_payments (
+  user_id text not null references public.users (id) on delete cascade,
+  id bigint not null,
+  date text not null,
+  customer_id bigint,
+  dealer_id bigint,
+  amount numeric not null default 0,
+  note text default '',
+  updated_at timestamptz not null default now(),
+  primary key (user_id, id)
+);
+
+create table if not exists public.ledger_settings (
+  user_id text primary key references public.users (id) on delete cascade,
+  id text not null default 'settings',
+  low_stock_threshold_kg numeric not null default 50,
+  language text not null default 'ur-roman',
+  shop_name text,
+  shop_logo text,
+  shop_phone text,
+  shop_address text,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists ledger_dealers_user_updated_idx on public.ledger_dealers (user_id, updated_at desc);
+create index if not exists ledger_customers_user_updated_idx on public.ledger_customers (user_id, updated_at desc);
+create index if not exists ledger_purchases_user_updated_idx on public.ledger_purchases (user_id, updated_at desc);
+create index if not exists ledger_sales_user_updated_idx on public.ledger_sales (user_id, updated_at desc);
+create index if not exists ledger_payments_user_updated_idx on public.ledger_payments (user_id, updated_at desc);
+
 -- Server uses service_role key (bypasses RLS). No public access needed.
 alter table public.users enable row level security;
 alter table public.otps enable row level security;
 alter table public.payment_submissions enable row level security;
 alter table public.ledger_snapshots enable row level security;
+alter table public.ledger_dealers enable row level security;
+alter table public.ledger_customers enable row level security;
+alter table public.ledger_purchases enable row level security;
+alter table public.ledger_sales enable row level security;
+alter table public.ledger_payments enable row level security;
+alter table public.ledger_settings enable row level security;

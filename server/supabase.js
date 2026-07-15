@@ -111,10 +111,23 @@ export async function testSupabaseConnection() {
     return { ok: false, reason: 'Supabase not configured — using local file storage' };
   }
   try {
-    const { error } = await getSupabase().from('users').select('id').limit(1);
-    if (error) {
-      return { ok: false, reason: error.message || 'Supabase query failed' };
+    const { error: usersError } = await getSupabase().from('users').select('id').limit(1);
+    if (usersError) {
+      return { ok: false, reason: usersError.message || 'Supabase query failed' };
     }
+
+    const { error: ledgerError } = await getSupabase().from('ledger_snapshots').select('user_id').limit(1);
+    if (ledgerError) {
+      const msg = ledgerError.message || 'ledger_snapshots query failed';
+      if (/relation.*ledger_snapshots.*does not exist|could not find.*ledger_snapshots/i.test(msg)) {
+        return {
+          ok: false,
+          reason: 'ledger_snapshots table missing — run supabase/schema.sql in Supabase SQL Editor',
+        };
+      }
+      return { ok: false, reason: msg };
+    }
+
     return { ok: true };
   } catch (err) {
     const reason = err instanceof Error ? err.message : 'Connection failed';
