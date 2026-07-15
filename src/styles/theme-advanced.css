@@ -35,8 +35,12 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   min-height: 100vh;
+  min-height: 100dvh;
+  height: auto;
   padding: 0;
   align-items: stretch;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .auth-tea-panel {
@@ -186,13 +190,17 @@ body {
 
 .auth-page-inner {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 2rem 1.5rem;
   position: relative;
   background:
     radial-gradient(circle at 80% 20%, rgba(45, 106, 79, 0.06) 0%, transparent 50%),
     var(--cream);
+  overflow-x: hidden;
+  overflow-y: visible;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .auth-card {

@@ -1,6 +1,7 @@
 import { Link, Navigate } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AppLoading from '../components/AppLoading';
+import LandingBubbles from '../components/LandingBubbles';
 import PaymentInstructions from '../components/PaymentInstructions';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_PAYMENT_CONFIG, DEMO_PLAN, LANDING_PLANS, SUBSCRIPTION_PRICES, normalizePaymentConfig } from '../data/paymentPlans';
@@ -178,8 +179,12 @@ export default function Landing() {
   }, []);
 
   useEffect(() => {
-    document.body.style.overflow = menuOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
+    if (menuOpen) {
+      document.body.classList.add('scroll-lock');
+    } else {
+      document.body.classList.remove('scroll-lock');
+    }
+    return () => document.body.classList.remove('scroll-lock');
   }, [menuOpen]);
 
   const scrollToSection = useCallback((e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
@@ -199,6 +204,8 @@ export default function Landing() {
 
   return (
     <div className="landing-page">
+      <LandingBubbles count={10} variant="light" className="landing-bubbles--page" />
+
       <header className={`landing-nav${navScrolled ? ' is-scrolled' : ''}${menuOpen ? ' menu-open' : ''}`}>
         <Link to="/" className="landing-logo" onClick={() => setMenuOpen(false)}>
           <span className="landing-logo-icon">🍵</span>
@@ -258,6 +265,7 @@ export default function Landing() {
       </header>
 
       <section className="landing-hero">
+        <LandingBubbles count={18} variant="hero" />
         <div className="landing-hero-bg landing-hero-parallax" style={{ backgroundImage: `url(${heroTea.image})` }} aria-hidden />
         <div className="landing-hero-overlay" aria-hidden />
         <div className="landing-hero-glow landing-hero-glow-a" aria-hidden />
@@ -273,7 +281,7 @@ export default function Landing() {
         </div>
 
         <div className="landing-hero-inner">
-          <div className="landing-hero-copy animate-fade-in-up">
+          <div className="landing-hero-copy animate-zoom-in">
             <span className="landing-eyebrow landing-eyebrow-glow">🇵🇰 Made for Pakistani tea shops</span>
             <h1>
               <span className="landing-hero-ur urdu-text landing-gradient-text" dir="rtl">چائے کی دکان کا smart کھاتہ</span>
@@ -300,7 +308,7 @@ export default function Landing() {
             </div>
           </div>
 
-          <div className="landing-hero-visual animate-fade-in-up stagger-3">
+          <div className="landing-hero-visual animate-zoom-in stagger-3">
             <div className="landing-hero-card landing-hero-card-pro">
               <div className="landing-hero-steam" aria-hidden>
                 <span className="steam-puff" />
@@ -325,7 +333,7 @@ export default function Landing() {
         </div>
       </section>
 
-      <section ref={trustRef} className="landing-trust reveal-on-scroll">
+      <section ref={trustRef} className="landing-trust reveal-on-scroll reveal-zoom">
         <div className="landing-trust-inner">
           <div className="landing-trust-stat">
             <strong>{modulesCount}</strong>
@@ -347,7 +355,7 @@ export default function Landing() {
       </section>
 
       <section id="features" className="landing-section">
-        <div className="landing-section-head reveal-on-scroll">
+        <div className="landing-section-head reveal-on-scroll reveal-zoom">
           <span className="landing-section-badge">Features</span>
           <h2>Everything your tea shop needs</h2>
           <p className="urdu-text" dir="rtl">آپ کی چائے کی دکان کے لیے ہر چیز ایک جگہ</p>
@@ -356,7 +364,7 @@ export default function Landing() {
           {FEATURES.map((f, i) => (
             <article
               key={f.title}
-              className={`landing-feature-card reveal-on-scroll reveal-delay-${(i % 4) + 1}`}
+              className={`landing-feature-card reveal-on-scroll reveal-zoom reveal-delay-${(i % 4) + 1}`}
             >
               <span className="landing-feature-icon-ring">
                 <span className="landing-feature-icon">{f.icon}</span>
@@ -371,7 +379,7 @@ export default function Landing() {
 
       <section id="modules" className="landing-section landing-section-alt">
         <div className="landing-modules">
-          <div className="landing-modules-copy reveal-on-scroll">
+          <div className="landing-modules-copy reveal-on-scroll reveal-zoom-left">
             <span className="landing-section-badge">Modules</span>
             <h2>Dukaan, Godaam, Customers & Stock</h2>
             <p>
@@ -387,7 +395,7 @@ export default function Landing() {
             </ul>
             <Link to="/register" className="btn primary landing-btn-shine">Create your shop account</Link>
           </div>
-          <div className="landing-tea-grid reveal-on-scroll reveal-delay-2">
+          <div className="landing-tea-grid reveal-on-scroll reveal-zoom-right reveal-delay-2">
             {TEA_GALLERY.slice(0, 4).map((tea, i) => (
               <figure key={tea.id} className={`landing-tea-tile reveal-on-scroll reveal-delay-${i + 1}`}>
                 <img src={tea.image} alt={tea.name} loading="lazy" />
@@ -401,7 +409,8 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="landing-section landing-sync-banner reveal-on-scroll">
+      <section className="landing-section landing-sync-banner reveal-on-scroll reveal-zoom">
+        <LandingBubbles count={12} variant="cta" />
         <div className="landing-sync-inner">
           <div>
             <h2>☁️ Use on any internet network</h2>
@@ -421,13 +430,13 @@ export default function Landing() {
       </section>
 
       <section id="pricing" className="landing-section landing-pricing-pro">
-        <div className="landing-section-head reveal-on-scroll">
+        <div className="landing-section-head reveal-on-scroll reveal-zoom">
           <span className="landing-section-badge">Pricing</span>
           <h2>Plans & payment</h2>
           <p className="urdu-text" dir="rtl">ماہانہ Rs {SUBSCRIPTION_PRICES.monthly} · سالانہ Rs {SUBSCRIPTION_PRICES.yearly}</p>
         </div>
         <div className="landing-pricing-grid landing-pricing-three">
-          <article className="landing-price-card landing-demo-card reveal-on-scroll reveal-delay-1">
+          <article className="landing-price-card landing-demo-card reveal-on-scroll reveal-zoom reveal-delay-1">
             <span className="landing-price-badge demo">Demo</span>
             <h3>{DEMO_PLAN.name}</h3>
             <p className="landing-price">{DEMO_PLAN.price}</p>
@@ -437,7 +446,7 @@ export default function Landing() {
           {LANDING_PLANS.map((plan, i) => (
             <article
               key={plan.id}
-              className={`landing-price-card landing-price-card-pro reveal-on-scroll reveal-delay-${i + 2}${plan.badge ? ' featured' : ''}`}
+              className={`landing-price-card landing-price-card-pro reveal-on-scroll reveal-zoom reveal-delay-${i + 2}${plan.badge ? ' featured' : ''}`}
             >
               {plan.badge && <span className="landing-price-badge">{plan.badge}</span>}
               <h3>{plan.name}</h3>
@@ -461,13 +470,13 @@ export default function Landing() {
       </section>
 
       <section id="how" className="landing-section landing-section-alt">
-        <div className="landing-section-head reveal-on-scroll">
+        <div className="landing-section-head reveal-on-scroll reveal-zoom">
           <span className="landing-section-badge">Onboarding</span>
           <h2>How it works</h2>
         </div>
         <ol className="landing-steps">
           {STEPS.map((step, i) => (
-            <li key={step.n} className={`reveal-on-scroll reveal-delay-${i + 1}`}>
+            <li key={step.n} className={`reveal-on-scroll reveal-zoom reveal-delay-${i + 1}`}>
               <span className="landing-step-num">{step.n}</span>
               <div>
                 <h3>{step.title}</h3>
@@ -478,8 +487,9 @@ export default function Landing() {
         </ol>
       </section>
 
-      <section className="landing-cta reveal-on-scroll">
-        <div className="landing-cta-inner">
+      <section className="landing-cta reveal-on-scroll reveal-zoom">
+        <LandingBubbles count={16} variant="cta" />
+        <div className="landing-cta-inner animate-zoom-in">
           <h2>Ready to digitize your chai khata?</h2>
           <p className="urdu-text" dir="rtl">اپنا کھاتہ آج ہی digital بنائیں</p>
           <div className="landing-hero-actions">

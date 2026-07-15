@@ -4,9 +4,69 @@
 
 .landing-page {
   min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: visible;
   background: var(--cream);
   color: var(--text);
   font-family: var(--font-sans);
+  position: relative;
+}
+
+/* ─── Floating bubbles (tea steam) ─── */
+.landing-bubbles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.landing-bubble {
+  position: absolute;
+  bottom: -24px;
+  border-radius: 50%;
+  animation: bubbleRise linear infinite;
+  will-change: transform, opacity;
+}
+
+.landing-bubble--hero {
+  background: radial-gradient(
+    circle at 32% 28%,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 255, 0.35) 45%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  box-shadow:
+    inset 0 -2px 6px rgba(255, 255, 255, 0.4),
+    0 0 12px rgba(255, 255, 255, 0.15);
+}
+
+.landing-bubble--light {
+  background: radial-gradient(
+    circle at 30% 30%,
+    rgba(45, 106, 79, 0.2) 0%,
+    rgba(45, 106, 79, 0.06) 55%,
+    transparent 100%
+  );
+  border: 1px solid rgba(45, 106, 79, 0.08);
+}
+
+.landing-bubble--cta {
+  background: radial-gradient(
+    circle at 28% 28%,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 100%
+  );
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.12);
+}
+
+.landing-bubbles--page {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.45;
 }
 
 /* ─── Nav ─── */
@@ -88,6 +148,13 @@
   border-radius: 12px;
   font-size: 1.35rem;
   box-shadow: 0 4px 14px rgba(26, 61, 47, 0.15);
+  animation: logoZoom 4s ease-in-out infinite;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.landing-logo:hover .landing-logo-icon {
+  transform: scale(1.12);
+  animation: none;
 }
 
 .landing-nav-links {
@@ -250,12 +317,14 @@
   background: rgba(26, 61, 47, 0.35);
   backdrop-filter: blur(4px);
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 .landing-nav-mobile.is-open {
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
 }
 
@@ -393,7 +462,7 @@
 
 .landing-hero-inner {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   max-width: 1200px;
   margin: 0 auto;
   display: grid;
@@ -523,11 +592,21 @@
 
 .landing-hero-card-pro {
   position: relative;
+  animation: zoomPulse 6s ease-in-out infinite;
 }
 
 .landing-hero-card-pro:hover {
-  transform: translateY(-6px) scale(1.01);
+  animation: none;
+  transform: translateY(-6px) scale(1.03);
   box-shadow: 0 32px 72px rgba(0, 0, 0, 0.4);
+}
+
+.landing-hero-card-pro img {
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.landing-hero-card-pro:hover img {
+  transform: scale(1.08);
 }
 
 .landing-hero-steam {
@@ -589,13 +668,13 @@
 .landing-float-a {
   top: -12px;
   right: -8px;
-  animation: floatSlow 5s ease-in-out infinite;
+  animation: floatSlow 5s ease-in-out infinite, zoomBreath 5s ease-in-out infinite;
 }
 
 .landing-float-b {
   bottom: 24px;
   left: -16px;
-  animation: floatSlow 6s ease-in-out infinite 0.5s;
+  animation: floatSlow 6s ease-in-out infinite 0.5s, zoomBreath 6.5s ease-in-out infinite 0.3s;
 }
 
 /* ─── Trust bar ─── */
@@ -631,7 +710,12 @@
   color: var(--tea-primary);
   font-weight: 800;
   font-family: var(--font-display);
-  animation: countPop 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: countPop 0.6s cubic-bezier(0.22, 1, 0.36, 1) both, zoomBreath 5s ease-in-out infinite 0.6s;
+}
+
+.landing-trust-stat:hover strong {
+  animation: countPop 0.4s ease both;
+  transform: scale(1.08);
 }
 
 .landing-trust-stat .landing-trust-word {
@@ -720,16 +804,32 @@
   border: 1px solid rgba(26, 61, 47, 0.06);
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(8px);
+  position: relative;
+  overflow: hidden;
   transition:
-    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.35s,
-    border-color 0.35s;
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.45s,
+    border-color 0.45s;
+}
+
+.landing-feature-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 80% 20%, rgba(45, 106, 79, 0.06) 0%, transparent 55%);
+  opacity: 0;
+  transition: opacity 0.45s;
+  pointer-events: none;
 }
 
 .landing-feature-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 16px 40px rgba(26, 61, 47, 0.12);
-  border-color: rgba(45, 106, 79, 0.18);
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 48px rgba(26, 61, 47, 0.14);
+  border-color: rgba(45, 106, 79, 0.22);
+}
+
+.landing-feature-card:hover::after {
+  opacity: 1;
 }
 
 .landing-feature-icon-ring {
@@ -743,12 +843,14 @@
   background: linear-gradient(135deg, var(--tea-soft), #fff);
   border: 1px solid rgba(45, 106, 79, 0.12);
   box-shadow: 0 4px 14px rgba(45, 106, 79, 0.08);
-  transition: transform 0.35s, box-shadow 0.35s;
+  transition: transform 0.45s, box-shadow 0.45s;
+  animation: iconZoom 5s ease-in-out infinite;
 }
 
 .landing-feature-card:hover .landing-feature-icon-ring {
-  transform: scale(1.06) rotate(-3deg);
-  box-shadow: 0 8px 20px rgba(45, 106, 79, 0.15);
+  transform: scale(1.15) rotate(-6deg);
+  box-shadow: 0 10px 24px rgba(45, 106, 79, 0.18);
+  animation: none;
 }
 
 .landing-feature-icon {
@@ -894,6 +996,8 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  position: relative;
+  z-index: 2;
 }
 
 .landing-sync-inner h2 {
@@ -921,12 +1025,18 @@
   font-size: 0.82rem;
   font-weight: 600;
   border: 1px solid rgba(255, 255, 255, 0.22);
-  transition: background 0.25s, transform 0.25s;
+  transition: background 0.3s, transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: tagPop 4s ease-in-out infinite;
 }
 
+.landing-sync-tags span:nth-child(2) { animation-delay: 0.5s; }
+.landing-sync-tags span:nth-child(3) { animation-delay: 1s; }
+.landing-sync-tags span:nth-child(4) { animation-delay: 1.5s; }
+
 .landing-sync-tags span:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-3px) scale(1.08);
+  animation: none;
 }
 
 /* ─── Pricing ─── */
@@ -965,15 +1075,21 @@
 }
 
 .landing-price-card-pro:hover {
-  transform: translateY(-4px);
-  border-color: rgba(45, 106, 79, 0.3);
-  box-shadow: 0 12px 36px rgba(26, 61, 47, 0.1);
+  transform: translateY(-8px) scale(1.03);
+  border-color: rgba(45, 106, 79, 0.35);
+  box-shadow: 0 16px 44px rgba(26, 61, 47, 0.14);
 }
 
 .landing-price-card.featured {
   border-color: var(--gold);
   background: linear-gradient(180deg, #fffef8 0%, #fff 100%);
   box-shadow: 0 12px 40px rgba(212, 168, 83, 0.22);
+  animation: zoomBreath 8s ease-in-out infinite;
+}
+
+.landing-price-card.featured:hover {
+  animation: none;
+  transform: translateY(-10px) scale(1.04);
 }
 
 .landing-price-card.featured::before {
@@ -1053,12 +1169,12 @@
   border-radius: 18px;
   box-shadow: var(--shadow-sm);
   border: 1px solid rgba(26, 61, 47, 0.06);
-  transition: transform 0.35s, box-shadow 0.35s;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.45s;
 }
 
 .landing-steps li:hover {
-  transform: translateX(6px);
-  box-shadow: 0 12px 32px rgba(26, 61, 47, 0.1);
+  transform: translateX(8px) scale(1.02);
+  box-shadow: 0 16px 40px rgba(26, 61, 47, 0.12);
 }
 
 .landing-step-num {
@@ -1073,6 +1189,13 @@
   font-weight: 800;
   font-size: 1.15rem;
   border-radius: 12px;
+  transition: transform 0.35s;
+  animation: zoomBreath 4s ease-in-out infinite;
+}
+
+.landing-steps li:hover .landing-step-num {
+  transform: scale(1.12);
+  animation: none;
 }
 
 .landing-steps h3 {
@@ -1119,6 +1242,11 @@
   font-size: clamp(1.5rem, 3vw, 2rem);
   margin: 0 0 0.5rem;
   letter-spacing: -0.02em;
+  animation: zoomBreath 7s ease-in-out infinite;
+}
+
+.landing-cta-inner.animate-zoom-in {
+  animation: zoomInPop 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .landing-cta p {
