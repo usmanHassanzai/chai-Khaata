@@ -131,6 +131,7 @@ function apiBase(): string {
 
 const REQUEST_TIMEOUT_MS = 12_000;
 const LOGIN_TIMEOUT_MS = 20_000;
+const ADMIN_ACTION_TIMEOUT_MS = 25_000;
 
 async function request<T>(path: string, options: RequestInit = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> {
   const token = getStoredToken();
@@ -355,61 +356,84 @@ export const remoteAuthApi = {
   },
 
   approvePaymentSubmission(id: string) {
-    return request<{ message: string }>(`/api/admin/payment-submissions/${id}/approve`, {
-      method: 'PATCH',
-    });
+    return request<{ message: string }>(
+      `/api/admin/payment-submissions/${id}/approve`,
+      { method: 'PATCH' },
+      ADMIN_ACTION_TIMEOUT_MS,
+    );
   },
 
   rejectPaymentSubmission(id: string, note?: string) {
-    return request<{ message: string }>(`/api/admin/payment-submissions/${id}/reject`, {
-      method: 'PATCH',
-      body: JSON.stringify({ note }),
-    });
+    return request<{ message: string }>(
+      `/api/admin/payment-submissions/${id}/reject`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ note }),
+      },
+      ADMIN_ACTION_TIMEOUT_MS,
+    );
   },
 
   approveUser(id: string) {
-    return request<{ user: AuthUser; message: string }>(`/api/admin/users/${id}/approve`, {
-      method: 'PATCH',
-    });
+    return request<{ user: AuthUser; message: string }>(
+      `/api/admin/users/${id}/approve`,
+      { method: 'PATCH' },
+      ADMIN_ACTION_TIMEOUT_MS,
+    );
   },
 
   rejectUser(id: string) {
-    return request<{ user: AuthUser; message: string }>(`/api/admin/users/${id}/reject`, {
-      method: 'PATCH',
-    });
+    return request<{ user: AuthUser; message: string }>(
+      `/api/admin/users/${id}/reject`,
+      { method: 'PATCH' },
+      ADMIN_ACTION_TIMEOUT_MS,
+    );
   },
 
   deleteUser(id: string) {
     return request<{ message: string; deletedId: string; deletedUsername: string }>(
       `/api/admin/users/${encodeURIComponent(id)}/delete`,
       { method: 'POST' },
+      ADMIN_ACTION_TIMEOUT_MS,
     );
   },
 
   setPaymentDue(id: string, amount: number, note?: string) {
-    return request<{ user: AuthUser; message: string }>(`/api/admin/users/${id}/payment-due`, {
-      method: 'PATCH',
-      body: JSON.stringify({ amount, note }),
-    });
+    return request<{ user: AuthUser; message: string }>(
+      `/api/admin/users/${id}/payment-due`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ amount, note }),
+      },
+      ADMIN_ACTION_TIMEOUT_MS,
+    );
   },
 
   markPaid(id: string) {
-    return request<{ user: AuthUser; message: string }>(`/api/admin/users/${id}/mark-paid`, {
-      method: 'PATCH',
-    });
+    return request<{ user: AuthUser; message: string }>(
+      `/api/admin/users/${id}/mark-paid`,
+      { method: 'PATCH' },
+      ADMIN_ACTION_TIMEOUT_MS,
+    );
   },
 
   sendOtpToUser(id: string, channel: 'email' | 'phone') {
-    return request<{ message: string; otp: string; sentTo: string }>(`/api/admin/users/${id}/send-otp`, {
-      method: 'POST',
-      body: JSON.stringify({ channel }),
-    });
+    return request<{ message: string; otp: string; sentTo: string }>(
+      `/api/admin/users/${id}/send-otp`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ channel }),
+      },
+      ADMIN_ACTION_TIMEOUT_MS,
+    );
   },
 
   sendPasswordToUser(id: string) {
-    return request<{ message: string; sent?: boolean }>(`/api/admin/users/${id}/send-password`, {
-      method: 'POST',
-    });
+    return request<{ message: string; sent?: boolean }>(
+      `/api/admin/users/${id}/send-password`,
+      { method: 'POST' },
+      ADMIN_ACTION_TIMEOUT_MS,
+    );
   },
 };
 
