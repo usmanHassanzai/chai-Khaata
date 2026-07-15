@@ -6,9 +6,7 @@
 /* ─── Ambient interior backdrop ─── */
 .main-content {
   position: relative;
-  overflow-x: hidden;
-  overflow-y: visible;
-  flex: 1 1 auto;
+  flex: 1 0 auto;
 }
 
 .app-interior {

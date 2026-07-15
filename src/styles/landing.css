@@ -5,8 +5,7 @@
 .landing-page {
   min-height: 100vh;
   min-height: 100dvh;
-  overflow-x: hidden;
-  overflow-y: visible;
+  overflow-x: clip;
   background: var(--cream);
   color: var(--text);
   font-family: var(--font-sans);
@@ -19,6 +18,7 @@
   inset: 0;
   overflow: hidden;
   pointer-events: none;
+  touch-action: none;
   z-index: 1;
 }
 
@@ -63,10 +63,11 @@
 }
 
 .landing-bubbles--page {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 0;
   opacity: 0.45;
+  pointer-events: none;
 }
 
 /* ─── Nav ─── */
@@ -323,6 +324,7 @@
 }
 
 .landing-nav-mobile.is-open {
+  display: block;
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
@@ -1377,10 +1379,6 @@
     display: flex;
     min-width: 44px;
     min-height: 44px;
-  }
-
-  .landing-nav-mobile {
-    display: block;
   }
 
   .landing-pricing-three {

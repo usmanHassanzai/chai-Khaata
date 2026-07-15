@@ -151,6 +151,11 @@ export default function Landing() {
   useScrollReveal();
 
   useEffect(() => {
+    document.body.classList.remove('scroll-lock');
+    return () => document.body.classList.remove('scroll-lock');
+  }, []);
+
+  useEffect(() => {
     authApi.config().then((c) => { if (c.payment) setPayment(normalizePaymentConfig(c.payment)); }).catch(() => {});
   }, []);
 
@@ -179,10 +184,9 @@ export default function Landing() {
   }, []);
 
   useEffect(() => {
+    document.body.classList.remove('scroll-lock');
     if (menuOpen) {
       document.body.classList.add('scroll-lock');
-    } else {
-      document.body.classList.remove('scroll-lock');
     }
     return () => document.body.classList.remove('scroll-lock');
   }, [menuOpen]);

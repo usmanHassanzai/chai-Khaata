@@ -78,6 +78,10 @@ function LayoutShell() {
 
   useEffect(() => onSyncStatus(setSyncStatus), []);
 
+  useEffect(() => {
+    document.body.classList.remove('scroll-lock');
+  }, []);
+
   const bottomLinks = [
     ...mainLinks,
     ...(isAdmin ? [adminLink] : []),
