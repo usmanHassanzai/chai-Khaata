@@ -18,7 +18,7 @@ export const DEFAULT_PAYMENT_CONFIG: PaymentConfig = {
   whatsappDisplay: '+923462204903',
   whatsappLink: 'https://wa.me/923462204903',
   demoDaysMarketing: 7,
-  pendingTrialHours: 24,
+  pendingTrialHours: 7 * 24,
 };
 
 export const LANDING_PLANS = [

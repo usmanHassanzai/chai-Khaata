@@ -46,6 +46,8 @@ export interface AuthUser {
   subscriptionExpired?: boolean;
   subscriptionActive?: boolean;
   subscriptionPrice?: number;
+  renewalAvailable?: boolean;
+  daysUntilExpiry?: number | null;
   paymentDue?: number;
   paymentDueNote?: string;
   paymentBlocked?: boolean;
@@ -304,6 +306,8 @@ export const remoteAuthApi = {
       accessBlocked: boolean;
       subscriptionExpiresAt?: string;
       subscriptionPlan?: string;
+      renewalAvailable?: boolean;
+      daysUntilExpiry?: number | null;
       pendingSubmission: boolean;
       pendingSubmittedAt?: string;
     }>('/api/auth/check-payment-submission', {

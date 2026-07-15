@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Label, PageTitle, SectionTitle, useLabel, useLabelMode } from '../i18n/useLabel';
 import { setLabelMode, type LabelMode } from '../i18n/labels';
@@ -386,6 +387,18 @@ export default function Settings() {
                         <span className="status-pill status-rejected"><Label k="auth.subscriptionInactive" variant="compact" /></span>
                       ) : null}
                     </p>
+                    {user.daysUntilExpiry != null && user.daysUntilExpiry >= 0 && !user.subscriptionExpired && (
+                      <p className="settings-note">
+                        <Label k="auth.daysUntilExpiry" variant="compact" vars={{ days: String(user.daysUntilExpiry) }} />
+                      </p>
+                    )}
+                    {user.renewalAvailable && (
+                      <p className="settings-note">
+                        <Link to="/subscription-renew" className="btn sm primary">
+                          <Label k="auth.renewNow" variant="compact" />
+                        </Link>
+                      </p>
+                    )}
                   </div>
                 )}
               </section>

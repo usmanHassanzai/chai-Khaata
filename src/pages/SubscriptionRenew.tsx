@@ -22,16 +22,46 @@ export default function SubscriptionRenew() {
   const [success, setSuccess] = useState('');
   const [pendingReview, setPendingReview] = useState(false);
   const [expiresAt, setExpiresAt] = useState(user?.subscriptionExpiresAt ?? '');
+  const [renewalAvailable, setRenewalAvailable] = useState(user?.renewalAvailable ?? false);
+  const [daysUntilExpiry, setDaysUntilExpiry] = useState<number | null>(user?.daysUntilExpiry ?? null);
+
+  const isEarlyRenewal = Boolean(
+    (user?.renewalAvailable && !user?.subscriptionExpired)
+    || (renewalAvailable && expiresAt && new Date(expiresAt) > new Date()),
+  );
 
   useEffect(() => {
+    async function loadPlans() {
+      try {
+        const { plans: list } = await authApi.subscriptionPlans();
+        if (list?.length) {
+          const normalized = normalizeSubscriptionPlans(list);
+          setPlans(normalized);
+          if (normalized.length) setSubscriptionPlan(normalized[0].id);
+          return;
+        }
+      } catch {
+        /* fall through to config */
+      }
+
+      try {
+        const c = await authApi.config();
+        if (c.payment) setPayment(normalizePaymentConfig(c.payment));
+        if (c.subscriptionPlans?.length) {
+          const normalized = normalizeSubscriptionPlans(c.subscriptionPlans);
+          setPlans(normalized);
+          if (normalized.length) setSubscriptionPlan(normalized[0].id);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
     authApi.config()
       .then((c) => { if (c.payment) setPayment(normalizePaymentConfig(c.payment)); })
       .catch(() => {});
-    authApi.subscriptionPlans().then(({ plans: list }) => {
-      const normalized = normalizeSubscriptionPlans(list);
-      setPlans(normalized);
-      if (normalized.length) setSubscriptionPlan(normalized[0].id);
-    }).catch(() => {});
+
+    loadPlans();
   }, []);
 
   useEffect(() => {
@@ -40,6 +70,8 @@ export default function SubscriptionRenew() {
     }
     if (user?.subscriptionExpiresAt) setExpiresAt(user.subscriptionExpiresAt);
     if (user?.subscriptionPlan) setSubscriptionPlan(user.subscriptionPlan as SubscriptionPlanId);
+    if (user?.renewalAvailable != null) setRenewalAvailable(user.renewalAvailable);
+    if (user?.daysUntilExpiry != null) setDaysUntilExpiry(user.daysUntilExpiry);
   }, [user]);
 
   const selectedPlan = plans.find((p) => p.id === subscriptionPlan);
@@ -55,11 +87,16 @@ export default function SubscriptionRenew() {
       const status = await authApi.checkPaymentSubmission(loginId.trim(), password);
       setExpiresAt(status.subscriptionExpiresAt ?? '');
       setPendingReview(status.pendingSubmission);
-      if (!status.accessBlocked) {
+      setRenewalAvailable(Boolean(status.renewalAvailable));
+      setDaysUntilExpiry(status.daysUntilExpiry ?? null);
+
+      if (!status.accessBlocked && !status.renewalAvailable) {
         setSuccess('Subscription active! You can log in now.');
         await refreshUser();
       } else if (status.pendingSubmission) {
         setSuccess('Your renewal payment is waiting for admin approval.');
+      } else if (status.renewalAvailable && !status.subscriptionExpired) {
+        setSuccess('');
       } else {
         setSuccess('');
       }
@@ -93,17 +130,42 @@ export default function SubscriptionRenew() {
     }
   }
 
+  const displayDaysLeft = daysUntilExpiry ?? user?.daysUntilExpiry ?? null;
+
   return (
     <AuthLayout wide>
         <div className="auth-brand">
-          <div className="auth-logo">⏳</div>
-          <h1><Label k="auth.subscriptionExpiredTitle" variant="stacked" /></h1>
-          <p className="auth-tagline"><Label k="auth.subscriptionExpiredSubtitle" variant="compact" /></p>
+          <div className="auth-logo">{isEarlyRenewal ? '⏰' : '⏳'}</div>
+          <h1>
+            <Label
+              k={isEarlyRenewal ? 'auth.subscriptionExpiringTitle' : 'auth.subscriptionExpiredTitle'}
+              variant="stacked"
+            />
+          </h1>
+          <p className="auth-tagline">
+            <Label
+              k={isEarlyRenewal ? 'auth.subscriptionExpiringSubtitle' : 'auth.subscriptionExpiredSubtitle'}
+              variant="compact"
+            />
+          </p>
         </div>
 
-        {expiresAt && (
+        {isEarlyRenewal && displayDaysLeft != null && displayDaysLeft >= 1 && (
+          <p className="auth-approval-hint">
+            <Label k="auth.daysUntilExpiry" variant="compact" vars={{ days: String(displayDaysLeft) }} />
+          </p>
+        )}
+
+        {expiresAt && !isEarlyRenewal && (
           <p className="auth-approval-hint">
             <Label k="auth.subscriptionEnded" variant="compact" />:{' '}
+            <strong>{new Date(expiresAt).toLocaleDateString()}</strong>
+          </p>
+        )}
+
+        {expiresAt && isEarlyRenewal && (
+          <p className="auth-approval-hint">
+            <Label k="auth.subscriptionExpires" variant="compact" />:{' '}
             <strong>{new Date(expiresAt).toLocaleDateString()}</strong>
           </p>
         )}

@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { isSubscriptionExpired, subscriptionInfo } from './subscriptions.js';
+import { isSubscriptionExpired, subscriptionInfo, subscriptionRenewalFields } from './subscriptions.js';
 import { isSupabaseEnabled } from './supabase.js';
 import { generatePaymentRefId } from './paymentConfig.js';
-import { isTrialActive, trialFieldsForPublic } from './trialAccess.js';
+import { buildPendingTrialFields, isTrialActive, trialFieldsForPublic } from './trialAccess.js';
 import { dataFile, ensureDataDir, getDataDir, isServerlessEnv, readDataJson } from './dataPaths.js';
 import * as sb from './persistence/supabase.js';
 
@@ -281,6 +281,9 @@ export async function createUser(user) {
     signupSnapshot,
     createdAt,
     ...(user.approvedAt ? { approvedAt: user.approvedAt } : {}),
+    ...((user.status ?? 'pending') === 'pending' && (user.role ?? 'user') !== 'admin'
+      ? buildPendingTrialFields(new Date(createdAt))
+      : {}),
   };
 
   if (await preferSupabase()) {
@@ -425,6 +428,7 @@ export function publicUser(user) {
     accessBlocked: isAccessBlocked(user) && !isTrialActive(user),
     ...trialFieldsForPublic(user),
     ...sub,
+    ...subscriptionRenewalFields(user),
   };
 }
 

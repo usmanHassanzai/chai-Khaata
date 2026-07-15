@@ -112,7 +112,7 @@ export default function PaymentInstructions({
 
       {!compact && (
         <p className="payment-footer-note">
-          After login, pending users get a <strong>1-day preview</strong> while admin reviews payment.
+          After signup, pending users get a <strong>{Math.max(1, Math.round((payment.pendingTrialHours || 7 * 24) / 24))}-day preview</strong> while admin reviews payment.
           Already registered? <Link to="/login">Log in</Link>
         </p>
       )}

@@ -1,3 +1,5 @@
+import { REMINDER_DAYS_BEFORE, daysUntilExpiry } from './subscriptionReminders.js';
+
 /** @typedef {'monthly' | 'yearly'} SubscriptionPlanId */
 
 export const PLAN_IDS = ['monthly', 'yearly'];
@@ -79,6 +81,28 @@ export function isSubscriptionExpired(user) {
   if (user?.status !== 'approved') return false;
   if (!user?.subscriptionExpiresAt) return false;
   return new Date() > new Date(user.subscriptionExpiresAt);
+}
+
+/** @param {import('./store.js').UserRecord} user */
+export function subscriptionRenewalFields(user) {
+  if (user?.role === 'admin' || user?.status !== 'approved') {
+    return { renewalAvailable: false, daysUntilExpiry: null };
+  }
+
+  const daysLeft = user?.subscriptionExpiresAt
+    ? daysUntilExpiry(user.subscriptionExpiresAt)
+    : null;
+
+  if (isSubscriptionExpired(user)) {
+    return { renewalAvailable: true, daysUntilExpiry: daysLeft };
+  }
+
+  if (!user?.subscriptionExpiresAt || daysLeft === null) {
+    return { renewalAvailable: false, daysUntilExpiry: null };
+  }
+
+  const renewalAvailable = daysLeft >= 1 && daysLeft <= REMINDER_DAYS_BEFORE;
+  return { renewalAvailable, daysUntilExpiry: daysLeft };
 }
 
 /** @param {{ subscriptionPlan?: string, subscriptionStartsAt?: string, subscriptionExpiresAt?: string, registrationFee?: number, role?: string }} user */

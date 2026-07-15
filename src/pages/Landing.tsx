@@ -62,7 +62,7 @@ const FEATURES = [
 const STEPS = [
   { n: '1', title: 'Choose a plan', body: 'Monthly Rs 500 or Yearly Rs 5000. You get a unique Payment ID (PAT-XXXXXX).' },
   { n: '2', title: 'Pay & send screenshot', body: 'Send via Easypaisa, UBL, Nayapay or JS Bank. WhatsApp screenshot with your Payment ID.' },
-  { n: '3', title: 'Admin approves', body: 'Admin gets email, verifies payment, approves — then full access. Pending users get 1-day preview on login.' },
+  { n: '3', title: 'Admin approves', body: 'Admin gets email, verifies payment, approves — then full access. New signups get a 7-day free preview while waiting.' },
 ] as const;
 
 export default function Landing() {

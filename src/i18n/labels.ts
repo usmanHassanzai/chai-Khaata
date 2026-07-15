@@ -511,11 +511,27 @@ export const labels = {
     subscription: { ur: 'سبسکرپشن', en: 'Subscription', roman: 'Subscription' },
     selectedPlanFee: { ur: 'منتخب پلان کی فیس', en: 'Selected plan fee', roman: 'Selected plan fee' },
     subscriptionExpiredTitle: { ur: 'سبسکرپشن ختم', en: 'Subscription Expired', roman: 'Subscription Expired' },
+    subscriptionExpiringTitle: {
+      ur: 'سبسکرپشن جلد ختم ہو رہی ہے',
+      en: 'Subscription expiring soon',
+      roman: 'Subscription jald khatam ho rahi hai',
+    },
     subscriptionExpiredSubtitle: {
       ur: 'جاری رکھنے کے لیے سبسکرپشن ری نیو کریں',
       en: 'Renew your subscription to continue using the app',
       roman: 'App use karne ke liye subscription renew karein',
     },
+    subscriptionExpiringSubtitle: {
+      ur: 'بروقت ری نیو کریں تاکہ رسائی جاری رہے',
+      en: 'Renew early to keep uninterrupted access',
+      roman: 'Waqt par renew karein taake access jari rahe',
+    },
+    daysUntilExpiry: {
+      ur: '{{days}} دن باقی',
+      en: '{{days}} day(s) left',
+      roman: '{{days}} din baqi',
+    },
+    renewNow: { ur: 'ابھی ری نیو کریں', en: 'Renew now', roman: 'Abhi renew karein' },
     subscriptionEnded: { ur: 'ختم ہونے کی تاریخ', en: 'Expired on', roman: 'Expired on' },
     renewSubscription: { ur: 'سبسکرپشن ری نیو', en: 'Renew Subscription', roman: 'Renew Subscription' },
     renewalAmount: { ur: 'ری نیو رقم', en: 'Renewal amount', roman: 'Renewal amount' },

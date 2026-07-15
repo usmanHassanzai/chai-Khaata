@@ -49,6 +49,10 @@ import { getPaymentConfig } from './paymentConfig.js';
 import { isTrialActive } from './trialAccess.js';
 import { withTimeout } from './httpUtils.js';
 import {
+  checkPaymentSubmissionByLogin,
+  submitPaymentProofByLogin,
+} from './paymentProofHandlers.js';
+import {
   listAdminUsers,
   getAdminUsersSummary,
   getAdminDashboard,
@@ -253,80 +257,23 @@ app.post('/api/auth/submit-payment-proof', async (req, res) => {
   try {
     const { login, email, username, password, screenshot, subscriptionPlan } = req.body ?? {};
     const loginValue = login ?? email ?? username;
+    const result = await withTimeout(
+      submitPaymentProofByLogin(loginValue, password, screenshot, subscriptionPlan),
+      20000,
+      'Submit payment proof',
+    );
 
-    if (!loginValue?.trim() || !password) {
-      return res.status(400).json({ error: 'VALIDATION', message: 'Email/username and password are required' });
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error, message: result.message });
     }
 
-    if (!screenshot || typeof screenshot !== 'string' || !screenshot.startsWith('data:image/')) {
-      return res.status(400).json({ error: 'VALIDATION', message: 'Payment screenshot image is required' });
-    }
+    console.log(`[Chai Khata] Payment proof submitted (${result.body?.submission?.kind ?? 'payment'})`);
 
-    if (screenshot.length > 4_000_000) {
-      return res.status(400).json({ error: 'VALIDATION', message: 'Image is too large. Use a smaller screenshot.' });
-    }
-
-    const user = await findUserByLogin(String(loginValue));
-    if (!user) {
-      return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password' });
-    }
-
-    const valid = await bcrypt.compare(String(password), user.passwordHash);
-    if (!valid) {
-      return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password' });
-    }
-
-    if (user.status !== 'approved') {
-      return res.status(403).json({ error: 'NOT_APPROVED', message: 'Account is not approved yet' });
-    }
-
-    const paymentBlocked = isPaymentBlocked(user);
-    const subscriptionExpired = isSubscriptionExpired(user);
-
-    if (!paymentBlocked && !subscriptionExpired) {
-      return res.status(400).json({ error: 'NO_PAYMENT_DUE', message: 'No payment or subscription renewal is required' });
-    }
-
-    let planId = subscriptionPlan ? String(subscriptionPlan) : '';
-    let kind = 'payment_due';
-    let amount = paymentDueAmount(user);
-
-    if (subscriptionExpired) {
-      if (!planId || !isValidPlanId(planId)) {
-        return res.status(400).json({ error: 'VALIDATION', message: 'Select a subscription plan to renew' });
-      }
-      kind = 'subscription_renewal';
-      amount = getPlan(planId).price;
-    }
-
-    const existing = await findPendingByUserId(user.id);
-    if (existing) {
-      return res.status(409).json({
-        error: 'ALREADY_SUBMITTED',
-        message: 'Your payment proof is already submitted. Please wait for admin approval.',
-      });
-    }
-
-    const submission = await createSubmission({
-      userId: user.id,
-      username: user.username,
-      email: user.email ?? '',
-      phone: user.phone ?? '',
-      paymentDue: amount,
-      subscriptionPlan: planId || user.subscriptionPlan || '',
-      kind,
-      screenshot,
-    });
-
-    console.log(`[Chai Khata] Payment proof submitted by ${user.username} — Rs ${submission.paymentDue} (${kind})`);
-
-    res.status(201).json({
-      message: kind === 'subscription_renewal'
-        ? 'Renewal payment submitted. Admin will review and extend your subscription.'
-        : 'Payment screenshot submitted. Admin will review and unblock your account after approval.',
-      submission: publicSubmission(submission),
-    });
+    res.status(result.status).json(result.body);
   } catch (err) {
+    if (/timed out after/i.test(String(err?.message || ''))) {
+      return res.status(503).json({ error: 'TIMEOUT', message: 'Request timed out. Please retry.' });
+    }
     console.error('Submit payment proof error:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not submit payment proof' });
   }
@@ -403,32 +350,21 @@ app.post('/api/auth/check-payment-submission', async (req, res) => {
   try {
     const { login, email, username, password } = req.body ?? {};
     const loginValue = login ?? email ?? username;
-    if (!loginValue?.trim() || !password) {
-      return res.status(400).json({ error: 'VALIDATION', message: 'Email/username and password required' });
+    const result = await withTimeout(
+      checkPaymentSubmissionByLogin(loginValue, password),
+      12000,
+      'Check payment submission',
+    );
+
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error, message: result.message });
     }
 
-    const user = await findUserByLogin(String(loginValue));
-    if (!user) {
-      return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password' });
-    }
-
-    const valid = await bcrypt.compare(String(password), user.passwordHash);
-    if (!valid) {
-      return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password' });
-    }
-
-    const pending = await findPendingByUserId(user.id);
-    res.json({
-      paymentDue: paymentDueAmount(user),
-      paymentBlocked: isPaymentBlocked(user),
-      subscriptionExpired: isSubscriptionExpired(user),
-      accessBlocked: isAccessBlocked(user),
-      subscriptionExpiresAt: user.subscriptionExpiresAt ?? '',
-      subscriptionPlan: user.subscriptionPlan ?? '',
-      pendingSubmission: Boolean(pending),
-      pendingSubmittedAt: pending?.createdAt,
-    });
+    res.json(result.body);
   } catch (err) {
+    if (/timed out after/i.test(String(err?.message || ''))) {
+      return res.status(503).json({ error: 'TIMEOUT', message: 'Request timed out. Please retry.' });
+    }
     console.error('Check payment submission error:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not check status' });
   }

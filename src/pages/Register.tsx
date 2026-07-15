@@ -157,7 +157,7 @@ export default function Register() {
             {uploading ? '…' : 'Submit screenshot'}
           </button>
           <button type="button" className="btn" onClick={() => navigate('/login')}>
-            Log in for 1-day preview
+            Log in for {Math.max(1, Math.round((payment.pendingTrialHours || 7 * 24) / 24))}-day preview
           </button>
         </div>
       </AuthLayout>

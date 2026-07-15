@@ -32,7 +32,7 @@ export function getPaymentConfig() {
     whatsappDisplay: whatsapp.startsWith('92') ? `+${whatsapp}` : whatsapp,
     whatsappLink: `https://wa.me/${whatsapp}`,
     demoDaysMarketing: 7,
-    pendingTrialHours: 24,
+    pendingTrialHours: Number(process.env.PENDING_TRIAL_HOURS) || 7 * 24,
   };
 }
 
