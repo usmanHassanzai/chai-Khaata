@@ -250,7 +250,9 @@ export const remoteAuthApi = {
   },
 
   subscriptionPlans() {
-    return request<{ plans: SubscriptionPlan[] }>('/api/auth/subscription-plans');
+    return request<AuthConfig>('/api/auth/config').then((c) => ({
+      plans: c.subscriptionPlans ?? [],
+    }));
   },
 
   forgotPassword(login: string, channel: 'email' | 'phone') {

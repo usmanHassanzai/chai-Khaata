@@ -15,7 +15,6 @@
     { "source": "/api/auth/me", "destination": "/api/auth/me" },
     { "source": "/api/auth/register", "destination": "/api/auth/register" },
     { "source": "/api/auth/recover-password-by-email", "destination": "/api/auth/recover-password-by-email" },
-    { "source": "/api/auth/subscription-plans", "destination": "/api/auth/subscription-plans" },
     { "source": "/api/auth/submit-payment-proof", "destination": "/api/auth/submit-payment-proof" },
     { "source": "/api/auth/check-payment-submission", "destination": "/api/auth/check-payment-submission" },
     { "source": "/api/admin/dashboard", "destination": "/api/admin-data?route=dashboard" },
