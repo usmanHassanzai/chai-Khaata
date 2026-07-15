@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useAdminPendingCount } from '../context/AdminUsersContext';
+import { AdminUsersProvider, useAdminPendingCount } from '../context/AdminUsersContext';
 import { isCloudSyncEnabled } from '../services/cloudConfig';
 import { onSyncStatus, type SyncStatus } from '../services/ledgerSync';
 import AppInterior from './AppInterior';
@@ -41,6 +41,21 @@ function pageTitleFromPath(pathname: string, mode: ReturnType<typeof useLabelMod
 }
 
 export default function Layout() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  if (isAdmin) {
+    return (
+      <AdminUsersProvider>
+        <LayoutShell />
+      </AdminUsersProvider>
+    );
+  }
+
+  return <LayoutShell />;
+}
+
+function LayoutShell() {
   const mode = useLabelMode();
   const location = useLocation();
   const { user, logout } = useAuth();

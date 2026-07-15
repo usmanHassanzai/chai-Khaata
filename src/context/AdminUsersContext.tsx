@@ -65,64 +65,74 @@ export function AdminUsersProvider({ children }: { children: ReactNode }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const hasLoadedRef = useRef(false);
+  const refreshInFlightRef = useRef<Promise<void> | null>(null);
 
   const refresh = useCallback(async (opts?: { silent?: boolean }) => {
-    if (user?.role !== 'admin') {
-      setUsers([]);
-      setOtpRequests([]);
-      setCounts({ pending: 0, rejected: 0, approved: 0, total: 0 });
-      setLoading(false);
-      setError('Admin access required.');
-      return;
+    if (refreshInFlightRef.current) {
+      return refreshInFlightRef.current;
     }
 
-    if (!getStoredToken()) {
-      setLoading(false);
-      setError('Session expired. Please log in again.');
-      return;
-    }
-
-    const silent = opts?.silent ?? hasLoadedRef.current;
-    if (silent) setRefreshing(true);
-    else setLoading(true);
-    setError('');
-
-    try {
-      try {
-        const dash = await authApi.adminDashboard({ includeAdmin: true });
-        setUsers(dash.users);
-        setCounts(dash.counts ?? countsFromUsers(dash.users));
-        hasLoadedRef.current = true;
-      } catch (dashErr) {
-        if (
-          dashErr instanceof ApiError
-          && ['FORBIDDEN', 'UNAUTHORIZED', 'INVALID_TOKEN'].includes(dashErr.code)
-        ) {
-          throw dashErr;
-        }
-        const usersRes = await authApi.listUsers({ includeAdmin: true });
-        setUsers(usersRes.users);
-        setCounts(countsFromUsers(usersRes.users));
-        hasLoadedRef.current = true;
-        authApi.adminUsersSummary()
-          .then((summaryRes) => setCounts(summaryRes))
-          .catch(() => { /* keep counts derived from user list */ });
-      }
-
-      // OTP table is non-critical — load after users so a slow OTP query cannot block the list.
-      authApi.listOtpRequests()
-        .then((otpRes) => setOtpRequests(otpRes.requests))
-        .catch(() => { /* keep existing OTP rows on background refresh failure */ });
-    } catch (err) {
-      setError(formatLoadError(err));
-      if (!silent) {
+    const run = async () => {
+      if (user?.role !== 'admin') {
         setUsers([]);
         setOtpRequests([]);
+        setCounts({ pending: 0, rejected: 0, approved: 0, total: 0 });
+        setLoading(false);
+        setError('Admin access required.');
+        return;
       }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+
+      if (!getStoredToken()) {
+        setLoading(false);
+        setError('Session expired. Please log in again.');
+        return;
+      }
+
+      const silent = opts?.silent ?? hasLoadedRef.current;
+      if (silent) setRefreshing(true);
+      else setLoading(true);
+      setError('');
+
+      try {
+        try {
+          const dash = await authApi.adminDashboard({ includeAdmin: true });
+          setUsers(dash.users);
+          setCounts(dash.counts ?? countsFromUsers(dash.users));
+          hasLoadedRef.current = true;
+        } catch (dashErr) {
+          if (
+            dashErr instanceof ApiError
+            && ['FORBIDDEN', 'UNAUTHORIZED', 'INVALID_TOKEN'].includes(dashErr.code)
+          ) {
+            throw dashErr;
+          }
+          const usersRes = await authApi.listUsers({ includeAdmin: true });
+          setUsers(usersRes.users);
+          setCounts(countsFromUsers(usersRes.users));
+          hasLoadedRef.current = true;
+          authApi.adminUsersSummary()
+            .then((summaryRes) => setCounts(summaryRes))
+            .catch(() => { /* keep counts derived from user list */ });
+        }
+
+        authApi.listOtpRequests()
+          .then((otpRes) => setOtpRequests(otpRes.requests))
+          .catch(() => { /* keep existing OTP rows on background refresh failure */ });
+      } catch (err) {
+        setError(formatLoadError(err));
+        if (!silent) {
+          setUsers([]);
+          setOtpRequests([]);
+        }
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+        refreshInFlightRef.current = null;
+      }
+    };
+
+    refreshInFlightRef.current = run();
+    return refreshInFlightRef.current;
   }, [user?.role]);
 
   useEffect(() => {
@@ -147,16 +157,15 @@ export function useAdminUsers() {
   return ctx;
 }
 
-/** Nav badge only — lightweight counts, no full user list */
+/** Nav badge only — uses shared context counts when inside AdminUsersProvider */
 export function useAdminPendingCount() {
+  const ctx = useContext(AdminUsersContext);
   const { user } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
-    if (user?.role !== 'admin') {
-      setPendingCount(0);
-      return;
-    }
+    if (ctx || user?.role !== 'admin') return;
+
     const poll = () => {
       authApi.adminUsersSummary()
         .then((c) => setPendingCount(c.pending))
@@ -165,7 +174,8 @@ export function useAdminPendingCount() {
     poll();
     const timer = window.setInterval(poll, POLL_MS);
     return () => window.clearInterval(timer);
-  }, [user?.role]);
+  }, [ctx, user?.role]);
 
+  if (ctx) return ctx.counts.pending;
   return pendingCount;
 }

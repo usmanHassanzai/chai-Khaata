@@ -1,5 +1,3 @@
-import { requireAdmin } from '../../server/adminAuth.js';
-import { listAdminOtpRequests, adminHandlerError } from '../../server/adminUsersHandlers.js';
 import { sendJson, setCors, withTimeout } from '../../server/httpUtils.js';
 
 export default async function handler(req, res) {
@@ -16,13 +14,16 @@ export default async function handler(req, res) {
     return;
   }
 
+  const { requireAdmin } = await import('../../server/adminAuth.js');
   if (!requireAdmin(req, res)) return;
 
   try {
-    const result = await withTimeout(listAdminOtpRequests(), 8000, 'OTP requests');
+    const { listAdminOtpRequests, ADMIN_QUERY_TIMEOUT_MS } = await import('../../server/adminUsersHandlers.js');
+    const result = await withTimeout(listAdminOtpRequests(), ADMIN_QUERY_TIMEOUT_MS, 'OTP requests');
     sendJson(res, 200, result);
   } catch (err) {
     console.error('Admin OTP requests error:', err);
+    const { adminHandlerError } = await import('../../server/adminUsersHandlers.js');
     const failure = adminHandlerError(err);
     sendJson(res, failure.status, failure.body);
   }

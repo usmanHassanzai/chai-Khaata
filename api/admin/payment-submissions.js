@@ -18,12 +18,12 @@ export default async function handler(req, res) {
   if (!requireAdmin(req, res)) return;
 
   try {
-    const { listAdminUsers, adminHandlerError, ADMIN_QUERY_TIMEOUT_MS } = await import('../../server/adminUsersHandlers.js');
-    const url = new URL(req.url || '/', 'http://localhost');
-    const result = await withTimeout(listAdminUsers(url.searchParams), ADMIN_QUERY_TIMEOUT_MS, 'List users');
-    sendJson(res, 200, result);
+    const { listPendingSubmissions, publicSubmission } = await import('../../server/paymentSubmissions.js');
+    const { ADMIN_QUERY_TIMEOUT_MS } = await import('../../server/adminUsersHandlers.js');
+    const submissions = await withTimeout(listPendingSubmissions(), ADMIN_QUERY_TIMEOUT_MS, 'Payment submissions');
+    sendJson(res, 200, { submissions: submissions.map(publicSubmission) });
   } catch (err) {
-    console.error('Admin list users error:', err);
+    console.error('Admin payment submissions error:', err);
     const { adminHandlerError } = await import('../../server/adminUsersHandlers.js');
     const failure = adminHandlerError(err);
     sendJson(res, failure.status, failure.body);

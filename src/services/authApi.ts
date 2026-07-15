@@ -129,6 +129,8 @@ function apiBase(): string {
   return '';
 }
 
+const REQUEST_TIMEOUT_MS = 12_000;
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getStoredToken();
   const headers: Record<string, string> = {
@@ -137,16 +139,30 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
+  const controller = options.signal ? null : new AbortController();
+  const timeoutId = controller
+    ? window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    : undefined;
+
   let res: Response;
   try {
-    res = await fetch(`${apiBase()}${path}`, { ...options, headers });
-  } catch {
+    res = await fetch(`${apiBase()}${path}`, {
+      ...options,
+      headers,
+      signal: options.signal ?? controller?.signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new ApiError('TIMEOUT', 'Request timed out. Please retry.');
+    }
     throw new ApiError(
       'NETWORK_ERROR',
       isLocalDevHost()
         ? 'Cannot reach server. Run: npm run dev'
         : 'Cannot reach server. Check internet or Cloud Sync URL in Settings.',
     );
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
   }
 
   const text = await res.text();
