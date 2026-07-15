@@ -139,8 +139,9 @@ export function printTable(options: {
   subtitle?: string;
   columns: ExportColumn[];
   rows: Record<string, string | number>[];
+  footerHtml?: string;
 }) {
-  const { title, subtitle, columns, rows } = options;
+  const { title, subtitle, columns, rows, footerHtml } = options;
   const profile: ShopPrintProfile = options.shopProfile ?? {
     shopName: options.shopName || 'Chai Khata',
   };
@@ -166,12 +167,18 @@ h2{font-size:1.05rem;margin:0 0 8px}
 table{width:100%;border-collapse:collapse;font-size:0.85rem}
 th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}
 th{background:#1a3d2f;color:#fff}
+.receipt-summary{margin-top:20px;padding:14px 16px;border:2px solid #1a3d2f;border-radius:8px;background:#f8faf8;max-width:360px}
+.receipt-summary p{margin:6px 0;font-size:0.95rem}
+.receipt-summary .label{color:#444}
+.receipt-summary .value{font-weight:700}
+.receipt-summary .remaining{color:#b45309;font-size:1.05rem}
 @media print{body{padding:12px}}
 </style></head><body>
 ${headerHtml}
 <h2>${title}</h2>
 <p class="meta">${subtitle ? `${subtitle} · ` : ''}Generated: ${stamp()}</p>
 <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+${footerHtml ?? ''}
 <script>window.onload=function(){window.print();}</script>
 </body></html>`);
   win.document.close();
@@ -227,14 +234,14 @@ export const SALES_EXPORT_COLUMNS: ExportColumn[] = [
 
 /** Customer-facing receipt — no purchase cost or profit. */
 export const CUSTOMER_RECEIPT_COLUMNS: ExportColumn[] = [
-  { key: 'date', header: 'Date' },
-  { key: 'tea', header: 'Tea' },
-  { key: 'bags', header: 'Bags' },
-  { key: 'kg', header: 'Kg' },
-  { key: 'salePrice', header: 'Rate/kg' },
-  { key: 'total', header: 'Total' },
-  { key: 'received', header: 'Paid' },
-  { key: 'dues', header: 'Balance' },
+  { key: 'date', header: 'Sale Date' },
+  { key: 'tea', header: 'Tea Name' },
+  { key: 'bags', header: 'Bags Sold' },
+  { key: 'kg', header: 'Weight (kg)' },
+  { key: 'salePrice', header: 'Sale Rate / kg' },
+  { key: 'total', header: 'Total Amount' },
+  { key: 'received', header: 'Amount Paid' },
+  { key: 'dues', header: 'Remaining Amount' },
   { key: 'notes', header: 'Notes' },
 ];
 
@@ -265,12 +272,21 @@ export function printCustomerReceipt(options: {
   const subtitle = customer
     ? `${customer.name}${customer.customerId ? ` · ${customer.customerId}` : ''}`
     : customerName || undefined;
+  const rows = buildCustomerReceiptRows(sale);
+  const row = rows[0];
+  const footerHtml = `
+<div class="receipt-summary">
+  <p><span class="label">Total Amount:</span> <span class="value">${row.total}</span></p>
+  <p><span class="label">Amount Paid:</span> <span class="value">${row.received}</span></p>
+  <p class="remaining"><span class="label">Remaining Amount:</span> <span class="value">${row.dues}</span></p>
+</div>`;
   printTable({
-    title: `Receipt — ${sale.teaName} (${sale.date})`,
-    subtitle,
+    title: `Sale Receipt — ${sale.teaName}`,
+    subtitle: subtitle ? `${subtitle} · ${sale.date}` : sale.date,
     shopProfile,
     columns: CUSTOMER_RECEIPT_COLUMNS,
-    rows: buildCustomerReceiptRows(sale),
+    rows,
+    footerHtml,
   });
 }
 
