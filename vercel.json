@@ -15,8 +15,6 @@
     { "source": "/api/auth/register", "destination": "/api/auth/register" },
     { "source": "/api/auth/recover-password-by-email", "destination": "/api/auth/recover-password-by-email" },
     { "source": "/api/cron/subscription-reminders", "destination": "/api/cron/subscription-reminders" },
-    { "source": "/api/admin/users/summary", "destination": "/api/admin/users/summary" },
-    { "source": "/api/admin/users", "destination": "/api/admin/users" },
     { "source": "/api/admin/(.*)", "destination": "/api/admin/$1" },
     { "source": "/api/sync/(.*)", "destination": "/api/sync/$1" },
     { "source": "/api/(.*)", "destination": "/api/server?__vercel_path=$1" },
