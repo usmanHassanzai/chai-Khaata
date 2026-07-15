@@ -10,6 +10,8 @@ type Props = {
   planLabel?: string;
   showAllPlanPrices?: boolean;
   showDemoNote?: boolean;
+  /** signup = 7-day new-user preview; renewal = 1-day access after submitting renewal */
+  demoNoteKind?: 'signup' | 'renewal';
   compact?: boolean;
 };
 
@@ -52,16 +54,29 @@ export default function PaymentInstructions({
   planLabel,
   showAllPlanPrices = false,
   showDemoNote = true,
+  demoNoteKind = 'signup',
   compact = false,
 }: Props) {
   const waLink = payment.whatsappLink || `https://wa.me/${payment.whatsapp}`;
   const accounts = payment.accounts?.length ? payment.accounts : [];
 
+  const demoNote = demoNoteKind === 'renewal'
+    ? (
+      <>
+        <strong>1-day demo</strong> — after you submit renewal, you get 1 day free access while admin verifies your payment. Full subscription continues after approval.
+      </>
+    )
+    : (
+      <>
+        <strong>7-day demo</strong> — shown on website only. Full access starts after admin verifies your payment.
+      </>
+    );
+
   return (
     <div className={`payment-instructions${compact ? ' compact' : ''}`}>
       {showDemoNote && (
         <div className="payment-demo-note">
-          <strong>7-day demo</strong> — shown on website only. Full access starts after admin verifies your payment.
+          {demoNote}
         </div>
       )}
 

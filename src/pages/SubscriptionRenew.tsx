@@ -272,7 +272,8 @@ export default function SubscriptionRenew() {
               paymentRefId={paymentRefId || user?.paymentRefId}
               planPrice={selectedPlan.price}
               planLabel={selectedPlan.label}
-              showDemoNote={false}
+              showDemoNote
+              demoNoteKind="renewal"
               compact
             />
           )}
