@@ -81,27 +81,56 @@ export async function sbReadUsers() {
 const ADMIN_USER_LIST_COLUMNS = [
   'id', 'username', 'email', 'phone', 'shop_name', 'status', 'role', 'created_at', 'approved_at',
   'payment_due', 'payment_due_note', 'last_paid_at', 'registration_fee', 'payment_fee_date',
-  'registration_password', 'subscription_plan', 'subscription_starts_at', 'subscription_expires_at',
-  'payment_ref_id', 'trial_started_at', 'trial_ends_at', 'last_expiry_reminder_date',
+  'subscription_plan', 'subscription_starts_at', 'subscription_expires_at',
 ].join(',');
+
+/** Older DBs may miss optional columns — retry with this set. */
+const ADMIN_USER_CORE_COLUMNS = [
+  'id', 'username', 'email', 'phone', 'shop_name', 'status', 'role', 'created_at', 'approved_at',
+  'payment_due', 'payment_due_note', 'registration_fee', 'payment_fee_date', 'subscription_plan',
+].join(',');
+
+const ADMIN_USER_MIN_COLUMNS = 'id,username,email,phone,shop_name,status,role,created_at,approved_at,payment_due';
+
+/** @param {import('@supabase/supabase-js').PostgrestFilterBuilder<any, any, any>} query */
+async function runAdminListQuery(query) {
+  const { data, error } = await query;
+  if (error) throwSupabaseError(error);
+  return (data ?? []).map(rowToUser);
+}
 
 /** @param {{ statuses?: string[], excludeAdmin?: boolean, limit?: number }} [opts] */
 export async function sbReadUsersForAdmin(opts = {}) {
   const { statuses, excludeAdmin = true, limit = 500 } = opts;
   const cappedLimit = Math.min(Math.max(1, limit), 1000);
 
-  let query = getSupabase()
-    .from('users')
-    .select(ADMIN_USER_LIST_COLUMNS)
-    .order('created_at', { ascending: false })
-    .limit(cappedLimit);
+  function buildQuery(columns) {
+    let query = getSupabase()
+      .from('users')
+      .select(columns)
+      .order('created_at', { ascending: false })
+      .limit(cappedLimit);
 
-  if (excludeAdmin) query = query.neq('role', 'admin');
-  if (statuses?.length) query = query.in('status', statuses);
+    if (excludeAdmin) query = query.neq('role', 'admin');
+    if (statuses?.length) query = query.in('status', statuses);
+    return query;
+  }
 
-  const { data, error } = await query;
-  if (error) throwSupabaseError(error);
-  return (data ?? []).map(rowToUser);
+  const columnTiers = [ADMIN_USER_LIST_COLUMNS, ADMIN_USER_CORE_COLUMNS, ADMIN_USER_MIN_COLUMNS];
+  let lastError = null;
+
+  for (const columns of columnTiers) {
+    try {
+      return await runAdminListQuery(buildQuery(columns));
+    } catch (err) {
+      if (!isMissingColumnError(err)) throw err;
+      lastError = err;
+      console.warn('[Chai Khata] Admin list retry with fewer columns:', err.message);
+    }
+  }
+
+  if (lastError) throw lastError;
+  return [];
 }
 
 /** @param {string[]} ids */
@@ -116,24 +145,39 @@ export async function sbFindUsersByIds(ids) {
   return (data ?? []).map(rowToUser);
 }
 
-export async function sbAdminUserCounts() {
-  const { data, error } = await getSupabase()
+async function sbCountUsersByStatus(status) {
+  const { count, error } = await getSupabase()
     .from('users')
-    .select('status')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', status)
     .neq('role', 'admin');
 
   if (error) throwSupabaseError(error);
+  return count ?? 0;
+}
 
-  let pending = 0;
-  let rejected = 0;
-  let approved = 0;
-  for (const row of data ?? []) {
-    if (row.status === 'pending') pending += 1;
-    else if (row.status === 'rejected') rejected += 1;
-    else if (row.status === 'approved') approved += 1;
+export async function sbAdminUserCounts() {
+  try {
+    const [pending, rejected, approved] = await Promise.all([
+      sbCountUsersByStatus('pending'),
+      sbCountUsersByStatus('rejected'),
+      sbCountUsersByStatus('approved'),
+    ]);
+    return { pending, rejected, approved, total: pending + rejected + approved };
+  } catch (err) {
+    // Fallback: derive from lite list if count queries fail (schema/RLS edge cases)
+    console.warn('[Chai Khata] Admin counts fallback:', err instanceof Error ? err.message : err);
+    const users = await sbReadUsersForAdmin({ excludeAdmin: true, limit: 1000 });
+    let pending = 0;
+    let rejected = 0;
+    let approved = 0;
+    for (const user of users) {
+      if (user.status === 'pending') pending += 1;
+      else if (user.status === 'rejected') rejected += 1;
+      else if (user.status === 'approved') approved += 1;
+    }
+    return { pending, rejected, approved, total: pending + rejected + approved };
   }
-
-  return { pending, rejected, approved, total: pending + rejected + approved };
 }
 
 export async function sbFindUserByEmail(email) {

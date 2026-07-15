@@ -509,6 +509,24 @@ export const localAuthApi = {
     };
   },
 
+  async adminDashboard() {
+    await requireAdmin();
+    const users = await authDb.users.toArray();
+    const mapped = users
+      .map(adminUser)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const shop = users.filter((u) => u.role !== 'admin');
+    return {
+      users: mapped,
+      counts: {
+        pending: shop.filter((u) => u.status === 'pending').length,
+        rejected: shop.filter((u) => u.status === 'rejected').length,
+        approved: shop.filter((u) => u.status === 'approved').length,
+        total: shop.length,
+      },
+    };
+  },
+
   async listOtpRequests(): Promise<{ requests: OtpRequest[] }> {
     await requireAdmin();
     const otps = await listActiveOtps();

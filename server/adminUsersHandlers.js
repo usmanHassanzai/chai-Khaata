@@ -58,6 +58,31 @@ export async function listAdminOtpRequests() {
   };
 }
 
+export async function getAdminDashboard(searchParams) {
+  const usersResult = await listAdminUsers(searchParams);
+  let counts;
+  try {
+    counts = await getAdminUsersSummary();
+  } catch (err) {
+    console.warn('[Chai Khata] Dashboard counts fallback from user list:', err instanceof Error ? err.message : err);
+    counts = countsFromUsers(usersResult.users);
+  }
+  return { ...usersResult, counts };
+}
+
+function countsFromUsers(users) {
+  let pending = 0;
+  let rejected = 0;
+  let approved = 0;
+  for (const user of users) {
+    if (user.role === 'admin') continue;
+    if (user.status === 'pending') pending += 1;
+    else if (user.status === 'rejected') rejected += 1;
+    else if (user.status === 'approved') approved += 1;
+  }
+  return { pending, rejected, approved, total: pending + rejected + approved };
+}
+
 export function adminHandlerError(err) {
   const message = err instanceof Error ? err.message : String(err);
   if (/timed out after/i.test(message)) {
@@ -69,11 +94,22 @@ export function adminHandlerError(err) {
       },
     };
   }
+  if (/SUPABASE|schema|PGRST|column|relation.*does not exist|invalid api key|SERVER_CONFIG/i.test(message)) {
+    return {
+      status: 503,
+      body: {
+        error: 'DATABASE_ERROR',
+        message: 'Database query failed. Run supabase/migrate-production.sql in Supabase SQL Editor, then redeploy.',
+      },
+    };
+  }
   return {
     status: 500,
     body: {
       error: 'SERVER_ERROR',
-      message: 'Could not complete admin request',
+      message: process.env.NODE_ENV === 'production'
+        ? 'Could not complete admin request'
+        : message,
     },
   };
 }

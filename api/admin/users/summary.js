@@ -1,5 +1,3 @@
-import { requireAdmin } from '../../../server/adminAuth.js';
-import { getAdminUsersSummary, adminHandlerError } from '../../../server/adminUsersHandlers.js';
 import { sendJson, setCors, withTimeout } from '../../../server/httpUtils.js';
 
 export default async function handler(req, res) {
@@ -16,13 +14,16 @@ export default async function handler(req, res) {
     return;
   }
 
+  const { requireAdmin } = await import('../../../server/adminAuth.js');
   if (!requireAdmin(req, res)) return;
 
   try {
-    const counts = await withTimeout(getAdminUsersSummary(), 8000, 'User summary');
+    const { getAdminUsersSummary, adminHandlerError, ADMIN_QUERY_TIMEOUT_MS } = await import('../../../server/adminUsersHandlers.js');
+    const counts = await withTimeout(getAdminUsersSummary(), ADMIN_QUERY_TIMEOUT_MS, 'User summary');
     sendJson(res, 200, counts);
   } catch (err) {
     console.error('Admin user summary error:', err);
+    const { adminHandlerError } = await import('../../../server/adminUsersHandlers.js');
     const failure = adminHandlerError(err);
     sendJson(res, failure.status, failure.body);
   }

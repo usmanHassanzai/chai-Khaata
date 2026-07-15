@@ -305,6 +305,20 @@ export const remoteAuthApi = {
     );
   },
 
+  adminDashboard(opts?: { status?: string; includeAdmin?: boolean; limit?: number }) {
+    const params = new URLSearchParams();
+    if (opts?.status) params.set('status', opts.status);
+    if (opts?.includeAdmin) params.set('includeAdmin', '1');
+    if (opts?.limit) params.set('limit', String(opts.limit));
+    const qs = params.toString();
+    return request<{
+      users: AuthUser[];
+      counts: { pending: number; rejected: number; approved: number; total: number };
+      limit?: number;
+      truncated?: boolean;
+    }>(`/api/admin/dashboard${qs ? `?${qs}` : ''}`);
+  },
+
   adminUsersSummary() {
     return request<{ pending: number; rejected: number; approved: number; total: number }>(
       '/api/admin/users/summary',

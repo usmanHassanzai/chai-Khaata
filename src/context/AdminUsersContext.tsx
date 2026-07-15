@@ -37,9 +37,23 @@ function formatLoadError(err: unknown): string {
     if (err.code === 'FORBIDDEN') return 'Admin access required. Log in with the admin account.';
     if (err.code === 'UNAUTHORIZED' || err.code === 'INVALID_TOKEN') return 'Session expired. Please log out and log in again.';
     if (err.code === 'TIMEOUT') return 'Server took too long loading users. Please retry.';
+    if (err.code === 'DATABASE_ERROR') return err.message;
     return err.message;
   }
   return 'Could not load users.';
+}
+
+function countsFromUsers(users: AuthUser[]): AdminCounts {
+  let pending = 0;
+  let rejected = 0;
+  let approved = 0;
+  for (const user of users) {
+    if (user.role === 'admin') continue;
+    if (user.status === 'pending') pending += 1;
+    else if (user.status === 'rejected') rejected += 1;
+    else if (user.status === 'approved') approved += 1;
+  }
+  return { pending, rejected, approved, total: pending + rejected + approved };
 }
 
 export function AdminUsersProvider({ children }: { children: ReactNode }) {
@@ -74,13 +88,26 @@ export function AdminUsersProvider({ children }: { children: ReactNode }) {
     setError('');
 
     try {
-      const [usersRes, summaryRes] = await Promise.all([
-        authApi.listUsers({ includeAdmin: true }),
-        authApi.adminUsersSummary(),
-      ]);
-      setUsers(usersRes.users);
-      setCounts(summaryRes);
-      hasLoadedRef.current = true;
+      try {
+        const dash = await authApi.adminDashboard({ includeAdmin: true });
+        setUsers(dash.users);
+        setCounts(dash.counts ?? countsFromUsers(dash.users));
+        hasLoadedRef.current = true;
+      } catch (dashErr) {
+        if (
+          dashErr instanceof ApiError
+          && ['FORBIDDEN', 'UNAUTHORIZED', 'INVALID_TOKEN'].includes(dashErr.code)
+        ) {
+          throw dashErr;
+        }
+        const usersRes = await authApi.listUsers({ includeAdmin: true });
+        setUsers(usersRes.users);
+        setCounts(countsFromUsers(usersRes.users));
+        hasLoadedRef.current = true;
+        authApi.adminUsersSummary()
+          .then((summaryRes) => setCounts(summaryRes))
+          .catch(() => { /* keep counts derived from user list */ });
+      }
 
       // OTP table is non-critical — load after users so a slow OTP query cannot block the list.
       authApi.listOtpRequests()

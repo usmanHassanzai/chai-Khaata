@@ -51,6 +51,7 @@ import { withTimeout } from './httpUtils.js';
 import {
   listAdminUsers,
   getAdminUsersSummary,
+  getAdminDashboard,
   listAdminOtpRequests,
   adminHandlerError,
 } from './adminUsersHandlers.js';
@@ -584,6 +585,18 @@ app.get('/api/admin/users/summary', authMiddleware, adminMiddleware, async (_req
     res.json(counts);
   } catch (err) {
     console.error('Admin user summary error:', err);
+    const failure = adminHandlerError(err);
+    res.status(failure.status).json(failure.body);
+  }
+});
+
+app.get('/api/admin/dashboard', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const params = new URLSearchParams(req.query ?? {});
+    const result = await withTimeout(getAdminDashboard(params), 8000, 'Admin dashboard');
+    res.json(result);
+  } catch (err) {
+    console.error('Admin dashboard error:', err);
     const failure = adminHandlerError(err);
     res.status(failure.status).json(failure.body);
   }
