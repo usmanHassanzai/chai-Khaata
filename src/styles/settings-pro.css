@@ -605,12 +605,18 @@
     position: static;
     padding: 0.5rem;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .settings-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .settings-tab {
     flex-shrink: 0;
-    padding: 0.6rem 0.85rem;
+    padding: 0.65rem 0.85rem;
     font-size: 0.82rem;
+    min-height: 44px;
   }
 
   .settings-theme-grid {
@@ -624,10 +630,71 @@
   .settings-lang-grid {
     grid-template-columns: 1fr;
   }
+
+  .settings-profile {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .settings-form-panel {
+    padding: 1rem;
+  }
+
+  .settings-toast {
+    bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 0.75rem);
+    max-width: calc(100vw - 2rem);
+    text-align: center;
+  }
+
+  .confirm-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .confirm-dialog {
+    max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    padding-bottom: calc(1.75rem + var(--safe-bottom));
+  }
+
+  .confirm-dialog-actions {
+    flex-direction: column;
+  }
+
+  .confirm-dialog-actions .btn {
+    width: 100%;
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 480px) {
+  .settings-theme-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-theme-btn {
+    flex-direction: row;
+    justify-content: center;
+    min-height: 48px;
+  }
+
+  .settings-info-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .settings-inline-field input {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+  }
 }
 
 @media (max-width: 420px) {
   .settings-theme-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-info-grid {
     grid-template-columns: 1fr;
   }
 }

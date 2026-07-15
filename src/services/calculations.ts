@@ -284,6 +284,7 @@ export function computeDashboardStats(
   now = new Date(),
 ) {
   const stocks = computeTeaStocks(purchases, sales, threshold);
+  const costByTea = new Map(stocks.map((t) => [normalizeTea(t.teaName), t.avgCostPerKg]));
 
   const todaySales = filterSales(sales, 'today', now);
   const monthSales = filterSales(sales, 'month', now);
@@ -291,7 +292,7 @@ export function computeDashboardStats(
 
   const profitFor = (list: Sale[]) =>
     list.reduce((sum, s) => {
-      const { avgCostPerKg } = getStockForTea(s.teaName, purchases, sales);
+      const avgCostPerKg = costByTea.get(normalizeTea(s.teaName)) ?? 0;
       return sum + saleProfit(s, avgCostPerKg);
     }, 0);
 

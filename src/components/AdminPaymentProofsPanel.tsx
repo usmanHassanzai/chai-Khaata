@@ -12,6 +12,30 @@ function formatPanelError(err: unknown): string {
   return 'Could not load payment proofs.';
 }
 
+function PaymentScreenshotCell({ submissionId, hasScreenshot }: { submissionId: string; hasScreenshot?: boolean }) {
+  const [src, setSrc] = useState<string | undefined>();
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!hasScreenshot || src) return;
+    let cancelled = false;
+    setLoading(true);
+    authApi.getPaymentSubmission(submissionId)
+      .then(({ submission }) => {
+        if (!cancelled && submission.screenshot) setSrc(submission.screenshot);
+      })
+      .catch(() => { /* thumbnail optional */ })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [submissionId, hasScreenshot, src]);
+
+  if (!hasScreenshot) return <span>—</span>;
+  if (loading && !src) return <span className="settings-note">…</span>;
+  return <ImageThumb src={src} alt="payment proof" />;
+}
+
 export default function AdminPaymentProofsPanel() {
   const [submissions, setSubmissions] = useState<PaymentSubmission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,7 +133,7 @@ export default function AdminPaymentProofsPanel() {
                 <td>{s.subscriptionPlan || '—'}</td>
                 <td><code>{s.paymentRefId || '—'}</code></td>
                 <td><strong className="due-amount">Rs {s.paymentDue.toLocaleString()}</strong></td>
-                <td><ImageThumb src={s.screenshot} alt="payment proof" /></td>
+                <td><PaymentScreenshotCell submissionId={s.id} hasScreenshot={s.hasScreenshot ?? Boolean(s.screenshot)} /></td>
                 <td>{new Date(s.createdAt).toLocaleString()}</td>
                 <td className="actions-cell">
                   <button

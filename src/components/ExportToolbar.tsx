@@ -38,8 +38,12 @@ export default function ExportToolbar({
     downloadCsv(base, columns, rows);
   }
 
-  function exportPdf() {
-    downloadPdf({ filename: base, title, shopProfile, subtitle, columns, rows });
+  async function exportPdf() {
+    try {
+      await downloadPdf({ filename: base, title, shopProfile, subtitle, columns, rows });
+    } catch (err) {
+      console.error('[Chai Khata] PDF export failed:', err);
+    }
   }
 
   function exportPrint() {

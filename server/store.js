@@ -462,17 +462,19 @@ export function adminUserListItem(user) {
   };
 }
 
-/** @param {{ statuses?: string[], excludeAdmin?: boolean, limit?: number }} [opts] */
+/** @param {{ statuses?: string[], excludeAdmin?: boolean, limit?: number, offset?: number }} [opts] */
 export async function readUsersForAdmin(opts = {}) {
-  const { statuses, excludeAdmin = true, limit = 500 } = opts;
+  const { statuses, excludeAdmin = true, limit = 500, offset = 0 } = opts;
   return withStorage(
-    () => sb.sbReadUsersForAdmin({ statuses, excludeAdmin, limit }),
+    () => sb.sbReadUsersForAdmin({ statuses, excludeAdmin, limit, offset }),
     async () => {
       let users = await readUsersFromFile();
       if (excludeAdmin) users = users.filter((u) => u.role !== 'admin');
       if (statuses?.length) users = users.filter((u) => statuses.includes(u.status));
       users.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      return users.slice(0, Math.min(Math.max(1, limit), 1000));
+      const cappedLimit = Math.min(Math.max(1, limit), 1000);
+      const safeOffset = Math.max(0, Number(offset) || 0);
+      return users.slice(safeOffset, safeOffset + cappedLimit);
     },
   );
 }

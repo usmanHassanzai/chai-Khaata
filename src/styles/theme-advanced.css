@@ -721,25 +721,46 @@ body {
 
   .auth-page-inner {
     min-height: 100vh;
+    min-height: 100dvh;
   }
 
   .dashboard-hero {
     grid-template-columns: 1fr;
-    padding: 1.5rem;
+    padding: 1.25rem 1rem;
+    margin-bottom: 1rem;
   }
 
   .dashboard-hero-visual {
-    min-height: 200px;
+    min-height: 180px;
     order: -1;
   }
 
   .dashboard-hero-image {
+    width: 140px;
+    height: 140px;
+  }
+
+  .dashboard-hero-image-ring {
     width: 160px;
     height: 160px;
   }
 
+  .dashboard-hero-title {
+    font-size: 1.35rem;
+  }
+
+  .dashboard-hero-actions {
+    width: 100%;
+  }
+
+  .dashboard-hero-actions .btn {
+    min-height: 48px;
+    flex: 1 1 auto;
+  }
+
   .quick-actions {
     grid-template-columns: repeat(2, 1fr);
+    gap: 0.65rem;
   }
 
   .tea-showcase-grid {
@@ -748,6 +769,32 @@ body {
 
   .tea-showcase-card.is-active {
     transform: none;
+  }
+
+  .page-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+
+  .page-banner-icon {
+    width: 52px;
+    height: 52px;
+    font-size: 2rem;
+  }
+
+  .page-banner-title {
+    font-size: 1.1rem;
+  }
+
+  .page-banner-sub {
+    font-size: 0.82rem;
+  }
+
+  .page-banner-steam {
+    display: none;
   }
 }
 
@@ -761,6 +808,10 @@ body {
     width: 42px;
     height: 42px;
     font-size: 1.25rem;
+  }
+
+  .dashboard-hero-stat-value {
+    font-size: 1.45rem;
   }
 }
 

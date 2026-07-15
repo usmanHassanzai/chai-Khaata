@@ -26,6 +26,21 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('jspdf') || id.includes('html2canvas')) return 'export-pdf';
+          if (id.includes('@supabase')) return 'supabase';
+          if (id.includes('dexie')) return 'dexie';
+          if (id.includes('i18next') || id.includes('react-i18next')) return 'i18n';
+          if (id.includes('react-router')) return 'router';
+          if (id.includes('react-dom') || id.includes('/react/')) return 'react-vendor';
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
@@ -34,6 +49,27 @@ export default defineConfig({
         enabled: false,
       },
       includeAssets: ['favicon.svg'],
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,svg,woff,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+          {
+            urlPattern: /\/api\/auth\/config$/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'auth-config-cache',
+              expiration: { maxEntries: 1, maxAgeSeconds: 300 },
+            },
+          },
+        ],
+      },
       manifest: {
         name: 'Patiwala — Chai Khata',
         short_name: 'Patiwala',

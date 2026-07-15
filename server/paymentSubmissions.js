@@ -94,6 +94,42 @@ export async function listPendingSubmissions() {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
+/** List metadata only — excludes heavy screenshot payloads. */
+export async function listPendingSubmissionsMeta() {
+  if (isSupabaseEnabled()) return sb.sbListPendingSubmissionsMeta();
+
+  const list = await listPendingSubmissions();
+  return list.map(publicSubmissionListItem);
+}
+
+/** @param {string} id */
+export async function findSubmissionById(id) {
+  if (isSupabaseEnabled()) return sb.sbFindSubmissionById(id);
+
+  const list = await readSubmissions();
+  return list.find((s) => s.id === id) ?? null;
+}
+
+/** @param {PaymentSubmission} s */
+export function publicSubmissionListItem(s) {
+  return {
+    id: s.id,
+    userId: s.userId,
+    username: s.username,
+    email: s.email,
+    phone: s.phone,
+    paymentDue: s.paymentDue,
+    subscriptionPlan: s.subscriptionPlan ?? '',
+    kind: s.kind ?? 'payment_due',
+    paymentRefId: s.paymentRefId ?? '',
+    hasScreenshot: Boolean(s.screenshot),
+    status: s.status,
+    createdAt: s.createdAt,
+    reviewedAt: s.reviewedAt,
+    rejectNote: s.rejectNote,
+  };
+}
+
 /** @param {PaymentSubmission} s */
 export function publicSubmission(s) {
   return {

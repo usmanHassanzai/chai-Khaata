@@ -109,6 +109,25 @@ function publicSubmission(s: PaymentSubmissionRecord): PaymentSubmission {
     subscriptionPlan: s.subscriptionPlan,
     kind: s.kind,
     screenshot: s.screenshot,
+    hasScreenshot: Boolean(s.screenshot),
+    status: s.status,
+    createdAt: s.createdAt,
+    reviewedAt: s.reviewedAt,
+    rejectNote: s.rejectNote,
+  };
+}
+
+function publicSubmissionListItem(s: PaymentSubmissionRecord): PaymentSubmission {
+  return {
+    id: s.id,
+    userId: s.userId,
+    username: s.username,
+    email: s.email,
+    phone: s.phone,
+    paymentDue: s.paymentDue,
+    subscriptionPlan: s.subscriptionPlan,
+    kind: s.kind,
+    hasScreenshot: Boolean(s.screenshot),
     status: s.status,
     createdAt: s.createdAt,
     reviewedAt: s.reviewedAt,
@@ -552,7 +571,16 @@ export const localAuthApi = {
   async listPaymentSubmissions() {
     await requireAdmin();
     const submissions = await listPendingSubmissions();
-    return { submissions: submissions.map(publicSubmission) };
+    return { submissions: submissions.map(publicSubmissionListItem) };
+  },
+
+  async getPaymentSubmission(id: string) {
+    await requireAdmin();
+    const submission = await authDb.submissions.get(id);
+    if (!submission || submission.status !== 'pending') {
+      throw new ApiError('NOT_FOUND', 'Submission not found or already reviewed');
+    }
+    return { submission: publicSubmission(submission) };
   },
 
   async approvePaymentSubmission(id: string) {

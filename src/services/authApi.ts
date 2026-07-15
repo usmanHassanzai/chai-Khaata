@@ -71,7 +71,8 @@ export interface PaymentSubmission {
   subscriptionPlan?: string;
   kind?: 'payment_due' | 'subscription_renewal' | 'signup_payment';
   paymentRefId?: string;
-  screenshot: string;
+  screenshot?: string;
+  hasScreenshot?: boolean;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
   reviewedAt?: string;
@@ -136,6 +137,44 @@ function apiBase(): string {
 const REQUEST_TIMEOUT_MS = 12_000;
 const LOGIN_TIMEOUT_MS = 20_000;
 const ADMIN_ACTION_TIMEOUT_MS = 25_000;
+const CONFIG_CACHE_TTL_MS = 5 * 60_000;
+
+type CacheEntry<T> = { expiresAt: number; value: T };
+const responseCache = new Map<string, CacheEntry<unknown>>();
+const inFlight = new Map<string, Promise<unknown>>();
+
+function getCached<T>(key: string): T | null {
+  const hit = responseCache.get(key);
+  if (!hit || hit.expiresAt <= Date.now()) {
+    if (hit) responseCache.delete(key);
+    return null;
+  }
+  return hit.value as T;
+}
+
+function setCached<T>(key: string, value: T, ttlMs = CONFIG_CACHE_TTL_MS) {
+  responseCache.set(key, { value, expiresAt: Date.now() + ttlMs });
+}
+
+async function dedupedRequest<T>(key: string, loader: () => Promise<T>): Promise<T> {
+  const cached = getCached<T>(key);
+  if (cached !== null) return cached;
+
+  const pending = inFlight.get(key);
+  if (pending) return pending as Promise<T>;
+
+  const promise = loader()
+    .then((value) => {
+      setCached(key, value);
+      return value;
+    })
+    .finally(() => {
+      inFlight.delete(key);
+    });
+
+  inFlight.set(key, promise);
+  return promise;
+}
 
 async function request<T>(path: string, options: RequestInit = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> {
   const token = getStoredToken();
@@ -208,7 +247,7 @@ async function request<T>(path: string, options: RequestInit = {}, timeoutMs = R
 
 export const remoteAuthApi = {
   config() {
-    return request<AuthConfig>('/api/auth/config');
+    return dedupedRequest('auth:config', () => request<AuthConfig>('/api/auth/config'));
   },
 
   login(emailOrLogin: string, password: string) {
@@ -252,7 +291,7 @@ export const remoteAuthApi = {
   },
 
   subscriptionPlans() {
-    return request<AuthConfig>('/api/auth/config').then((c) => ({
+    return remoteAuthApi.config().then((c) => ({
       plans: c.subscriptionPlans ?? [],
     }));
   },
@@ -335,28 +374,32 @@ export const remoteAuthApi = {
     return request<{ user: AuthUser }>('/api/auth/me');
   },
 
-  listUsers(opts?: { status?: string; includeAdmin?: boolean; limit?: number }) {
+  listUsers(opts?: { status?: string; includeAdmin?: boolean; limit?: number; offset?: number }) {
     const params = new URLSearchParams();
     if (opts?.status) params.set('status', opts.status);
     if (opts?.includeAdmin) params.set('includeAdmin', '1');
     if (opts?.limit) params.set('limit', String(opts.limit));
+    if (opts?.offset) params.set('offset', String(opts.offset));
     const qs = params.toString();
-    return request<{ users: AuthUser[]; limit?: number; truncated?: boolean }>(
+    return request<{ users: AuthUser[]; limit?: number; offset?: number; truncated?: boolean; total?: number }>(
       `/api/admin/users${qs ? `?${qs}` : ''}`,
     );
   },
 
-  adminDashboard(opts?: { status?: string; includeAdmin?: boolean; limit?: number }) {
+  adminDashboard(opts?: { status?: string; includeAdmin?: boolean; limit?: number; offset?: number }) {
     const params = new URLSearchParams();
     if (opts?.status) params.set('status', opts.status);
     if (opts?.includeAdmin) params.set('includeAdmin', '1');
     if (opts?.limit) params.set('limit', String(opts.limit));
+    if (opts?.offset) params.set('offset', String(opts.offset));
     const qs = params.toString();
     return request<{
       users: AuthUser[];
       counts: { pending: number; rejected: number; approved: number; total: number };
       limit?: number;
+      offset?: number;
       truncated?: boolean;
+      total?: number;
     }>(`/api/admin/dashboard${qs ? `?${qs}` : ''}`);
   },
 
@@ -372,6 +415,10 @@ export const remoteAuthApi = {
 
   listPaymentSubmissions() {
     return request<{ submissions: PaymentSubmission[] }>('/api/admin/payment-submissions');
+  },
+
+  getPaymentSubmission(id: string) {
+    return request<{ submission: PaymentSubmission }>(`/api/admin/payment-submissions/${encodeURIComponent(id)}`);
   },
 
   approvePaymentSubmission(id: string) {

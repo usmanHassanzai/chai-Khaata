@@ -31,3 +31,24 @@
   width: 100%;
   margin-bottom: 0.75rem;
 }
+
+@media (max-width: 900px) {
+  .export-toolbar {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
+  .export-toolbar .btn {
+    min-height: 44px;
+    flex: 1 1 auto;
+  }
+
+  .export-toolbar.compact {
+    margin-top: 0;
+  }
+
+  .section-header .export-toolbar {
+    width: 100%;
+  }
+}

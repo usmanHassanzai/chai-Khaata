@@ -48,9 +48,6 @@ export default function Register() {
         if (c.payment) setPayment(normalizePaymentConfig(c.payment));
       })
       .catch(() => {});
-    authApi.subscriptionPlans()
-      .then(({ plans: list }) => setPlans(normalizeSubscriptionPlans(list)))
-      .catch(() => {});
   }, []);
 
   const selectedPlan = plans.find((p) => p.id === subscriptionPlan);

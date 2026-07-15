@@ -1,5 +1,3 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import type {
   Customer,
   Dealer,
@@ -59,7 +57,7 @@ function stamp() {
   return new Date().toISOString().slice(0, 19).replace('T', ' ');
 }
 
-export function downloadPdf(options: {
+export async function downloadPdf(options: {
   filename: string;
   title: string;
   shopProfile?: ShopPrintProfile;
@@ -69,6 +67,11 @@ export function downloadPdf(options: {
   columns: ExportColumn[];
   rows: Record<string, string | number>[];
 }) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+
   const { filename, title, subtitle, columns, rows } = options;
   const profile: ShopPrintProfile = options.shopProfile ?? {
     shopName: options.shopName || 'Chai Khata',

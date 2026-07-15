@@ -6,7 +6,8 @@
 /* ─── Ambient interior backdrop ─── */
 .main-content {
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .app-interior {
@@ -846,6 +847,62 @@
 
   .dashboard-hero-premium {
     grid-template-columns: 1fr;
+    min-height: auto;
+    padding: 1.25rem 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .dashboard-hero-premium .dashboard-hero-visual {
+    min-height: 180px;
+  }
+
+  .dashboard-hero-premium .dashboard-hero-badge {
+    position: relative;
+    bottom: auto;
+    right: auto;
+    margin-top: 0.75rem;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .dashboard-hero-premium .dashboard-hero-actions {
+    width: 100%;
+  }
+
+  .dashboard-hero-premium .dashboard-hero-actions .btn {
+    min-height: 48px;
+  }
+
+  .page-banner-photo {
+    min-height: 88px;
+    padding: 1rem;
+  }
+
+  .page-banner-photo .page-banner-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 1.75rem;
+  }
+
+  .page-banner-photo .page-banner-title {
+    font-size: 1.05rem;
+  }
+
+  .page-banner-photo .page-banner-sub {
+    font-size: 0.78rem;
+  }
+
+  .stat-card-pro .stat-value {
+    font-size: 1.25rem;
+  }
+
+  .section-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tea-showcase {
+    padding: 1rem;
   }
 
   .app-header-pro .header-inner {
@@ -855,6 +912,25 @@
 
   .bottom-nav-pro .bottom-link {
     min-width: 4.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-hero-premium .dashboard-hero-title {
+    font-size: 1.35rem;
+  }
+
+  .dashboard-hero-premium .dashboard-hero-stat-value {
+    font-size: 1.45rem;
+  }
+
+  .quick-action-card {
+    padding: 0.85rem 0.5rem;
+  }
+
+  .quick-action-label {
+    font-size: 0.75rem;
+    text-align: center;
   }
 }
 

@@ -95,7 +95,7 @@ export function AdminUsersProvider({ children }: { children: ReactNode }) {
 
       try {
         try {
-          const dash = await authApi.adminDashboard({ includeAdmin: true });
+          const dash = await authApi.adminDashboard({ includeAdmin: true, limit: 500 });
           setUsers(dash.users);
           setCounts(dash.counts ?? countsFromUsers(dash.users));
           hasLoadedRef.current = true;
@@ -106,7 +106,7 @@ export function AdminUsersProvider({ children }: { children: ReactNode }) {
           ) {
             throw dashErr;
           }
-          const usersRes = await authApi.listUsers({ includeAdmin: true });
+          const usersRes = await authApi.listUsers({ includeAdmin: true, limit: 500 });
           setUsers(usersRes.users);
           setCounts(countsFromUsers(usersRes.users));
           hasLoadedRef.current = true;

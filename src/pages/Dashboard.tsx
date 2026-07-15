@@ -1,4 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
+import { useMemo } from 'react';
 import StatCard from '../components/StatCard';
 import MobileSaleCards from '../components/MobileSaleCards';
 import TeaHero from '../components/TeaHero';
@@ -36,17 +37,23 @@ export default function Dashboard() {
     language: 'ur-roman' as const,
   };
 
-  const stats = computeDashboardStats(
-    sales,
-    purchases,
-    customers,
-    payments,
-    dealers,
-    settings.lowStockThresholdKg,
+  const stats = useMemo(
+    () => computeDashboardStats(
+      sales,
+      purchases,
+      customers,
+      payments,
+      dealers,
+      settings.lowStockThresholdKg,
+    ),
+    [sales, purchases, customers, payments, dealers, settings.lowStockThresholdKg],
   );
 
-  const dashboardRows = buildDashboardExportRows(stats);
-  const recentExportRows = buildSalesExportRows(stats.recentSales, purchases, sales, customers);
+  const dashboardRows = useMemo(() => buildDashboardExportRows(stats), [stats]);
+  const recentExportRows = useMemo(
+    () => buildSalesExportRows(stats.recentSales, purchases, sales, customers),
+    [stats.recentSales, purchases, sales, customers],
+  );
 
   return (
     <div className="page">

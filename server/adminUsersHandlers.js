@@ -18,15 +18,26 @@ export async function listAdminUsers(searchParams) {
   const includeAdmin = searchParams.get('includeAdmin') === '1';
   const excludeAdmin = !includeAdmin;
   const limitRaw = Number(searchParams.get('limit'));
-  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 500;
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 200;
+  const offsetRaw = Number(searchParams.get('offset'));
+  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
   const full = searchParams.get('full') === '1';
 
-  const users = await readUsersForAdmin({ statuses, excludeAdmin, limit });
+  const users = await readUsersForAdmin({ statuses, excludeAdmin, limit, offset });
   const mapper = full ? adminUser : adminUserListItem;
+  let total;
+  try {
+    const counts = await getAdminUsersSummary();
+    total = counts.total;
+  } catch {
+    total = undefined;
+  }
 
   return {
     users: users.map(mapper),
     limit,
+    offset,
+    total,
     truncated: users.length >= limit,
   };
 }

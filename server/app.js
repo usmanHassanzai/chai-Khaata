@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import { sendOtpEmail } from './email.js';
 import { sendOtpSms } from './twilio.js';
 import { readLedger, writeLedger, shouldAcceptIncoming, deleteLedger } from './ledgerStore.js';
-import { deliverOtp, otpDeliveryStatus, otpDeliveryHealth } from './otpDelivery.js';
+import { deliverOtp, otpDeliveryStatus } from './otpDelivery.js';
 import { clearOtp, createOtp, getOtpForUser, verifyOtp } from './otpStore.js';
 import { registerErrorResponse, registerNewUser } from './registerUser.js';
 import { recoverPasswordByEmail, adminSendPasswordToUser } from './passwordRecovery.js';
@@ -14,7 +14,8 @@ import {
   clearSubmissionsForUser,
   createSubmission,
   findPendingByUserId,
-  listPendingSubmissions,
+  findSubmissionById,
+  listPendingSubmissionsMeta,
   publicSubmission,
   updateSubmission,
 } from './paymentSubmissions.js';
@@ -60,6 +61,8 @@ import {
   listAdminOtpRequests,
   adminHandlerError,
 } from './adminUsersHandlers.js';
+import { createRateLimiter } from './rateLimit.js';
+import { cached } from './responseCache.js';
 
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 const CORS_ALLOW_ALL = process.env.CORS_ALLOW_ALL === 'true' || process.env.NODE_ENV === 'production';
@@ -106,6 +109,22 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 }));
 app.use(express.json({ limit: '50mb' }));
+
+const authRateLimit = createRateLimiter({ keyPrefix: 'auth', max: 30, windowMs: 60_000 });
+const AUTH_CONFIG_CACHE_MS = Number(process.env.AUTH_CONFIG_CACHE_MS) || 300_000;
+
+async function buildAuthConfigPayload() {
+  const emailHealth = await import('./otpDelivery.js').then((m) => m.otpDeliveryHealth());
+  return {
+    adminEmail: ADMIN_EMAIL,
+    requiresApproval: true,
+    subscriptionPlans: getSubscriptionPlans(),
+    otpDelivery: emailHealth,
+    publicServerUrl: PUBLIC_SERVER_URL || null,
+    cloudSync: true,
+    payment: getPaymentConfig(),
+  };
+}
 
 app.use((req, _res, next) => {
   const raw = req.url || '';
@@ -197,23 +216,22 @@ app.get('/api/cron/subscription-reminders', async (req, res) => {
 });
 
 app.get('/api/auth/config', async (_req, res) => {
-  const emailHealth = await otpDeliveryHealth();
-  res.json({
-    adminEmail: ADMIN_EMAIL,
-    requiresApproval: true,
-    subscriptionPlans: getSubscriptionPlans(),
-    otpDelivery: emailHealth,
-    publicServerUrl: PUBLIC_SERVER_URL || null,
-    cloudSync: true,
-    payment: getPaymentConfig(),
-  });
+  try {
+    const payload = await cached('auth:config', buildAuthConfigPayload, AUTH_CONFIG_CACHE_MS);
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+    res.json(payload);
+  } catch (err) {
+    console.error('Auth config error:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not load config' });
+  }
 });
 
 app.get('/api/auth/subscription-plans', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
   res.json({ plans: getSubscriptionPlans() });
 });
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authRateLimit, async (req, res) => {
   try {
     const result = await registerNewUser(req.body ?? {});
     if (!result.ok) {
@@ -254,7 +272,7 @@ function accessBlockedResponse(user, res) {
   return res.status(403).json({ error: 'FORBIDDEN', message: 'Access blocked', user: publicUser(user) });
 }
 
-app.post('/api/auth/submit-payment-proof', async (req, res) => {
+app.post('/api/auth/submit-payment-proof', authRateLimit, async (req, res) => {
   try {
     const { login, email, username, password, screenshot, subscriptionPlan } = req.body ?? {};
     const loginValue = login ?? email ?? username;
@@ -280,7 +298,7 @@ app.post('/api/auth/submit-payment-proof', async (req, res) => {
   }
 });
 
-app.post('/api/auth/submit-signup-payment', async (req, res) => {
+app.post('/api/auth/submit-signup-payment', authRateLimit, async (req, res) => {
   try {
     const { login, email, username, password, screenshot } = req.body ?? {};
     const loginValue = login ?? email ?? username;
@@ -347,7 +365,7 @@ app.post('/api/auth/submit-signup-payment', async (req, res) => {
   }
 });
 
-app.post('/api/auth/check-payment-submission', async (req, res) => {
+app.post('/api/auth/check-payment-submission', authRateLimit, async (req, res) => {
   try {
     const { login, email, username, password } = req.body ?? {};
     const loginValue = login ?? email ?? username;
@@ -373,19 +391,31 @@ app.post('/api/auth/check-payment-submission', async (req, res) => {
 
 app.get('/api/admin/payment-submissions', authMiddleware, adminMiddleware, async (_req, res) => {
   try {
-    const submissions = await listPendingSubmissions();
-    res.json({ submissions: submissions.map(publicSubmission) });
+    const submissions = await listPendingSubmissionsMeta();
+    res.json({ submissions });
   } catch (err) {
     console.error('List payment submissions error:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not list payment submissions' });
   }
 });
 
+app.get('/api/admin/payment-submissions/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const submission = await findSubmissionById(req.params.id);
+    if (!submission || submission.status !== 'pending') {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Submission not found or already reviewed' });
+    }
+    res.json({ submission: publicSubmission(submission) });
+  } catch (err) {
+    console.error('Get payment submission error:', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not load payment submission' });
+  }
+});
+
 app.patch('/api/admin/payment-submissions/:id/approve', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const list = await listPendingSubmissions();
-    const submission = list.find((s) => s.id === req.params.id);
-    if (!submission) {
+    const submission = await findSubmissionById(req.params.id);
+    if (!submission || submission.status !== 'pending') {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Submission not found or already reviewed' });
     }
 
@@ -430,9 +460,8 @@ app.patch('/api/admin/payment-submissions/:id/approve', authMiddleware, adminMid
 
 app.patch('/api/admin/payment-submissions/:id/reject', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const list = await listPendingSubmissions();
-    const submission = list.find((s) => s.id === req.params.id);
-    if (!submission) {
+    const submission = await findSubmissionById(req.params.id);
+    if (!submission || submission.status !== 'pending') {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Submission not found' });
     }
 
@@ -453,7 +482,7 @@ app.patch('/api/admin/payment-submissions/:id/reject', authMiddleware, adminMidd
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authRateLimit, async (req, res) => {
   try {
     const { username, email, login, password } = req.body ?? {};
     const loginValue = login ?? email ?? username;
@@ -672,7 +701,7 @@ async function deleteUserHandler(req, res) {
   }
 }
 
-app.post('/api/auth/recover-password-by-email', async (req, res) => {
+app.post('/api/auth/recover-password-by-email', authRateLimit, async (req, res) => {
   try {
     const { email } = req.body ?? {};
     const result = await recoverPasswordByEmail(email);
@@ -691,7 +720,7 @@ app.post('/api/auth/recover-password-by-email', async (req, res) => {
   }
 });
 
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', authRateLimit, async (req, res) => {
   try {
     const { login, channel } = req.body ?? {};
     if (!login?.trim()) {
@@ -750,7 +779,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   }
 });
 
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', authRateLimit, async (req, res) => {
   try {
     const { login, otp, newPassword } = req.body ?? {};
 

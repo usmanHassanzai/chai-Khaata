@@ -622,12 +622,14 @@
   .auth-page-inner {
     flex-direction: column;
     justify-content: flex-start;
-    padding: 1.25rem 1rem 2rem;
+    padding: calc(1rem + var(--safe-top)) 1rem calc(2rem + var(--safe-bottom));
     min-height: 100vh;
+    min-height: 100dvh;
   }
 
   .auth-mobile-strip {
     display: flex;
+    max-width: 100%;
   }
 
   .auth-card-pro {
@@ -637,6 +639,62 @@
 
   .auth-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .auth-links-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .subscription-plans-two {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-field-pro .auth-input-wrap input {
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .auth-submit {
+    min-height: 52px;
+  }
+
+  .auth-trust-row {
+    gap: 0.35rem;
+  }
+
+  .auth-trust-pill {
+    font-size: 0.68rem;
+    padding: 0.35rem 0.55rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-page-inner {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+
+  .auth-card-pro {
+    padding: 1.35rem 1rem 0.85rem;
+    border-radius: 20px;
+  }
+
+  .auth-page-title {
+    font-size: 1.35rem;
+  }
+
+  .auth-links-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .subscription-plans-two {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-card-footer {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
   }
 }
 
@@ -651,6 +709,7 @@
     gap: 0.65rem;
     text-align: left;
     padding: 0.65rem 0.85rem;
+    min-height: 44px;
   }
 
   .auth-step span {

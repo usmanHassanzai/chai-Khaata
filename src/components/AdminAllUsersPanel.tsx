@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ConfirmDialog from './ConfirmDialog';
 import AdminUserDetailsModal from './AdminUserDetailsModal';
 import { Label, SectionTitle, useLabel } from '../i18n/useLabel';
@@ -7,6 +7,8 @@ import { ApiError, authApi, type AuthUser, type UserStatus } from '../services/a
 import { formatAdminDateTime } from '../utils/adminProfile';
 
 type StatusFilter = 'all' | UserStatus;
+
+const PAGE_SIZE = 50;
 
 export default function AdminAllUsersPanel() {
   const l = useLabel();
@@ -17,6 +19,7 @@ export default function AdminAllUsersPanel() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [detailsUser, setDetailsUser] = useState<AuthUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AuthUser | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -36,6 +39,12 @@ export default function AdminAllUsersPanel() {
       return haystack.includes(q);
     });
   }, [users, search, statusFilter]);
+
+  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [search, statusFilter]);
 
   async function confirmDelete() {
     if (!deleteTarget) return;
@@ -107,7 +116,7 @@ export default function AdminAllUsersPanel() {
           <option value="rejected">{l('auth.filterRejected')}</option>
         </select>
         <span className="admin-all-users-count">
-          {filtered.length} / {shopOwners.length} {l('auth.usersShown')}
+          {visible.length} / {filtered.length} / {shopOwners.length} {l('auth.usersShown')}
         </span>
       </div>
 
@@ -132,7 +141,7 @@ export default function AdminAllUsersPanel() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((u) => (
+              {visible.map((u) => (
                 <tr key={u.id} className={u.status === 'pending' ? 'row-pending' : u.status === 'rejected' ? 'row-rejected' : undefined}>
                   <td>
                     <strong>{u.username}</strong>
@@ -178,6 +187,18 @@ export default function AdminAllUsersPanel() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {filtered.length > visible.length && (
+        <div className="admin-all-users-more">
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+          >
+            Load more ({filtered.length - visible.length} remaining)
+          </button>
         </div>
       )}
 

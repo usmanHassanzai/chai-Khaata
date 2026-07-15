@@ -101,17 +101,18 @@ async function runAdminListQuery(query) {
   return (data ?? []).map(rowToUser);
 }
 
-/** @param {{ statuses?: string[], excludeAdmin?: boolean, limit?: number }} [opts] */
+/** @param {{ statuses?: string[], excludeAdmin?: boolean, limit?: number, offset?: number }} [opts] */
 export async function sbReadUsersForAdmin(opts = {}) {
-  const { statuses, excludeAdmin = true, limit = 500 } = opts;
+  const { statuses, excludeAdmin = true, limit = 500, offset = 0 } = opts;
   const cappedLimit = Math.min(Math.max(1, limit), 1000);
+  const safeOffset = Math.max(0, Number(offset) || 0);
 
   function buildQuery(columns) {
     let query = getSupabase()
       .from('users')
       .select(columns)
       .order('created_at', { ascending: false })
-      .limit(cappedLimit);
+      .range(safeOffset, safeOffset + cappedLimit - 1);
 
     if (excludeAdmin) query = query.neq('role', 'admin');
     if (statuses?.length) query = query.in('status', statuses);
@@ -493,6 +494,36 @@ export async function sbListPendingSubmissions() {
 
   if (error) throwSupabaseError(error);
   return (data ?? []).map(rowToSubmission);
+}
+
+const SUBMISSION_LIST_COLUMNS = [
+  'id', 'user_id', 'username', 'email', 'phone', 'payment_due', 'subscription_plan',
+  'kind', 'status', 'created_at', 'reviewed_at', 'reject_note',
+].join(',');
+
+export async function sbListPendingSubmissionsMeta() {
+  const { data, error } = await getSupabase()
+    .from('payment_submissions')
+    .select(SUBMISSION_LIST_COLUMNS)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+
+  if (error) throwSupabaseError(error);
+  return (data ?? []).map((row) => ({
+    ...rowToSubmission({ ...row, screenshot: null }),
+    hasScreenshot: true,
+  }));
+}
+
+export async function sbFindSubmissionById(id) {
+  const { data, error } = await getSupabase()
+    .from('payment_submissions')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) throwSupabaseError(error);
+  return data ? rowToSubmission(data) : null;
 }
 
 export async function sbClearSubmissionsForUser(userId) {

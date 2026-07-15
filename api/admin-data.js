@@ -55,9 +55,9 @@ export default async function handler(req, res) {
     }
 
     if (route === 'payments') {
-      const { listPendingSubmissions, publicSubmission } = await import('../server/paymentSubmissions.js');
-      const submissions = await withTimeout(listPendingSubmissions(), ADMIN_QUERY_TIMEOUT_MS, 'Payment submissions');
-      sendJson(res, 200, { submissions: submissions.map(publicSubmission) });
+      const { listPendingSubmissionsMeta } = await import('../server/paymentSubmissions.js');
+      const submissions = await withTimeout(listPendingSubmissionsMeta(), ADMIN_QUERY_TIMEOUT_MS, 'Payment submissions');
+      sendJson(res, 200, { submissions });
       return;
     }
 

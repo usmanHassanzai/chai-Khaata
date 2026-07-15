@@ -103,6 +103,43 @@
   }
 }
 
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes glowDrift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(12px, -16px) scale(1.06); }
+}
+
+@keyframes revealFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heroParallax {
+  0%, 100% { transform: scale(1.08) translateY(0); }
+  50% { transform: scale(1.1) translateY(-8px); }
+}
+
+@keyframes orbFloat {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-14px) rotate(6deg); }
+}
+
+@keyframes countPop {
+  0% { transform: scale(0.85); opacity: 0; }
+  60% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 @keyframes navPop {
   0% { transform: scale(1); }
   50% { transform: scale(1.08); }
@@ -126,6 +163,29 @@
 .stagger-7 { animation-delay: 0.35s; }
 .stagger-8 { animation-delay: 0.4s; }
 
+/* ─── Scroll reveal (landing) ─── */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reveal-delay-1 { transition-delay: 0.05s; }
+.reveal-delay-2 { transition-delay: 0.1s; }
+.reveal-delay-3 { transition-delay: 0.15s; }
+.reveal-delay-4 { transition-delay: 0.2s; }
+.reveal-delay-5 { transition-delay: 0.25s; }
+.reveal-delay-6 { transition-delay: 0.3s; }
+.reveal-delay-7 { transition-delay: 0.35s; }
+.reveal-delay-8 { transition-delay: 0.4s; }
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
   .animate-fade-in-up,
@@ -136,7 +196,17 @@
   .animate-float-slow,
   .tea-marquee-track,
   .floating-leaf,
-  .steam-puff {
+  .steam-puff,
+  .landing-hero-parallax,
+  .landing-hero-glow,
+  .landing-hero-orb,
+  .landing-btn-pulse {
     animation: none !important;
+  }
+
+  .reveal-on-scroll {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 }
