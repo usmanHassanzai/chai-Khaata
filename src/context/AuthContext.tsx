@@ -59,13 +59,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const { user: profile } = await authApi.me();
-      try {
-        await prepareDatabase(profile.id);
-      } catch (dbErr) {
+      setUser(profile);
+      void prepareDatabase(profile.id).catch((dbErr) => {
         console.warn('[Chai Khata] Database init:', dbErr);
         setDbReady(false);
-      }
-      setUser(profile);
+      });
     } catch (err) {
       setDbReady(false);
       if (err instanceof ApiError && (err.code === 'PENDING_APPROVAL' || err.code === 'REJECTED' || err.code === 'PAYMENT_DUE' || err.code === 'SUBSCRIPTION_EXPIRED')) {
@@ -100,8 +98,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { token, user: loggedIn } = await authApi.login(emailOrLogin, password);
       setStoredToken(token);
-      await prepareDatabase(loggedIn.id);
       setUser(loggedIn);
+      void prepareDatabase(loggedIn.id).catch((dbErr) => {
+        console.warn('[Chai Khata] Database init:', dbErr);
+        setDbReady(false);
+      });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'PAYMENT_DUE' && err.user) {
         setUser(err.user);

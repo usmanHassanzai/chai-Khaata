@@ -42,11 +42,7 @@ export default function Login() {
 
   useEffect(() => {
     void refreshServerStatus();
-    const timer = window.setInterval(() => {
-      if (serverOnline === false) void refreshServerStatus();
-    }, 15000);
-    return () => window.clearInterval(timer);
-  }, [serverOnline]);
+  }, []);
 
   if (user?.status === 'approved' || user?.role === 'admin' || (user?.status === 'pending' && user.trialActive)) {
     return <Navigate to="/dashboard" replace />;
@@ -59,11 +55,6 @@ export default function Login() {
     setSubmitting(true);
 
     try {
-      const online = await refreshServerStatus();
-      if (!online && !isNativeAuthMode()) {
-        return;
-      }
-
       await login(loginId.trim(), password);
     } catch (err) {
       if (err instanceof ApiError) {

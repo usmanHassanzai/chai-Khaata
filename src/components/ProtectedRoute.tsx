@@ -11,9 +11,9 @@ function isSubscriptionExpired(user: NonNullable<ReturnType<typeof useAuth>['use
 }
 
 export default function ProtectedRoute() {
-  const { user, loading, dbReady } = useAuth();
+  const { user, loading } = useAuth();
 
-  if (loading || (user && !dbReady)) {
+  if (loading) {
     return <AppLoading />;
   }
 

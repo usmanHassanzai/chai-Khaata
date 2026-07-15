@@ -10,6 +10,16 @@
   "rewrites": [
     { "source": "/api/health", "destination": "/api/health" },
     { "source": "/api/cron/subscription-reminders", "destination": "/api/cron/subscription-reminders" },
+    { "source": "/api/auth/login", "destination": "/api/auth/login" },
+    { "source": "/api/auth/config", "destination": "/api/auth/config" },
+    { "source": "/api/auth/me", "destination": "/api/auth/me" },
+    { "source": "/api/auth/register", "destination": "/api/auth/register" },
+    { "source": "/api/auth/recover-password-by-email", "destination": "/api/auth/recover-password-by-email" },
+    { "source": "/api/admin/dashboard", "destination": "/api/admin-data?route=dashboard" },
+    { "source": "/api/admin/users/summary", "destination": "/api/admin-data?route=summary" },
+    { "source": "/api/admin/users", "destination": "/api/admin-data?route=users" },
+    { "source": "/api/admin/otp-requests", "destination": "/api/admin-data?route=otp" },
+    { "source": "/api/admin/payment-submissions", "destination": "/api/admin-data?route=payments" },
     { "source": "/api/(.*)", "destination": "/api/server?__vercel_path=$1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],

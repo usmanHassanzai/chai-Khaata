@@ -53,11 +53,9 @@ export async function performLogin(loginValue, password) {
   }
 
   if (user.status === 'pending') {
-    try {
-      await notifyAdminPendingLogin(ADMIN_EMAIL, user);
-    } catch (notifyErr) {
+    void notifyAdminPendingLogin(ADMIN_EMAIL, user).catch((notifyErr) => {
       console.warn('[Chai Khata] Admin login notification failed:', notifyErr);
-    }
+    });
     const trial = await ensurePendingTrial(user, updateUser);
     if (trial.active) {
       const refreshed = await findUserByLogin(String(loginValue));

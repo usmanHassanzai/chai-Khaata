@@ -130,8 +130,9 @@ function apiBase(): string {
 }
 
 const REQUEST_TIMEOUT_MS = 12_000;
+const LOGIN_TIMEOUT_MS = 20_000;
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> {
   const token = getStoredToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -141,7 +142,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   const controller = options.signal ? null : new AbortController();
   const timeoutId = controller
-    ? window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    ? window.setTimeout(() => controller.abort(), timeoutMs)
     : undefined;
 
   let res: Response;
@@ -206,10 +207,14 @@ export const remoteAuthApi = {
   },
 
   login(emailOrLogin: string, password: string) {
-    return request<AuthResponse>('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ login: emailOrLogin, password }),
-    });
+    return request<AuthResponse>(
+      '/api/auth/login',
+      {
+        method: 'POST',
+        body: JSON.stringify({ login: emailOrLogin, password }),
+      },
+      LOGIN_TIMEOUT_MS,
+    );
   },
 
   register(
