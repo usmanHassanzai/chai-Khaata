@@ -137,6 +137,7 @@ function apiBase(): string {
 const REQUEST_TIMEOUT_MS = 12_000;
 const LOGIN_TIMEOUT_MS = 20_000;
 const ADMIN_ACTION_TIMEOUT_MS = 25_000;
+const CHANGE_PASSWORD_TIMEOUT_MS = 30_000;
 const CONFIG_CACHE_TTL_MS = 5 * 60_000;
 
 type CacheEntry<T> = { expiresAt: number; value: T };
@@ -334,7 +335,7 @@ export const remoteAuthApi = {
         method: 'POST',
         body: JSON.stringify({ currentPassword, newPassword }),
       },
-      LOGIN_TIMEOUT_MS,
+      CHANGE_PASSWORD_TIMEOUT_MS,
     );
   },
 

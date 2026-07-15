@@ -1,5 +1,10 @@
 import { setCors, sendJson, readJsonBody, withTimeout } from '../../server/httpUtils.js';
 
+function resolveAction(req) {
+  const url = new URL(req.url || '/', 'http://localhost');
+  return url.searchParams.get('action') || '';
+}
+
 export default async function handler(req, res) {
   setCors(res);
 
@@ -14,10 +19,30 @@ export default async function handler(req, res) {
     return;
   }
 
+  const action = resolveAction(req);
+
   try {
     const body = await readJsonBody(req);
-    const { submitPaymentProofByLogin } = await import('../../server/paymentProofHandlers.js');
     const loginValue = body.login ?? body.email ?? body.username;
+
+    if (action === 'check') {
+      const { checkPaymentSubmissionByLogin } = await import('../../server/paymentProofHandlers.js');
+      const result = await withTimeout(
+        checkPaymentSubmissionByLogin(loginValue, body.password),
+        12000,
+        'Check payment submission',
+      );
+
+      if (!result.ok) {
+        sendJson(res, result.status, { error: result.error, message: result.message });
+        return;
+      }
+
+      sendJson(res, result.status, result.body);
+      return;
+    }
+
+    const { submitPaymentProofByLogin } = await import('../../server/paymentProofHandlers.js');
     const result = await withTimeout(
       submitPaymentProofByLogin(loginValue, body.password, body.screenshot, body.subscriptionPlan),
       20000,
@@ -35,8 +60,8 @@ export default async function handler(req, res) {
       sendJson(res, 503, { error: 'TIMEOUT', message: 'Request timed out. Please retry.' });
       return;
     }
-    console.error('Submit payment proof error:', err);
-    sendJson(res, 500, { error: 'SERVER_ERROR', message: 'Could not submit payment proof' });
+    console.error(action === 'check' ? 'Check payment submission error:' : 'Submit payment proof error:', err);
+    sendJson(res, 500, { error: 'SERVER_ERROR', message: 'Could not process payment request' });
   }
 }
 

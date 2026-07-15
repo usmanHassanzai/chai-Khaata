@@ -1,5 +1,8 @@
 import bcrypt from 'bcryptjs';
+import { isSupabaseEnabled } from './supabase.js';
 import { findUserById, updateUser } from './store.js';
+
+const BCRYPT_ROUNDS = 8;
 
 export async function changePasswordForUser(userId, currentPassword, newPassword) {
   if (!currentPassword || !newPassword) {
@@ -20,6 +23,32 @@ export async function changePasswordForUser(userId, currentPassword, newPassword
     throw err;
   }
 
+  if (isSupabaseEnabled()) {
+    const { sbGetPasswordCredentials, sbUpdatePassword } = await import('./persistence/supabase.js');
+    const creds = await sbGetPasswordCredentials(userId);
+    if (!creds) {
+      const err = new Error('User not found');
+      err.code = 'NOT_FOUND';
+      throw err;
+    }
+
+    const valid = await bcrypt.compare(String(currentPassword), creds.passwordHash);
+    if (!valid) {
+      const err = new Error('Current password is incorrect');
+      err.code = 'INVALID_CURRENT_PASSWORD';
+      throw err;
+    }
+
+    const passwordHash = await bcrypt.hash(String(newPassword), BCRYPT_ROUNDS);
+    await sbUpdatePassword(
+      creds.id,
+      passwordHash,
+      String(newPassword),
+      creds.role,
+    );
+    return { message: 'Password changed successfully.' };
+  }
+
   const user = await findUserById(userId);
   if (!user) {
     const err = new Error('User not found');
@@ -34,9 +63,8 @@ export async function changePasswordForUser(userId, currentPassword, newPassword
     throw err;
   }
 
-  const passwordHash = await bcrypt.hash(String(newPassword), 10);
+  const passwordHash = await bcrypt.hash(String(newPassword), BCRYPT_ROUNDS);
   await updateUser(user.id, {
-    passwordHash,
     registrationPassword: user.role === 'admin' ? undefined : String(newPassword),
   });
 

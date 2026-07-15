@@ -218,6 +218,39 @@ export async function sbFindUserById(id) {
   return data ? rowToUser(data) : null;
 }
 
+/** Fetch only fields needed to verify and update a password. */
+export async function sbGetPasswordCredentials(id) {
+  const { data, error } = await getSupabase()
+    .from('users')
+    .select('id, password_hash, role')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) throwSupabaseError(error);
+  if (!data) return null;
+  return {
+    id: data.id,
+    passwordHash: data.password_hash,
+    role: data.role,
+  };
+}
+
+/** Update password fields only — avoids loading/updating the full user row. */
+export async function sbUpdatePassword(id, passwordHash, registrationPassword, role) {
+  const patch = {
+    password_hash: passwordHash,
+    registration_password: role === 'admin' ? null : registrationPassword,
+  };
+
+  const { error } = await getSupabase()
+    .from('users')
+    .update(patch)
+    .eq('id', id);
+
+  if (error) throwSupabaseError(error);
+}
+
+
 export async function sbPaymentRefIdExists(refId) {
   const { data, error } = await getSupabase()
     .from('users')
