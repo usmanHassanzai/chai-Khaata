@@ -1,9 +1,10 @@
 import jwt from 'jsonwebtoken';
-import { setCors, sendJson, withTimeout } from '../../server/httpUtils.js';
+import { setCors, sendJson, readJsonBody, withTimeout } from '../../server/httpUtils.js';
 import { JWT_SECRET, ADMIN_EMAIL } from '../../server/env.js';
 import { findUserById, isPaymentBlocked, paymentDueAmount, publicUser } from '../../server/store.js';
 import { isSubscriptionAccessBlocked } from '../../server/renewalGrace.js';
 import { isTrialActive } from '../../server/trialAccess.js';
+import { changePasswordForUser, mapChangePasswordError } from '../../server/changePassword.js';
 
 function readUserId(req) {
   const header = req.headers.authorization || req.headers.Authorization;
@@ -16,12 +17,43 @@ function readUserId(req) {
   }
 }
 
+async function handleChangePassword(req, res) {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'METHOD_NOT_ALLOWED', message: 'POST only' });
+    return;
+  }
+
+  const userId = readUserId(req);
+  if (!userId) {
+    sendJson(res, 401, { error: 'UNAUTHORIZED', message: 'Login required' });
+    return;
+  }
+
+  try {
+    const body = await readJsonBody(req);
+    const result = await withTimeout(
+      changePasswordForUser(userId, body.currentPassword, body.newPassword),
+      15000,
+      'Change password',
+    );
+    sendJson(res, 200, result);
+  } catch (err) {
+    mapChangePasswordError(err, res, sendJson);
+  }
+}
+
 export default async function handler(req, res) {
   setCors(res);
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     res.end();
+    return;
+  }
+
+  const route = String(req.query?.route || '').trim();
+  if (route === 'change-password') {
+    await handleChangePassword(req, res);
     return;
   }
 

@@ -13,6 +13,7 @@
     { "source": "/api/auth/login", "destination": "/api/auth/login" },
     { "source": "/api/auth/config", "destination": "/api/auth/config" },
     { "source": "/api/auth/me", "destination": "/api/auth/me" },
+    { "source": "/api/auth/change-password", "destination": "/api/auth/me?route=change-password" },
     { "source": "/api/auth/register", "destination": "/api/auth/register" },
     { "source": "/api/auth/recover-password-by-email", "destination": "/api/auth/recover-password-by-email" },
     { "source": "/api/auth/submit-payment-proof", "destination": "/api/auth/submit-payment-proof" },

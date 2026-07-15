@@ -50,6 +50,7 @@ import { getPaymentConfig } from './paymentConfig.js';
 import { isSubscriptionAccessBlocked } from './renewalGrace.js';
 import { isTrialActive } from './trialAccess.js';
 import { withTimeout } from './httpUtils.js';
+import { changePasswordForUser } from './changePassword.js';
 import {
   checkPaymentSubmissionByLogin,
   submitPaymentProofByLogin,
@@ -821,43 +822,20 @@ app.post('/api/auth/reset-password', authRateLimit, async (req, res) => {
 app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body ?? {};
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({
-        error: 'VALIDATION',
-        message: 'Current password and new password are required',
-      });
-    }
-
-    if (String(newPassword).length < 6) {
-      return res.status(400).json({ error: 'VALIDATION', message: 'Password must be at least 6 characters' });
-    }
-
-    if (String(currentPassword) === String(newPassword)) {
-      return res.status(400).json({
-        error: 'VALIDATION',
-        message: 'New password must be different from current password',
-      });
-    }
-
-    const user = await findUserById(req.userId);
-    if (!user) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found' });
-    }
-
-    const valid = await bcrypt.compare(String(currentPassword), user.passwordHash);
-    if (!valid) {
-      return res.status(401).json({ error: 'INVALID_CURRENT_PASSWORD', message: 'Current password is incorrect' });
-    }
-
-    const passwordHash = await bcrypt.hash(String(newPassword), 10);
-    await updateUser(user.id, {
-      passwordHash,
-      registrationPassword: user.role === 'admin' ? undefined : String(newPassword),
-    });
-
-    res.json({ message: 'Password changed successfully.' });
+    const result = await withTimeout(
+      changePasswordForUser(req.userId, currentPassword, newPassword),
+      15000,
+      'Change password',
+    );
+    res.json(result);
   } catch (err) {
+    const code = err?.code || 'SERVER_ERROR';
+    if (code === 'VALIDATION') return res.status(400).json({ error: code, message: err.message });
+    if (code === 'NOT_FOUND') return res.status(404).json({ error: code, message: err.message });
+    if (code === 'INVALID_CURRENT_PASSWORD') return res.status(401).json({ error: code, message: err.message });
+    if (/timed out after/i.test(String(err?.message || ''))) {
+      return res.status(503).json({ error: 'TIMEOUT', message: 'Password change took too long. Please retry.' });
+    }
     console.error('Change password error:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not change password' });
   }

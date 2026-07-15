@@ -328,10 +328,14 @@ export const remoteAuthApi = {
   },
 
   changePassword(currentPassword: string, newPassword: string) {
-    return request<{ message: string }>('/api/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify({ currentPassword, newPassword }),
-    });
+    return request<{ message: string }>(
+      '/api/auth/change-password',
+      {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword }),
+      },
+      LOGIN_TIMEOUT_MS,
+    );
   },
 
   submitPaymentProof(login: string, password: string, screenshot: string, subscriptionPlan?: SubscriptionPlanId) {
