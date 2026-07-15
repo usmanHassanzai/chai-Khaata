@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
 import { useAuth } from '../context/AuthContext';
 import { Label } from '../i18n/useLabel';
-import { ApiError, authHealth, getApiBase, isNativeAuthMode } from '../services/authApi';
+import { ApiError, authApi, authHealth, getApiBase, isNativeAuthMode } from '../services/authApi';
 import { friendlyAuthError, isLocalDevHost } from '../utils/authErrors';
 
 export default function Login() {
@@ -19,6 +19,11 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false);
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
   const [checkingServer, setCheckingServer] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('');
+
+  useEffect(() => {
+    authApi.config().then((c) => setAdminEmail(c.adminEmail)).catch(() => {});
+  }, []);
 
   async function refreshServerStatus() {
     setCheckingServer(true);
@@ -72,9 +77,9 @@ export default function Login() {
           setError(`${err.message}. Fix SUPABASE_SERVICE_ROLE_KEY in Vercel — use Secret key (sb_secret_…), then Redeploy.`);
         } else if (err.code === 'INVALID_CREDENTIALS') {
           setError(
-            isLocalDevHost()
-              ? 'Invalid email or password'
-              : 'Invalid email or password. Online login uses Supabase — local accounts are not copied automatically. Use admin credentials from Vercel env (ADMIN_EMAIL / ADMIN_PASSWORD), register again on this site, or run npm run sync:users from your PC.',
+            adminEmail
+              ? `Invalid email or password. If you already registered, use Forgot Password — or contact admin at ${adminEmail}.`
+              : 'Invalid email or password. If you already registered, use Forgot Password on the login page.',
           );
         } else if (err.code === 'NETWORK_ERROR') {
           setError(friendlyAuthError(err));

@@ -13,10 +13,45 @@ export function isResendConfigured() {
   return true;
 }
 
+function cleanEnvKey(value) {
+  return String(value || '').trim().replace(/^["']+|["']+$/g, '');
+}
+
+export function getBrevoApiKey() {
+  return cleanEnvKey(process.env.BREVO_API_KEY);
+}
+
 export function isBrevoConfigured() {
-  const key = String(process.env.BREVO_API_KEY || '').trim();
+  const key = getBrevoApiKey();
   if (!key || /xkeysib-xxx|change-me|example/i.test(key)) return false;
   return true;
+}
+
+/** Verify Brevo API key without sending email. */
+export async function testBrevoConnection() {
+  if (!isBrevoConfigured()) {
+    return { ok: false, reason: 'BREVO_API_KEY not set (or still placeholder)' };
+  }
+  try {
+    const key = getBrevoApiKey();
+    const response = await fetchWithTimeout('https://api.brevo.com/v3/account', {
+      headers: { accept: 'application/json', 'api-key': key },
+    }, 8000);
+    if (response.ok) {
+      return { ok: true, via: 'brevo' };
+    }
+    const body = await response.text().catch(() => '');
+    if (response.status === 401 || /unauthorized|key not found/i.test(body)) {
+      return {
+        ok: false,
+        reason: 'Brevo API key rejected. Create a NEW key at brevo.com → Settings → SMTP & API → API keys (not SMTP key).',
+      };
+    }
+    return { ok: false, reason: `Brevo ${response.status}: ${body.slice(0, 120)}` };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : 'Brevo check failed';
+    return { ok: false, reason };
+  }
 }
 
 /** True when admin signup / notification emails can be sent (SMTP, Brevo, or Resend). */
@@ -81,7 +116,7 @@ function mailFromAddress() {
 async function sendViaBrevo(to, subject, text, html) {
   if (!isBrevoConfigured()) return null;
 
-  const key = String(process.env.BREVO_API_KEY).trim();
+  const key = getBrevoApiKey();
   const sender = parseFromAddress(mailFromAddress());
 
   const response = await fetchWithTimeout('https://api.brevo.com/v3/smtp/email', {

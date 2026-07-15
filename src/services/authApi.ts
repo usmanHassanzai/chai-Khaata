@@ -294,8 +294,21 @@ export const remoteAuthApi = {
     return request<{ user: AuthUser }>('/api/auth/me');
   },
 
-  listUsers() {
-    return request<{ users: AuthUser[] }>('/api/admin/users');
+  listUsers(opts?: { status?: string; includeAdmin?: boolean; limit?: number }) {
+    const params = new URLSearchParams();
+    if (opts?.status) params.set('status', opts.status);
+    if (opts?.includeAdmin) params.set('includeAdmin', '1');
+    if (opts?.limit) params.set('limit', String(opts.limit));
+    const qs = params.toString();
+    return request<{ users: AuthUser[]; limit?: number; truncated?: boolean }>(
+      `/api/admin/users${qs ? `?${qs}` : ''}`,
+    );
+  },
+
+  adminUsersSummary() {
+    return request<{ pending: number; rejected: number; approved: number; total: number }>(
+      '/api/admin/users/summary',
+    );
   },
 
   listOtpRequests() {

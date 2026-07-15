@@ -5,6 +5,7 @@ import { getPaymentConfig } from './paymentConfig.js';
 import { withTimeout } from './httpUtils.js';
 import { createUser, isValidEmail, publicUser } from './store.js';
 import { getPlan, isValidPlanId } from './subscriptions.js';
+import { isSupabaseEnabled, validateSupabaseConfig } from './supabase.js';
 
 const ADMIN_EMAIL_TIMEOUT_MS = 12_000;
 
@@ -12,6 +13,16 @@ const ADMIN_EMAIL_TIMEOUT_MS = 12_000;
  * @param {Record<string, unknown>} body
  */
 export async function registerNewUser(body) {
+  if (process.env.VERCEL && !isSupabaseEnabled()) {
+    const config = validateSupabaseConfig();
+    return {
+      ok: false,
+      status: 503,
+      error: 'SERVER_CONFIG',
+      message: config.error || 'Database not configured on server',
+    };
+  }
+
   const { username, email, phone, password, shopName, paymentFeeDate, subscriptionPlan } = body ?? {};
 
   if (!username?.trim() || !email?.trim() || !phone?.trim() || !password) {
@@ -53,20 +64,24 @@ export async function registerNewUser(body) {
   const passwordHash = await bcrypt.hash(String(password), 10);
   const plainPassword = String(password);
 
-  const user = await createUser({
-    username: String(username).trim().toLowerCase(),
-    email: String(email),
-    phone: String(phone).trim(),
-    passwordHash,
-    registrationPassword: plainPassword,
-    registrationFee: feeAmount,
-    paymentFeeDate: String(paymentFeeDate).trim(),
-    subscriptionPlan: plan.id,
-    subscriptionPlanLabel: plan.label,
-    shopName: shopName?.trim() || '',
-    status: 'pending',
-    role: 'user',
-  });
+  const user = await withTimeout(
+    createUser({
+      username: String(username).trim().toLowerCase(),
+      email: String(email),
+      phone: String(phone).trim(),
+      passwordHash,
+      registrationPassword: plainPassword,
+      registrationFee: feeAmount,
+      paymentFeeDate: String(paymentFeeDate).trim(),
+      subscriptionPlan: plan.id,
+      subscriptionPlanLabel: plan.label,
+      shopName: shopName?.trim() || '',
+      status: 'pending',
+      role: 'user',
+    }),
+    15_000,
+    'Create user',
+  );
 
   console.log(`[Chai Khata] Signup saved: ${user.username} | ref=${user.paymentRefId} | phone=${user.phone} | plan=${plan.label}`);
 
@@ -104,18 +119,80 @@ export function registerErrorResponse(err) {
     return { status: 409, error: 'USERNAME_TAKEN', message: 'This username is already taken' };
   }
   if (err instanceof Error && err.message === 'EMAIL_TAKEN') {
-    return { status: 409, error: 'EMAIL_TAKEN', message: 'This email is already registered' };
+    return {
+      status: 409,
+      error: 'EMAIL_TAKEN',
+      message: 'This email is already registered. Try logging in with your password, or use Forgot Password on the login page.',
+    };
   }
 
   const errMsg = err instanceof Error ? err.message : String(err);
-  let message = 'Could not register user';
-  if (/column.*does not exist|last_expiry_reminder/i.test(errMsg)) {
-    message = 'Database needs an update. Admin: run supabase/schema.sql migration in Supabase SQL Editor.';
-  } else if (/supabase|fetch failed|timed out|connection/i.test(errMsg)) {
-    message = 'Database temporarily unavailable. Please try again in a minute.';
-  } else if (/JWT|service_role|SUPABASE/i.test(errMsg)) {
-    message = 'Server database configuration error. Contact admin.';
+  const errCode = err instanceof Error ? err.code : '';
+
+  console.error('[Chai Khata] Register failure detail:', errMsg, errCode || '');
+
+  if (errCode === 'SERVER_CONFIG') {
+    return {
+      status: 503,
+      error: 'SERVER_CONFIG',
+      message: 'Server database not configured. Admin: check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel, then redeploy.',
+    };
   }
 
-  return { status: 500, error: 'SERVER_ERROR', message };
+  if (/Create user timed out/i.test(errMsg)) {
+    return { status: 503, error: 'SERVER_ERROR', message: 'Registration timed out. Please try again.' };
+  }
+
+  if (/invalid path specified|requested path is invalid/i.test(errMsg)) {
+    return {
+      status: 503,
+      error: 'SERVER_CONFIG',
+      message: 'Supabase URL is wrong. Admin: set SUPABASE_URL to https://YOUR_PROJECT.supabase.co only (no /rest/v1), then redeploy.',
+    };
+  }
+
+  if (/could not find|schema cache|PGRST204|column.*does not exist|unknown column/i.test(errMsg)) {
+    return {
+      status: 503,
+      error: 'SERVER_CONFIG',
+      message: 'Database schema outdated. Admin: open Supabase → SQL Editor → run supabase/migrate-production.sql',
+    };
+  }
+
+  if (/permission denied|row-level security|42501/i.test(errMsg)) {
+    return {
+      status: 503,
+      error: 'SERVER_CONFIG',
+      message: 'Database permission error. Admin: use Supabase Secret key (sb_secret_…) in SUPABASE_SERVICE_ROLE_KEY on Vercel.',
+    };
+  }
+
+  if (/invalid api key|jwt|jws|service.role|service_role/i.test(errMsg)) {
+    return {
+      status: 503,
+      error: 'SERVER_CONFIG',
+      message: 'Supabase key is invalid. Admin: copy Secret key (sb_secret_…) into SUPABASE_SERVICE_ROLE_KEY on Vercel, then redeploy.',
+    };
+  }
+
+  if (/duplicate key|23505|unique constraint/i.test(errMsg)) {
+    return { status: 409, error: 'VALIDATION', message: 'Username or email is already registered. Try a different one.' };
+  }
+
+  if (/JSON object requested, multiple/i.test(errMsg)) {
+    return { status: 500, error: 'SERVER_ERROR', message: 'Database has duplicate accounts. Contact admin to clean up users table.' };
+  }
+
+  if (/supabase|fetch failed|timed out|connection|abort|ECONNREFUSED|ENOTFOUND/i.test(errMsg)) {
+    return { status: 503, error: 'SERVER_ERROR', message: 'Database temporarily unavailable. Please try again in a minute.' };
+  }
+
+  const short = errMsg.replace(/\s+/g, ' ').trim().slice(0, 140);
+  return {
+    status: 500,
+    error: 'SERVER_ERROR',
+    message: short
+      ? `Registration failed: ${short}`
+      : 'Could not register user. Please try again or contact admin.',
+  };
 }

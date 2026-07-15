@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { authApi } from '../services/authApi';
+import { useAdminPendingCount } from '../context/AdminUsersContext';
 import { isCloudSyncEnabled } from '../services/cloudConfig';
 import { onSyncStatus, type SyncStatus } from '../services/ledgerSync';
 import AppInterior from './AppInterior';
@@ -44,7 +44,7 @@ export default function Layout() {
   const mode = useLabelMode();
   const location = useLocation();
   const { user, logout } = useAuth();
-  const [pendingCount, setPendingCount] = useState(0);
+  const pendingCount = useAdminPendingCount();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
 
   const [sidebarTea, setSidebarTea] = useState(0);
@@ -60,23 +60,6 @@ export default function Layout() {
   const mobilePageTitle = pageTitleFromPath(location.pathname, mode);
 
   useEffect(() => onSyncStatus(setSyncStatus), []);
-
-  useEffect(() => {
-    if (!isAdmin) {
-      setPendingCount(0);
-      return;
-    }
-    const poll = () => {
-      authApi.listUsers()
-        .then(({ users }) => {
-          setPendingCount(users.filter((u) => u.status === 'pending' && u.role !== 'admin').length);
-        })
-        .catch(() => setPendingCount(0));
-    };
-    poll();
-    const timer = window.setInterval(poll, 15000);
-    return () => window.clearInterval(timer);
-  }, [isAdmin]);
 
   const bottomLinks = [
     ...mainLinks,

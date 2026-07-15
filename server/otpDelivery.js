@@ -1,4 +1,4 @@
-import { sendOtpEmail, isAdminNotificationConfigured } from './email.js';
+import { sendOtpEmail, isAdminNotificationConfigured, isBrevoConfigured, testBrevoConnection } from './email.js';
 import { sendOtpSms, isSmsConfigured, twilioConfigSummary } from './twilio.js';
 
 /**
@@ -50,7 +50,14 @@ export function otpDeliveryStatus() {
   return {
     emailConfigured: isAdminNotificationConfigured(),
     adminNotificationsConfigured: isAdminNotificationConfigured(),
+    brevoConfigured: isBrevoConfigured(),
     smsConfigured: isSmsConfigured(),
     twilio: twilioConfigSummary(),
   };
+}
+
+export async function otpDeliveryHealth() {
+  const status = otpDeliveryStatus();
+  const brevo = isBrevoConfigured() ? await testBrevoConnection() : { ok: false, reason: 'BREVO_API_KEY not set' };
+  return { ...status, brevo };
 }

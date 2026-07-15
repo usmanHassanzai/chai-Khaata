@@ -1,68 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import ConfirmDialog from './ConfirmDialog';
 import AdminUserDetailsModal from './AdminUserDetailsModal';
 import { Label, SectionTitle, useLabel } from '../i18n/useLabel';
-import { useAuth } from '../context/AuthContext';
-import { ApiError, authApi, getStoredToken, type AuthUser, type UserStatus } from '../services/authApi';
+import { useAdminUsers } from '../context/AdminUsersContext';
+import { ApiError, authApi, type AuthUser, type UserStatus } from '../services/authApi';
 import { formatAdminDateTime } from '../utils/adminProfile';
 
 type StatusFilter = 'all' | UserStatus;
 
-function formatLoadError(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.code === 'FORBIDDEN') return 'Admin access required. Log in with the admin account.';
-    if (err.code === 'UNAUTHORIZED' || err.code === 'INVALID_TOKEN') return 'Session expired. Please log out and log in again.';
-    return err.message;
-  }
-  return 'Could not load users.';
-}
-
 export default function AdminAllUsersPanel() {
   const l = useLabel();
-  const { user } = useAuth();
-  const [users, setUsers] = useState<AuthUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { users, loading, refreshing, error, refresh } = useAdminUsers();
   const [message, setMessage] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [detailsUser, setDetailsUser] = useState<AuthUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AuthUser | null>(null);
-
-  const load = useCallback(async () => {
-    if (user?.role !== 'admin') {
-      setLoading(false);
-      setError('Admin access required.');
-      setUsers([]);
-      return;
-    }
-
-    if (!getStoredToken()) {
-      setLoading(false);
-      setError('Session expired. Please log in again.');
-      setUsers([]);
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    try {
-      const { users: list } = await authApi.listUsers();
-      setUsers(list);
-    } catch (err) {
-      setError(formatLoadError(err));
-      setUsers([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.role]);
-
-  useEffect(() => {
-    load();
-    const timer = window.setInterval(load, 15000);
-    return () => window.clearInterval(timer);
-  }, [load]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -89,13 +43,12 @@ export default function AdminAllUsersPanel() {
     setDeleteTarget(null);
     setBusyId(target.id);
     setMessage('');
-    setError('');
     try {
       const res = await authApi.deleteUser(target.id);
       setMessage(res.message);
-      await load();
+      await refresh({ silent: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Delete failed');
+      setMessage(err instanceof ApiError ? err.message : 'Delete failed');
     } finally {
       setBusyId(null);
     }
@@ -105,12 +58,11 @@ export default function AdminAllUsersPanel() {
     if (!window.confirm(`Send password to "${username}" registered email?`)) return;
     setBusyId(`${id}-pwd`);
     setMessage('');
-    setError('');
     try {
       const res = await authApi.sendPasswordToUser(id);
       setMessage(res.message);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not send password email');
+      setMessage(err instanceof ApiError ? err.message : 'Could not send password email');
     } finally {
       setBusyId(null);
     }
@@ -122,8 +74,8 @@ export default function AdminAllUsersPanel() {
     <section className="card admin-users-card admin-all-users-panel">
       <div className="admin-panel-head">
         <SectionTitle k="auth.allUsersManage" />
-        <button type="button" className="btn sm" onClick={() => load()} disabled={loading}>
-          ↻ <Label k="auth.refresh" variant="compact" />
+        <button type="button" className="btn sm" onClick={() => refresh({ silent: true })} disabled={loading || refreshing}>
+          {refreshing ? '…' : '↻'} <Label k="auth.refresh" variant="compact" />
         </button>
       </div>
 
@@ -159,13 +111,13 @@ export default function AdminAllUsersPanel() {
         </span>
       </div>
 
-      {loading && <p className="settings-note">Loading users…</p>}
+      {loading && users.length === 0 && <p className="settings-note">Loading users…</p>}
 
       {!loading && !error && filtered.length === 0 && (
         <p className="settings-note"><Label k="auth.noUsersFound" variant="compact" /></p>
       )}
 
-      {!loading && filtered.length > 0 && (
+      {filtered.length > 0 && (
         <div className="table-wrap admin-all-users-table-wrap">
           <table className="data-table admin-all-users-table">
             <thead>
@@ -181,7 +133,7 @@ export default function AdminAllUsersPanel() {
             </thead>
             <tbody>
               {filtered.map((u) => (
-                <tr key={u.id} className={u.status === 'pending' ? 'row-pending' : undefined}>
+                <tr key={u.id} className={u.status === 'pending' ? 'row-pending' : u.status === 'rejected' ? 'row-rejected' : undefined}>
                   <td>
                     <strong>{u.username}</strong>
                     {u.role === 'admin' && (

@@ -10,8 +10,16 @@ export function supabaseEnvPresent() {
 }
 
 /** Fail fast with a clear message before any DB call. */
+export function normalizeSupabaseUrl(url) {
+  let normalized = String(url || '').trim();
+  if (!normalized) return normalized;
+  normalized = normalized.replace(/\/+$/, '');
+  normalized = normalized.replace(/\/rest\/v1$/i, '');
+  return normalized;
+}
+
 export function validateSupabaseConfig() {
-  const url = String(process.env.SUPABASE_URL || '').trim();
+  const url = normalizeSupabaseUrl(process.env.SUPABASE_URL);
   const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 
   if (!url || !key) {
@@ -83,8 +91,9 @@ export function getSupabase() {
   }
 
   if (!client) {
+    const url = normalizeSupabaseUrl(process.env.SUPABASE_URL);
     client = createClient(
-      process.env.SUPABASE_URL,
+      url,
       process.env.SUPABASE_SERVICE_ROLE_KEY,
       {
         auth: { persistSession: false, autoRefreshToken: false },

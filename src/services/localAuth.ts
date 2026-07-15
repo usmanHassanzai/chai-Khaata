@@ -497,6 +497,18 @@ export const localAuthApi = {
     };
   },
 
+  async adminUsersSummary() {
+    await requireAdmin();
+    const users = await authDb.users.toArray();
+    const shop = users.filter((u) => u.role !== 'admin');
+    return {
+      pending: shop.filter((u) => u.status === 'pending').length,
+      rejected: shop.filter((u) => u.status === 'rejected').length,
+      approved: shop.filter((u) => u.status === 'approved').length,
+      total: shop.length,
+    };
+  },
+
   async listOtpRequests(): Promise<{ requests: OtpRequest[] }> {
     await requireAdmin();
     const otps = await listActiveOtps();

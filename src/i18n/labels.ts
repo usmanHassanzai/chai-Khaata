@@ -449,6 +449,7 @@ export const labels = {
     },
     activeOtps: { ur: 'فعال OTP (پاس ورڈ ریسیٹ)', en: 'Active OTPs (password reset)', roman: 'Active OTPs' },
     pendingApprovals: { ur: 'زیرِ التواء منظوری', en: 'Pending Approvals', roman: 'Pending Manzoori' },
+    rejectedApprovals: { ur: 'مسترد صارفین', en: 'Rejected Users', roman: 'Rejected Users' },
     refresh: { ur: 'تازہ کریں', en: 'Refresh', roman: 'Refresh' },
     adminOnly: {
       ur: 'صرف ایڈمن اس صفحے تک رسائی حاصل کر سکتا ہے',

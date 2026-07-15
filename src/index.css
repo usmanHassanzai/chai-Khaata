@@ -2161,6 +2161,16 @@ tfoot td {
   background: #fffbeb;
 }
 
+.admin-user-card-wrap.row-rejected,
+.data-table tr.row-rejected {
+  border: 2px solid #ef4444;
+  background: #fef2f2;
+}
+
+.data-table tr.row-rejected td {
+  background: transparent;
+}
+
 .admin-user-card {
   margin-bottom: 0.75rem;
 }

@@ -1,72 +1,23 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AdminUserCard from './AdminUserCard';
 import AdminUserDetailsModal from './AdminUserDetailsModal';
 import { Label, SectionTitle } from '../i18n/useLabel';
 import { useAuth } from '../context/AuthContext';
-import { ApiError, authApi, getApiBase, getStoredToken, type AuthUser, type OtpRequest } from '../services/authApi';
-
-function formatLoadError(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.code === 'FORBIDDEN') return 'Admin access required. Log in with the admin account.';
-    if (err.code === 'UNAUTHORIZED' || err.code === 'INVALID_TOKEN') return 'Session expired. Please log out and log in again.';
-    if (err.code === 'NETWORK_ERROR') return err.message;
-    return err.message;
-  }
-  return 'Could not load users. Run npm run dev and log in as admin.';
-}
+import { useAdminUsers } from '../context/AdminUsersContext';
+import { ApiError, authApi, getApiBase, type AuthUser } from '../services/authApi';
 
 export default function AdminUsersPanel() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [users, setUsers] = useState<AuthUser[]>([]);
-  const [otpRequests, setOtpRequests] = useState<OtpRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { users, otpRequests, counts, loading, refreshing, error, refresh } = useAdminUsers();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [detailsUser, setDetailsUser] = useState<AuthUser | null>(null);
 
-  const load = useCallback(async () => {
-    if (user?.role !== 'admin') {
-      setLoading(false);
-      setError('Admin access required.');
-      setUsers([]);
-      return;
-    }
-
-    if (!getStoredToken()) {
-      setLoading(false);
-      setError('Session expired. Please log in again.');
-      setUsers([]);
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    try {
-      const { users: list } = await authApi.listUsers();
-      setUsers(list);
-    } catch (err) {
-      setError(formatLoadError(err));
-      setUsers([]);
-    }
-
-    try {
-      const { requests } = await authApi.listOtpRequests();
-      setOtpRequests(requests);
-    } catch {
-      setOtpRequests([]);
-    }
-
-    setLoading(false);
-  }, [user?.role]);
-
-  useEffect(() => {
-    load();
-    const timer = window.setInterval(load, 15000);
-    return () => window.clearInterval(timer);
-  }, [load]);
+  async function afterAction() {
+    await refresh({ silent: true });
+  }
 
   async function approve(id: string) {
     setBusyId(id);
@@ -74,9 +25,9 @@ export default function AdminUsersPanel() {
     try {
       const res = await authApi.approveUser(id);
       setMessage(res.message);
-      await load();
+      await afterAction();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Approve failed');
+      setMessage(err instanceof ApiError ? err.message : 'Approve failed');
     } finally {
       setBusyId(null);
     }
@@ -87,7 +38,7 @@ export default function AdminUsersPanel() {
     setBusyId(id);
     try {
       await authApi.rejectUser(id);
-      await load();
+      await afterAction();
     } finally {
       setBusyId(null);
     }
@@ -96,13 +47,12 @@ export default function AdminUsersPanel() {
   async function removeUser(id: string, username: string) {
     if (!window.confirm(`Permanently delete "${username}" from database? They cannot log in again.`)) return;
     setBusyId(id);
-    setError('');
     try {
       const res = await authApi.deleteUser(id);
       setMessage(res.message);
-      await load();
+      await afterAction();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Delete failed');
+      setMessage(err instanceof ApiError ? err.message : 'Delete failed');
     } finally {
       setBusyId(null);
     }
@@ -113,7 +63,7 @@ export default function AdminUsersPanel() {
     if (amountStr === null) return;
     const amount = Number(amountStr);
     if (!Number.isFinite(amount) || amount < 0) {
-      setError('Enter a valid amount');
+      setMessage('Enter a valid amount');
       return;
     }
     const note = window.prompt('Note (optional):', '') ?? '';
@@ -121,9 +71,7 @@ export default function AdminUsersPanel() {
     try {
       const res = await authApi.setPaymentDue(id, amount, note);
       setMessage(res.message);
-      await load();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not set payment due');
+      await afterAction();
     } finally {
       setBusyId(null);
     }
@@ -134,7 +82,7 @@ export default function AdminUsersPanel() {
     try {
       const res = await authApi.markPaid(id);
       setMessage(res.message);
-      await load();
+      await afterAction();
     } finally {
       setBusyId(null);
     }
@@ -146,7 +94,7 @@ export default function AdminUsersPanel() {
     try {
       const res = await authApi.sendOtpToUser(id, channel);
       setMessage(`${res.message} OTP: ${res.otp} → ${res.sentTo}`);
-      await load();
+      await afterAction();
     } finally {
       setBusyId(null);
     }
@@ -156,19 +104,19 @@ export default function AdminUsersPanel() {
     if (!window.confirm(`Send password to "${username}" registered email?`)) return;
     setBusyId(`${id}-pwd`);
     setMessage('');
-    setError('');
     try {
       const res = await authApi.sendPasswordToUser(id);
       setMessage(res.message);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not send password email');
+      setMessage(err instanceof ApiError ? err.message : 'Could not send password email');
     } finally {
       setBusyId(null);
     }
   }
 
   const pending = users.filter((u) => u.status === 'pending' && u.role !== 'admin');
-  const regularUsers = users.filter((u) => u.role !== 'admin');
+  const rejected = users.filter((u) => u.status === 'rejected' && u.role !== 'admin');
+  const queue = [...pending, ...rejected];
 
   function UserActions({ u }: { u: AuthUser }) {
     return (
@@ -176,14 +124,16 @@ export default function AdminUsersPanel() {
         <button type="button" className="btn sm" onClick={() => setDetailsUser(u)}>
           <Label k="auth.viewDetails" variant="compact" />
         </button>
-        {u.status === 'pending' && (
+        {(u.status === 'pending' || u.status === 'rejected') && (
           <>
             <button type="button" className="btn sm primary" disabled={busyId === u.id} onClick={() => approve(u.id)}>
               <Label k="auth.approve" variant="compact" />
             </button>
-            <button type="button" className="btn sm danger" disabled={busyId === u.id} onClick={() => reject(u.id)}>
-              <Label k="auth.reject" variant="compact" />
-            </button>
+            {u.status === 'pending' && (
+              <button type="button" className="btn sm danger" disabled={busyId === u.id} onClick={() => reject(u.id)}>
+                <Label k="auth.reject" variant="compact" />
+              </button>
+            )}
           </>
         )}
         <button type="button" className="btn sm" disabled={busyId === u.id} onClick={() => setPaymentDue(u.id, u.username)}>
@@ -210,12 +160,35 @@ export default function AdminUsersPanel() {
     );
   }
 
+  function UserQueueSection({
+    titleKey,
+    list,
+    rowClass,
+  }: {
+    titleKey: 'auth.pendingApprovals' | 'auth.rejectedApprovals';
+    list: AuthUser[];
+    rowClass: string;
+  }) {
+    if (!list.length) return null;
+    return (
+      <div className="admin-user-list">
+        <h4 className="admin-all-users-title"><Label k={titleKey} variant="compact" /></h4>
+        {list.map((u) => (
+          <div key={u.id} className={`admin-user-card-wrap ${rowClass}`}>
+            <AdminUserCard user={u} />
+            <UserActions u={u} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <section className="card admin-users-card">
       <div className="admin-panel-head">
         <SectionTitle k="auth.pendingApprovals" />
-        <button type="button" className="btn sm" onClick={() => load()} disabled={loading}>
-          ↻ <Label k="auth.refresh" variant="compact" />
+        <button type="button" className="btn sm" onClick={() => refresh({ silent: true })} disabled={loading || refreshing}>
+          {refreshing ? '…' : '↻'} <Label k="auth.refresh" variant="compact" />
         </button>
       </div>
 
@@ -225,8 +198,10 @@ export default function AdminUsersPanel() {
         </div>
       )}
 
-      {pending.length > 0 && (
-        <div className="admin-pending-badge">{pending.length} pending</div>
+      {(counts.pending > 0 || counts.rejected > 0) && (
+        <div className="admin-pending-badge">
+          {counts.pending} pending{counts.rejected > 0 ? ` · ${counts.rejected} rejected` : ''}
+        </div>
       )}
 
       <p className="settings-hint">
@@ -234,12 +209,12 @@ export default function AdminUsersPanel() {
       </p>
 
       {message && <div className="auth-banner success">{message}</div>}
-      {loading && <p className="settings-note">Loading users…</p>}
+      {loading && users.length === 0 && <p className="settings-note">Loading users…</p>}
       {error && (
         <div className="auth-banner error">
           {error}
           <p className="settings-note" style={{ marginTop: '0.5rem' }}>
-            API: {getApiBase() || 'same origin'} — ensure <code>npm run dev</code> is running.
+            API: {getApiBase() || 'same origin'}
           </p>
           {(error.includes('Session expired') || error.includes('log in')) && (
             <button
@@ -257,20 +232,15 @@ export default function AdminUsersPanel() {
         </div>
       )}
 
-      {!loading && !error && pending.length === 0 && regularUsers.length === 0 && (
+      {!loading && !error && queue.length === 0 && (
         <p className="settings-note"><Label k="auth.noPendingUsers" variant="compact" /></p>
       )}
 
-      {!loading && !error && pending.length > 0 && (
-        <div className="admin-user-list">
-          <h4 className="admin-all-users-title"><Label k="auth.pendingApprovals" variant="compact" /></h4>
-          {pending.map((u) => (
-            <div key={u.id} className="admin-user-card-wrap row-pending">
-              <AdminUserCard user={u} />
-              <UserActions u={u} />
-            </div>
-          ))}
-        </div>
+      {!loading && !error && (
+        <>
+          <UserQueueSection titleKey="auth.pendingApprovals" list={pending} rowClass="row-pending" />
+          <UserQueueSection titleKey="auth.rejectedApprovals" list={rejected} rowClass="row-rejected" />
+        </>
       )}
 
       {!loading && otpRequests.length > 0 && (
@@ -301,12 +271,6 @@ export default function AdminUsersPanel() {
             </table>
           </div>
         </>
-      )}
-
-      {!loading && !error && pending.length > 0 && (
-        <p className="settings-note">
-          <Label k="auth.seeAllUsersBelow" variant="compact" />
-        </p>
       )}
 
       {detailsUser && (

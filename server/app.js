@@ -5,8 +5,8 @@ import jwt from 'jsonwebtoken';
 import { sendOtpEmail } from './email.js';
 import { sendOtpSms } from './twilio.js';
 import { readLedger, writeLedger, shouldAcceptIncoming, deleteLedger } from './ledgerStore.js';
-import { deliverOtp, otpDeliveryStatus } from './otpDelivery.js';
-import { clearOtp, createOtp, getOtpForUser, listActiveOtps, verifyOtp } from './otpStore.js';
+import { deliverOtp, otpDeliveryStatus, otpDeliveryHealth } from './otpDelivery.js';
+import { clearOtp, createOtp, getOtpForUser, verifyOtp } from './otpStore.js';
 import { registerErrorResponse, registerNewUser } from './registerUser.js';
 import { recoverPasswordByEmail, adminSendPasswordToUser } from './passwordRecovery.js';
 import { clearExpiryReminderFields, runSubscriptionExpiryReminders } from './subscriptionReminders.js';
@@ -47,6 +47,13 @@ import { isSupabaseEnabled, getStorageMode, testSupabaseConnection, validateSupa
 import { ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET, PORT } from './env.js';
 import { getPaymentConfig } from './paymentConfig.js';
 import { isTrialActive } from './trialAccess.js';
+import { withTimeout } from './httpUtils.js';
+import {
+  listAdminUsers,
+  getAdminUsersSummary,
+  listAdminOtpRequests,
+  adminHandlerError,
+} from './adminUsersHandlers.js';
 
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 const CORS_ALLOW_ALL = process.env.CORS_ALLOW_ALL === 'true' || process.env.NODE_ENV === 'production';
@@ -183,12 +190,13 @@ app.get('/api/cron/subscription-reminders', async (req, res) => {
   }
 });
 
-app.get('/api/auth/config', (_req, res) => {
+app.get('/api/auth/config', async (_req, res) => {
+  const emailHealth = await otpDeliveryHealth();
   res.json({
     adminEmail: ADMIN_EMAIL,
     requiresApproval: true,
     subscriptionPlans: getSubscriptionPlans(),
-    otpDelivery: otpDeliveryStatus(),
+    otpDelivery: emailHealth,
     publicServerUrl: PUBLIC_SERVER_URL || null,
     cloudSync: true,
     payment: getPaymentConfig(),
@@ -570,42 +578,37 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/api/admin/users', authMiddleware, adminMiddleware, async (_req, res) => {
+app.get('/api/admin/users/summary', authMiddleware, adminMiddleware, async (_req, res) => {
   try {
-    const users = await readUsers();
-    res.json({
-      users: users
-        .map(adminUser)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    });
+    const counts = await withTimeout(getAdminUsersSummary(), 8000, 'User summary');
+    res.json(counts);
+  } catch (err) {
+    console.error('Admin user summary error:', err);
+    const failure = adminHandlerError(err);
+    res.status(failure.status).json(failure.body);
+  }
+});
+
+app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const params = new URLSearchParams(req.query ?? {});
+    const result = await withTimeout(listAdminUsers(params), 8000, 'List users');
+    res.json(result);
   } catch (err) {
     console.error('List users error:', err);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not list users' });
+    const failure = adminHandlerError(err);
+    res.status(failure.status).json(failure.body);
   }
 });
 
 app.get('/api/admin/otp-requests', authMiddleware, adminMiddleware, async (_req, res) => {
   try {
-    const otps = await listActiveOtps();
-    const users = await readUsers();
-    const requests = otps.map((o) => {
-      const user = users.find((u) => u.id === o.userId);
-      return {
-        userId: o.userId,
-        username: user?.username ?? '—',
-        email: user?.email ?? '',
-        phone: user?.phone ?? '',
-        otp: o.otp,
-        channel: o.channel,
-        sentTo: o.sentTo,
-        expiresAt: o.expiresAt,
-        createdAt: o.createdAt,
-      };
-    });
-    res.json({ requests });
+    const result = await withTimeout(listAdminOtpRequests(), 8000, 'OTP requests');
+    res.json(result);
   } catch (err) {
     console.error('OTP requests error:', err);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not list OTP requests' });
+    const failure = adminHandlerError(err);
+    res.status(failure.status).json(failure.body);
   }
 });
 

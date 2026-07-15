@@ -36,7 +36,7 @@ create table if not exists public.users (
 create unique index if not exists users_username_lower_idx on public.users (lower(username));
 create unique index if not exists users_email_lower_idx on public.users (lower(email));
 create index if not exists users_role_idx on public.users (role);
-create index if not exists users_status_idx on public.users (status);
+create index if not exists users_role_status_created_idx on public.users (role, status, created_at desc);
 
 create table if not exists public.otps (
   user_id text primary key references public.users (id) on delete cascade,

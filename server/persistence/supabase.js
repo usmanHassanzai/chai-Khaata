@@ -77,6 +77,65 @@ export async function sbReadUsers() {
   return (data ?? []).map(rowToUser);
 }
 
+/** Lite columns for admin list — excludes password_hash and signup_snapshot (large jsonb). */
+const ADMIN_USER_LIST_COLUMNS = [
+  'id', 'username', 'email', 'phone', 'shop_name', 'status', 'role', 'created_at', 'approved_at',
+  'payment_due', 'payment_due_note', 'last_paid_at', 'registration_fee', 'payment_fee_date',
+  'registration_password', 'subscription_plan', 'subscription_starts_at', 'subscription_expires_at',
+  'payment_ref_id', 'trial_started_at', 'trial_ends_at', 'last_expiry_reminder_date',
+].join(',');
+
+/** @param {{ statuses?: string[], excludeAdmin?: boolean, limit?: number }} [opts] */
+export async function sbReadUsersForAdmin(opts = {}) {
+  const { statuses, excludeAdmin = true, limit = 500 } = opts;
+  const cappedLimit = Math.min(Math.max(1, limit), 1000);
+
+  let query = getSupabase()
+    .from('users')
+    .select(ADMIN_USER_LIST_COLUMNS)
+    .order('created_at', { ascending: false })
+    .limit(cappedLimit);
+
+  if (excludeAdmin) query = query.neq('role', 'admin');
+  if (statuses?.length) query = query.in('status', statuses);
+
+  const { data, error } = await query;
+  if (error) throwSupabaseError(error);
+  return (data ?? []).map(rowToUser);
+}
+
+/** @param {string[]} ids */
+export async function sbFindUsersByIds(ids) {
+  if (!ids.length) return [];
+  const { data, error } = await getSupabase()
+    .from('users')
+    .select('id, username, email, phone')
+    .in('id', ids);
+
+  if (error) throwSupabaseError(error);
+  return (data ?? []).map(rowToUser);
+}
+
+export async function sbAdminUserCounts() {
+  const { data, error } = await getSupabase()
+    .from('users')
+    .select('status')
+    .neq('role', 'admin');
+
+  if (error) throwSupabaseError(error);
+
+  let pending = 0;
+  let rejected = 0;
+  let approved = 0;
+  for (const row of data ?? []) {
+    if (row.status === 'pending') pending += 1;
+    else if (row.status === 'rejected') rejected += 1;
+    else if (row.status === 'approved') approved += 1;
+  }
+
+  return { pending, rejected, approved, total: pending + rejected + approved };
+}
+
 export async function sbFindUserByEmail(email) {
   const normalized = String(email).trim().toLowerCase();
   const { data, error } = await getSupabase()
@@ -123,17 +182,56 @@ export async function sbPaymentRefIdExists(refId) {
   return Boolean(data);
 }
 
+function isMissingColumnError(error) {
+  const text = [error?.message, error?.details, error?.hint].filter(Boolean).join(' ');
+  return /could not find|schema cache|PGRST204|column.*does not exist|unknown column/i.test(text);
+}
+
+function coreUserRow(user) {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    phone: user.phone ?? '',
+    password_hash: user.passwordHash,
+    registration_password: user.registrationPassword ?? null,
+    shop_name: user.shopName ?? '',
+    status: user.status,
+    role: user.role,
+    created_at: user.createdAt,
+    payment_due: user.paymentDue ?? 0,
+    payment_due_note: user.paymentDueNote ?? '',
+    registration_fee: user.registrationFee ?? null,
+    payment_fee_date: user.paymentFeeDate ?? null,
+    subscription_plan: user.subscriptionPlan ?? null,
+  };
+}
+
 export async function sbInsertUser(user) {
-  const { data, error } = await getSupabase()
+  const fullRow = userToRow(user);
+  let result = await getSupabase()
     .from('users')
-    .insert(userToRow(user))
+    .insert(fullRow)
     .select('*')
     .single();
 
+  if (result.error && isMissingColumnError(result.error)) {
+    console.warn('[Chai Khata] Full user insert failed — retrying with core columns:', result.error.message);
+    result = await getSupabase()
+      .from('users')
+      .insert(coreUserRow(user))
+      .select('*')
+      .single();
+  }
+
+  const { data, error } = result;
+
   if (error) {
     if (error.code === '23505') {
-      if (error.message?.includes('username')) throw new Error('USERNAME_TAKEN');
-      if (error.message?.includes('email')) throw new Error('EMAIL_TAKEN');
+      const text = `${error.message || ''} ${error.details || ''}`.toLowerCase();
+      if (text.includes('username')) throw new Error('USERNAME_TAKEN');
+      if (text.includes('email')) throw new Error('EMAIL_TAKEN');
+      throw new Error('USERNAME_TAKEN');
     }
     throwSupabaseError(error);
   }
@@ -228,11 +326,9 @@ export async function sbDeleteOtp(userId) {
 
 export async function sbListActiveOtps() {
   const now = new Date().toISOString();
-  await getSupabase().from('otps').delete().lt('expires_at', now);
-
   const { data, error } = await getSupabase()
     .from('otps')
-    .select('*')
+    .select('user_id, otp, channel, sent_to, expires_at, created_at')
     .gt('expires_at', now);
 
   if (error) throwSupabaseError(error);

@@ -1,0 +1,144 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import { ApiError, authApi, getStoredToken, type AuthUser, type OtpRequest } from '../services/authApi';
+import { useAuth } from './AuthContext';
+
+type AdminCounts = {
+  pending: number;
+  rejected: number;
+  approved: number;
+  total: number;
+};
+
+type AdminUsersState = {
+  users: AuthUser[];
+  otpRequests: OtpRequest[];
+  counts: AdminCounts;
+  loading: boolean;
+  refreshing: boolean;
+  error: string;
+  refresh: (opts?: { silent?: boolean }) => Promise<void>;
+};
+
+const AdminUsersContext = createContext<AdminUsersState | null>(null);
+
+const POLL_MS = 30_000;
+
+function formatLoadError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.code === 'FORBIDDEN') return 'Admin access required. Log in with the admin account.';
+    if (err.code === 'UNAUTHORIZED' || err.code === 'INVALID_TOKEN') return 'Session expired. Please log out and log in again.';
+    if (err.code === 'TIMEOUT') return 'Server took too long loading users. Please retry.';
+    return err.message;
+  }
+  return 'Could not load users.';
+}
+
+export function AdminUsersProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const [users, setUsers] = useState<AuthUser[]>([]);
+  const [otpRequests, setOtpRequests] = useState<OtpRequest[]>([]);
+  const [counts, setCounts] = useState<AdminCounts>({ pending: 0, rejected: 0, approved: 0, total: 0 });
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const hasLoadedRef = useRef(false);
+
+  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
+    if (user?.role !== 'admin') {
+      setUsers([]);
+      setOtpRequests([]);
+      setCounts({ pending: 0, rejected: 0, approved: 0, total: 0 });
+      setLoading(false);
+      setError('Admin access required.');
+      return;
+    }
+
+    if (!getStoredToken()) {
+      setLoading(false);
+      setError('Session expired. Please log in again.');
+      return;
+    }
+
+    const silent = opts?.silent ?? hasLoadedRef.current;
+    if (silent) setRefreshing(true);
+    else setLoading(true);
+    setError('');
+
+    try {
+      const [usersRes, summaryRes] = await Promise.all([
+        authApi.listUsers({ includeAdmin: true }),
+        authApi.adminUsersSummary(),
+      ]);
+      setUsers(usersRes.users);
+      setCounts(summaryRes);
+      hasLoadedRef.current = true;
+
+      // OTP table is non-critical — load after users so a slow OTP query cannot block the list.
+      authApi.listOtpRequests()
+        .then((otpRes) => setOtpRequests(otpRes.requests))
+        .catch(() => { /* keep existing OTP rows on background refresh failure */ });
+    } catch (err) {
+      setError(formatLoadError(err));
+      if (!silent) {
+        setUsers([]);
+        setOtpRequests([]);
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user?.role]);
+
+  useEffect(() => {
+    void refresh({ silent: false });
+    const timer = window.setInterval(() => {
+      void refresh({ silent: true });
+    }, POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+
+  const value = useMemo(
+    () => ({ users, otpRequests, counts, loading, refreshing, error, refresh }),
+    [users, otpRequests, counts, loading, refreshing, error, refresh],
+  );
+
+  return <AdminUsersContext.Provider value={value}>{children}</AdminUsersContext.Provider>;
+}
+
+export function useAdminUsers() {
+  const ctx = useContext(AdminUsersContext);
+  if (!ctx) throw new Error('useAdminUsers must be used within AdminUsersProvider');
+  return ctx;
+}
+
+/** Nav badge only — lightweight counts, no full user list */
+export function useAdminPendingCount() {
+  const { user } = useAuth();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (user?.role !== 'admin') {
+      setPendingCount(0);
+      return;
+    }
+    const poll = () => {
+      authApi.adminUsersSummary()
+        .then((c) => setPendingCount(c.pending))
+        .catch(() => setPendingCount(0));
+    };
+    poll();
+    const timer = window.setInterval(poll, POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [user?.role]);
+
+  return pendingCount;
+}

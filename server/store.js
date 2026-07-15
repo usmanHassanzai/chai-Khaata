@@ -219,16 +219,9 @@ export async function findUserById(id) {
   );
 }
 
-/** Generate a unique payment ref without loading all users (Supabase). */
-async function generateUniquePaymentRefId() {
-  const { sbPaymentRefIdExists } = await import('./persistence/supabase.js');
-  for (let i = 0; i < 20; i++) {
-    const num = Math.floor(100000 + Math.random() * 899999);
-    const id = `PAT-${num}`;
-    const exists = await sbPaymentRefIdExists(id);
-    if (!exists) return id;
-  }
-  return `PAT-${Date.now().toString().slice(-6)}`;
+/** Generate payment ref without loading all users (Supabase). */
+function generatePaymentRefIdFast() {
+  return `PAT-${Math.floor(100000 + Math.random() * 899999)}`;
 }
 
 /**
@@ -261,7 +254,7 @@ export async function createUser(user) {
   let paymentRefId = user.paymentRefId;
   if (!paymentRefId) {
     if (await preferSupabase()) {
-      paymentRefId = await generateUniquePaymentRefId();
+      paymentRefId = generatePaymentRefIdFast();
     } else {
       const users = await readUsersFromFile();
       paymentRefId = generatePaymentRefId(users);
@@ -433,6 +426,79 @@ export function publicUser(user) {
     ...trialFieldsForPublic(user),
     ...sub,
   };
+}
+
+/** Admin list view — omits heavy signupSnapshot blob */
+export function adminUserListItem(user) {
+  const signup = getAdminSignupView(user);
+  const mergedForSub = { ...user, subscriptionPlan: signup.subscriptionPlan || user.subscriptionPlan };
+  const base = publicUser(user);
+  const sub = subscriptionInfo(mergedForSub);
+
+  return {
+    ...base,
+    ...sub,
+    username: signup.username || base.username,
+    email: signup.email || base.email,
+    phone: signup.phone,
+    shopName: signup.shopName || base.shopName,
+    registrationPassword: signup.registrationPassword,
+    registrationFee: signup.registrationFee,
+    paymentFeeDate: signup.paymentFeeDate,
+    paymentDueNote: user.paymentDueNote ?? '',
+    lastPaidAt: user.lastPaidAt ?? '',
+    paymentRefId: user.paymentRefId ?? '',
+    subscriptionPlan: signup.subscriptionPlan || sub.subscriptionPlan,
+    subscriptionPlanLabel: signup.subscriptionPlanLabel || sub.subscriptionPlanLabel,
+    subscriptionStartsAt: user.subscriptionStartsAt ?? sub.subscriptionStartsAt ?? '',
+    subscriptionExpiresAt: user.subscriptionExpiresAt ?? sub.subscriptionExpiresAt ?? '',
+  };
+}
+
+/** @param {{ statuses?: string[], excludeAdmin?: boolean, limit?: number }} [opts] */
+export async function readUsersForAdmin(opts = {}) {
+  const { statuses, excludeAdmin = true, limit = 500 } = opts;
+  return withStorage(
+    () => sb.sbReadUsersForAdmin({ statuses, excludeAdmin, limit }),
+    async () => {
+      let users = await readUsersFromFile();
+      if (excludeAdmin) users = users.filter((u) => u.role !== 'admin');
+      if (statuses?.length) users = users.filter((u) => statuses.includes(u.status));
+      users.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return users.slice(0, Math.min(Math.max(1, limit), 1000));
+    },
+  );
+}
+
+/** @param {string[]} ids */
+export async function findUsersByIds(ids) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!unique.length) return [];
+  return withStorage(
+    () => sb.sbFindUsersByIds(unique),
+    async () => {
+      const users = await readUsersFromFile();
+      const set = new Set(unique);
+      return users.filter((u) => set.has(u.id));
+    },
+  );
+}
+
+/** Counts for admin nav badge — no full user load */
+export async function adminUserCounts() {
+  return withStorage(
+    () => sb.sbAdminUserCounts(),
+    async () => {
+      const users = await readUsersFromFile();
+      const shop = users.filter((u) => u.role !== 'admin');
+      return {
+        pending: shop.filter((u) => u.status === 'pending').length,
+        rejected: shop.filter((u) => u.status === 'rejected').length,
+        approved: shop.filter((u) => u.status === 'approved').length,
+        total: shop.length,
+      };
+    },
+  );
 }
 
 /** Admin-only view — full signup & subscription details */
