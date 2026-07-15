@@ -159,6 +159,9 @@ export const labels = {
     grade: { ur: 'گریڈ', en: 'Grade', roman: 'Grade' },
     invoiceNumber: { ur: 'انوائس نمبر', en: 'Invoice Number', roman: 'Invoice Number' },
     shipmentDetails: { ur: 'شپمنٹ تفصیل', en: 'Shipment Details', roman: 'Shipment Details' },
+    editPurchase: { ur: 'خریداری میں ترمیم', en: 'Edit Purchase', roman: 'Khareedari Edit' },
+    updatePurchase: { ur: 'خریداری اپ ڈیٹ کریں', en: 'Update Purchase', roman: 'Khareedari Update Karein' },
+    bagsReceivedMax: { ur: 'موصول بوریاں آرڈر سے زیادہ نہیں ہو سکتیں', en: 'Bags received cannot exceed bags ordered', roman: 'Mosool boriyaa order se zyada nahi ho sakti' },
   },
 
   customers: {
@@ -190,6 +193,7 @@ export const labels = {
     saleDues: { ur: 'اس sale کا باقی', en: 'Sale Dues', roman: 'Is Sale ka Baqi' },
     lastSaleDate: { ur: 'آخری sale تاریخ', en: 'Last Sale Date', roman: 'Aakhri Sale Tareekh' },
     customerRecord: { ur: 'گاہک ریکارڈ', en: 'Customer Record', roman: 'Customer Record' },
+    printReceipt: { ur: 'رسید پرنٹ', en: 'Print Receipt', roman: 'Receipt Print' },
   },
 
   stock: {

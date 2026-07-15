@@ -225,6 +225,50 @@ export const SALES_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'notes', header: 'Notes' },
 ];
 
+/** Customer-facing receipt — no purchase cost or profit. */
+export const CUSTOMER_RECEIPT_COLUMNS: ExportColumn[] = [
+  { key: 'date', header: 'Date' },
+  { key: 'tea', header: 'Tea' },
+  { key: 'bags', header: 'Bags' },
+  { key: 'kg', header: 'Kg' },
+  { key: 'salePrice', header: 'Rate/kg' },
+  { key: 'total', header: 'Total' },
+  { key: 'received', header: 'Paid' },
+  { key: 'dues', header: 'Balance' },
+  { key: 'notes', header: 'Notes' },
+];
+
+export function buildCustomerReceiptRows(sale: Sale) {
+  const total = saleTotal(sale);
+  const dues = Math.max(0, total - sale.amountReceived);
+  return [{
+    date: sale.date,
+    tea: sale.teaName,
+    bags: formatBags(saleBagsSold(sale)),
+    kg: formatKg(sale.quantityKg),
+    salePrice: formatCurrency(sale.salePricePerKg),
+    total: formatCurrency(total),
+    received: formatCurrency(sale.amountReceived),
+    dues: formatCurrency(dues),
+    notes: sale.notes ?? '',
+  }];
+}
+
+export function printCustomerReceipt(options: {
+  sale: Sale;
+  customer?: Customer;
+  shopProfile?: ShopPrintProfile;
+}) {
+  const { sale, customer, shopProfile } = options;
+  printTable({
+    title: `Receipt — ${sale.teaName} (${sale.date})`,
+    subtitle: customer ? `${customer.name}${customer.customerId ? ` · ${customer.customerId}` : ''}` : undefined,
+    shopProfile,
+    columns: CUSTOMER_RECEIPT_COLUMNS,
+    rows: buildCustomerReceiptRows(sale),
+  });
+}
+
 export function buildPurchaseExportRows(purchases: Purchase[], dealers: Dealer[]) {
   return purchases.map((p) => ({
     date: p.date,

@@ -106,6 +106,25 @@ export default function Godaam() {
   const [grade, setGrade] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
 
+  const [editPurchaseId, setEditPurchaseId] = useState<number | null>(null);
+  const [editPDate, setEditPDate] = useState(todayISO());
+  const [editPDealerId, setEditPDealerId] = useState('');
+  const [editPTeaName, setEditPTeaName] = useState('');
+  const [editBagsOrdered, setEditBagsOrdered] = useState('');
+  const [editBagsReceived, setEditBagsReceived] = useState('');
+  const [editBagWeight, setEditBagWeight] = useState('62');
+  const [editMissWeight, setEditMissWeight] = useState('0');
+  const [editPricePerKg, setEditPricePerKg] = useState('');
+  const [editDepositPaid, setEditDepositPaid] = useState('');
+  const [editBillImage, setEditBillImage] = useState<string | undefined>();
+  const [editPurchaseNotes, setEditPurchaseNotes] = useState('');
+  const [editContNo, setEditContNo] = useState('');
+  const [editLotNo, setEditLotNo] = useState('');
+  const [editCountry, setEditCountry] = useState('');
+  const [editGrade, setEditGrade] = useState('');
+  const [editInvoiceNumber, setEditInvoiceNumber] = useState('');
+  const [editPurchaseError, setEditPurchaseError] = useState('');
+
   const previewPurchase: Purchase = useMemo(
     () => ({
       date: pDate,
@@ -126,6 +145,27 @@ export default function Godaam() {
   const totalPrice = purchaseTotalPrice(previewPurchase);
   const dueThisPurchase = purchaseDue(previewPurchase);
   const pendingBags = purchasePendingBags(previewPurchase);
+
+  const editPreviewPurchase: Purchase = useMemo(
+    () => ({
+      date: editPDate,
+      dealerId: parseInt(editPDealerId, 10) || 0,
+      teaName: editPTeaName,
+      bagsOrdered: parseFloat(editBagsOrdered) || 0,
+      bagsReceived: parseFloat(editBagsReceived) || 0,
+      bagWeightKg: parseFloat(editBagWeight) || 62,
+      missWeightKg: parseFloat(editMissWeight) || 0,
+      pricePerKg: parseFloat(editPricePerKg) || 0,
+      depositPaid: parseFloat(editDepositPaid) || 0,
+    }),
+    [editPDate, editPDealerId, editPTeaName, editBagsOrdered, editBagsReceived, editBagWeight, editMissWeight, editPricePerKg, editDepositPaid],
+  );
+
+  const editStandardWeight = editPreviewPurchase.bagsReceived * editPreviewPurchase.bagWeightKg;
+  const editNetWeight = purchaseNetWeight(editPreviewPurchase);
+  const editTotalPrice = purchaseTotalPrice(editPreviewPurchase);
+  const editDueThisPurchase = purchaseDue(editPreviewPurchase);
+  const editPendingBags = purchasePendingBags(editPreviewPurchase);
 
   const remainingBalance = useMemo(() => {
     if (!previewPurchase.dealerId) return 0;
@@ -211,6 +251,54 @@ export default function Godaam() {
     setInvoiceNumber('');
     setBillImage(undefined);
     setPurchaseNotes('');
+  }
+
+  function openEditPurchase(p: Purchase) {
+    if (!p.id) return;
+    setEditPurchaseId(p.id);
+    setEditPurchaseError('');
+    setEditPDate(p.date);
+    setEditPDealerId(String(p.dealerId));
+    setEditPTeaName(p.teaName);
+    setEditBagsOrdered(String(p.bagsOrdered));
+    setEditBagsReceived(String(p.bagsReceived));
+    setEditBagWeight(String(p.bagWeightKg));
+    setEditMissWeight(String(p.missWeightKg));
+    setEditPricePerKg(String(p.pricePerKg));
+    setEditDepositPaid(String(p.depositPaid));
+    setEditBillImage(p.billImage);
+    setEditPurchaseNotes(p.notes ?? '');
+    setEditContNo(p.contNo ?? '');
+    setEditLotNo(p.lotNo ?? '');
+    setEditCountry(p.country ?? '');
+    setEditGrade(p.grade ?? '');
+    setEditInvoiceNumber(p.invoiceNumber ?? '');
+  }
+
+  async function handleUpdatePurchase(e: React.FormEvent) {
+    e.preventDefault();
+    setEditPurchaseError('');
+    if (!editPurchaseId || !editPDealerId || !editPTeaName.trim()) return;
+
+    const ordered = parseFloat(editBagsOrdered) || 0;
+    const received = parseFloat(editBagsReceived) || 0;
+    if (received > ordered) {
+      setEditPurchaseError(l('godaam.bagsReceivedMax'));
+      return;
+    }
+
+    await db.purchases.update(editPurchaseId, {
+      ...editPreviewPurchase,
+      teaName: editPTeaName.trim(),
+      contNo: editContNo.trim() || undefined,
+      lotNo: editLotNo.trim() || undefined,
+      country: editCountry.trim() || undefined,
+      grade: editGrade.trim() || undefined,
+      invoiceNumber: editInvoiceNumber.trim() || undefined,
+      billImage: editBillImage,
+      notes: editPurchaseNotes.trim() || undefined,
+    });
+    setEditPurchaseId(null);
   }
 
   async function handleRemoveDealer(id: number) {
@@ -375,11 +463,12 @@ export default function Godaam() {
                 <th><Label k="godaam.missWeight" variant="compact" /></th>
                 <th><Label k="godaam.totalPrice" variant="compact" /></th>
                 <th><Label k="godaam.billImage" variant="compact" /></th>
+                <th><Label k="common.actions" variant="compact" /></th>
               </tr>
             </thead>
             <tbody>
               {filteredPurchases.length === 0 ? (
-                <tr><td colSpan={16} className="empty">{l('common.noData')}</td></tr>
+                <tr><td colSpan={17} className="empty">{l('common.noData')}</td></tr>
               ) : (
                 filteredPurchases.map((p) => {
                   const dealer = dealers.find((d) => d.id === p.dealerId);
@@ -400,6 +489,9 @@ export default function Godaam() {
                       <td>{formatKg(p.missWeightKg)}</td>
                       <td>{formatCurrency(purchaseTotalPrice(p))}</td>
                       <td><ImageThumb src={p.billImage} /></td>
+                      <td className="action-cell">
+                        <button type="button" className="btn sm" onClick={() => openEditPurchase(p)}>{l('godaam.editPurchase')}</button>
+                      </td>
                     </tr>
                   );
                 })
@@ -437,11 +529,12 @@ export default function Godaam() {
                     <th><Label k="godaam.receivedMaal" variant="compact" /></th>
                     <th><Label k="godaam.pendingMaal" variant="compact" /></th>
                     <th><Label k="godaam.totalPrice" variant="compact" /></th>
+                    <th><Label k="common.actions" variant="compact" /></th>
                   </tr>
                 </thead>
                 <tbody>
                   {detailPurchases.length === 0 ? (
-                    <tr><td colSpan={13} className="empty">{l('common.noData')}</td></tr>
+                    <tr><td colSpan={14} className="empty">{l('common.noData')}</td></tr>
                   ) : (
                     detailPurchases.map((p) => {
                       const pending = purchasePendingBags(p);
@@ -456,6 +549,9 @@ export default function Godaam() {
                           <td>{formatKg(purchaseNetWeight(p))}</td>
                           <td className={pending > 0 ? 'warn-text' : ''}>{formatKg(pending * p.bagWeightKg)}</td>
                           <td>{formatCurrency(purchaseTotalPrice(p))}</td>
+                          <td className="action-cell">
+                            <button type="button" className="btn sm" onClick={() => openEditPurchase(p)}>{l('godaam.editPurchase')}</button>
+                          </td>
                         </tr>
                       );
                     })
@@ -465,6 +561,52 @@ export default function Godaam() {
             </div>
 
             <button type="button" className="btn" onClick={() => setDetailDealerId(null)}>{l('common.cancel')}</button>
+          </div>
+        </div>
+      )}
+
+      {editPurchaseId && (
+        <div className="modal-overlay" onClick={() => setEditPurchaseId(null)}>
+          <div className="modal card modal-wide" onClick={(e) => e.stopPropagation()}>
+            <SectionTitle k="godaam.editPurchase" />
+            <form onSubmit={handleUpdatePurchase}>
+              <div className="form-grid">
+                <FormField labelKey="common.date" value={editPDate} onChange={setEditPDate} type="date" required />
+                <label className="form-field">
+                  <FieldLabel labelKey="godaam.dealer" />
+                  <select value={editPDealerId} onChange={(e) => setEditPDealerId(e.target.value)} required>
+                    <option value="">—</option>
+                    {activeDealers.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <FormField labelKey="godaam.teaName" value={editPTeaName} onChange={setEditPTeaName} required />
+                <FormField labelKey="godaam.contNo" value={editContNo} onChange={setEditContNo} />
+                <FormField labelKey="godaam.lotNo" value={editLotNo} onChange={setEditLotNo} />
+                <FormField labelKey="godaam.country" value={editCountry} onChange={setEditCountry} />
+                <FormField labelKey="godaam.grade" value={editGrade} onChange={setEditGrade} />
+                <FormField labelKey="godaam.invoiceNumber" value={editInvoiceNumber} onChange={setEditInvoiceNumber} />
+                <FormField labelKey="godaam.bagsOrdered" value={editBagsOrdered} onChange={setEditBagsOrdered} type="number" min={0} required />
+                <FormField labelKey="godaam.bagsReceived" value={editBagsReceived} onChange={setEditBagsReceived} type="number" min={0} required />
+                <FormField labelKey="godaam.bagWeight" value={editBagWeight} onChange={setEditBagWeight} type="number" min={0} step={0.01} />
+                <ReadOnlyField labelKey="godaam.standardWeight" value={formatKg(editStandardWeight)} />
+                <FormField labelKey="godaam.missWeight" value={editMissWeight} onChange={setEditMissWeight} type="number" min={0} step={0.01} />
+                <ReadOnlyField labelKey="godaam.netWeight" value={formatKg(editNetWeight)} />
+                <FormField labelKey="godaam.pricePerKg" value={editPricePerKg} onChange={setEditPricePerKg} type="number" min={0} step={0.01} required />
+                <ReadOnlyField labelKey="godaam.totalPrice" value={formatCurrency(editTotalPrice)} />
+                <FormField labelKey="godaam.depositPaid" value={editDepositPaid} onChange={setEditDepositPaid} type="number" min={0} step={0.01} />
+                <ReadOnlyField labelKey="godaam.dueThisPurchase" value={formatCurrency(editDueThisPurchase)} />
+                <ReadOnlyField labelKey="godaam.pendingBags" value={String(editPendingBags)} />
+                <TextAreaField labelKey="godaam.purchaseNotes" value={editPurchaseNotes} onChange={setEditPurchaseNotes} />
+                <ImageUpload labelKey="godaam.billImage" value={editBillImage} onChange={setEditBillImage} />
+              </div>
+              {editPurchaseError && <p className="error-msg">{editPurchaseError}</p>}
+              <div className="modal-actions">
+                <button type="submit" className="btn primary">{l('godaam.updatePurchase')}</button>
+                <button type="button" className="btn" onClick={() => setEditPurchaseId(null)}>{l('common.cancel')}</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

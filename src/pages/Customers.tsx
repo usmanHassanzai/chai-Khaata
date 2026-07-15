@@ -30,7 +30,9 @@ import {
   buildCustomerSummaryExportRows,
   CUSTOMER_LEDGER_COLUMNS,
   CUSTOMER_SUMMARY_COLUMNS,
+  printCustomerReceipt,
 } from '../services/export';
+import { useShopPrintProfile } from '../hooks/useShopPrintProfile';
 
 function ReadOnlyDisplay({ labelKey, value }: { labelKey: string; value: string }) {
   return (
@@ -43,6 +45,7 @@ function ReadOnlyDisplay({ labelKey, value }: { labelKey: string; value: string 
 
 export default function Customers() {
   const l = useLabel();
+  const shopProfile = useShopPrintProfile();
   const customers = useLiveQuery(() => db.customers.toArray(), []) ?? [];
   const sales = useLiveQuery(() => db.sales.toArray(), []) ?? [];
   const purchases = useLiveQuery(() => db.purchases.toArray(), []) ?? [];
@@ -242,6 +245,11 @@ export default function Customers() {
     setSaleReceived('');
     setSaleBillImage(undefined);
     setSaleNotes('');
+  }
+
+  function printCustomerSale(s: Sale) {
+    const customer = customerForSale(s);
+    printCustomerReceipt({ sale: s, customer, shopProfile });
   }
 
   function customerForSale(s: Sale) {
@@ -449,11 +457,12 @@ export default function Customers() {
                 <th><Label k="customers.saleDues" variant="compact" /></th>
                 <th><Label k="dukaan.billImage" variant="compact" /></th>
                 <th><Label k="common.notes" variant="compact" /></th>
+                <th><Label k="common.actions" variant="compact" /></th>
               </tr>
             </thead>
             <tbody>
               {filteredLedger.length === 0 ? (
-                <tr><td colSpan={15} className="empty">{l('common.noData')}</td></tr>
+                <tr><td colSpan={16} className="empty">{l('common.noData')}</td></tr>
               ) : (
                 filteredLedger.map((s) => {
                   const c = customerForSale(s);
@@ -475,6 +484,9 @@ export default function Customers() {
                       <td className={saleDues(s) > 0 ? 'warn-text' : ''}>{formatCurrency(saleDues(s))}</td>
                       <td><ImageThumb src={s.billImage} /></td>
                       <td className="truncate-cell">{s.notes ?? '—'}</td>
+                      <td className="action-cell">
+                        <button type="button" className="btn sm" onClick={() => printCustomerSale(s)} title={l('customers.printReceipt')}>🖨</button>
+                      </td>
                     </tr>
                   );
                 })
@@ -531,6 +543,7 @@ export default function Customers() {
                     <th><Label k="customers.saleDues" variant="compact" /></th>
                     <th><Label k="dukaan.billImage" variant="compact" /></th>
                     <th><Label k="common.notes" variant="compact" /></th>
+                    <th><Label k="common.actions" variant="compact" /></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -550,6 +563,9 @@ export default function Customers() {
                         <td className={saleDues(s) > 0 ? 'warn-text' : ''}>{formatCurrency(saleDues(s))}</td>
                         <td><ImageThumb src={s.billImage} /></td>
                         <td>{s.notes ?? '—'}</td>
+                        <td className="action-cell">
+                          <button type="button" className="btn sm" onClick={() => printCustomerSale(s)} title={l('customers.printReceipt')}>🖨</button>
+                        </td>
                       </tr>
                     );
                   })}

@@ -27,6 +27,7 @@ import {
 } from '../services/calculations';
 import {
   buildSalesExportRows,
+  printCustomerReceipt,
   printTable,
   SALES_EXPORT_COLUMNS,
 } from '../services/export';
@@ -169,6 +170,11 @@ export default function Dukaan() {
   );
 
   function printOneSale(s: Sale) {
+    const customer = s.customerId ? customers.find((c) => c.id === s.customerId) : undefined;
+    if (s.customerId && customer) {
+      printCustomerReceipt({ sale: s, customer, shopProfile });
+      return;
+    }
     const rows = buildSalesExportRows([s], purchases, sales, customers);
     printTable({
       title: `Sale — ${s.teaName} (${s.date})`,
