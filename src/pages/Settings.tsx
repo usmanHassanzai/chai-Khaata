@@ -216,7 +216,7 @@ export default function Settings() {
         <div className="settings-panels">
           {tab === 'general' && (
             <div className="settings-panel animate-fade-in-up">
-              <section className="card settings-card">
+              <section className="card settings-card settings-card-pro">
                 <SectionTitle k="settings.appearance" />
                 <p className="settings-hint"><Label k="settings.appearanceHint" variant="compact" /></p>
 
@@ -254,7 +254,7 @@ export default function Settings() {
                 />
               </section>
 
-              <section className="card settings-card">
+              <section className="card settings-card settings-card-pro">
                 <SectionTitle k="settings.chooseLanguage" />
                 <p className="settings-hint"><Label k="settings.labelDisplay" variant="compact" /></p>
                 <div className="lang-buttons settings-lang-grid">
@@ -276,15 +276,17 @@ export default function Settings() {
 
           {tab === 'business' && (
             <div className="settings-panel animate-fade-in-up">
-              <section className="card settings-card">
+              <section className="card settings-card settings-card-pro">
                 <SectionTitle k="settings.shopProfile" />
                 <p className="settings-hint"><Label k="settings.shopProfileHint" variant="compact" /></p>
 
-                <div className="form-grid">
-                  <FormField labelKey="settings.shopName" value={shopName} onChange={setShopName} placeholder="My Tea Shop" />
-                  <FormField labelKey="settings.shopPhone" value={shopPhone} onChange={setShopPhone} placeholder="03xx-xxxxxxx" />
-                  <FormField labelKey="settings.shopAddress" value={shopAddress} onChange={setShopAddress} placeholder="City, area" />
-                  <ImageUpload labelKey="settings.shopLogo" value={shopLogo} onChange={setShopLogo} />
+                <div className="settings-form-panel">
+                  <div className="form-grid">
+                    <FormField labelKey="settings.shopName" value={shopName} onChange={setShopName} placeholder="My Tea Shop" />
+                    <FormField labelKey="settings.shopPhone" value={shopPhone} onChange={setShopPhone} placeholder="03xx-xxxxxxx" />
+                    <FormField labelKey="settings.shopAddress" value={shopAddress} onChange={setShopAddress} placeholder="City, area" />
+                    <ImageUpload labelKey="settings.shopLogo" value={shopLogo} onChange={setShopLogo} />
+                  </div>
                 </div>
 
                 <button type="button" className="btn primary" onClick={saveShopProfile} disabled={!appDb}>
@@ -300,7 +302,7 @@ export default function Settings() {
                 </div>
               </section>
 
-              <section className="card settings-card">
+              <section className="card settings-card settings-card-pro">
                 <SectionTitle k="settings.businessRules" />
                 <p className="settings-hint"><Label k="settings.businessHint" variant="compact" /></p>
 
@@ -338,7 +340,7 @@ export default function Settings() {
           {tab === 'cloud' && (
             <div className="settings-panel animate-fade-in-up">
               <CloudSyncPanel />
-              <section className="card settings-card settings-steps-card">
+              <section className="card settings-card settings-card-pro settings-steps-card">
                 <SectionTitle k="settings.cloudSync" />
                 <ol className="settings-steps">
                   <li><Label k="settings.cloudStep1" variant="compact" /></li>
@@ -352,7 +354,7 @@ export default function Settings() {
 
           {tab === 'account' && user && (
             <div className="settings-panel animate-fade-in-up">
-              <section className="card settings-card settings-account-card">
+              <section className="card settings-card settings-card-pro settings-account-card">
                 <SectionTitle k="auth.account" />
                 <div className="settings-profile">
                   <div className="settings-avatar">{user.shopName?.[0]?.toUpperCase() ?? '☕'}</div>
@@ -409,7 +411,7 @@ export default function Settings() {
 
           {tab === 'data' && (
             <div className="settings-panel animate-fade-in-up">
-              <section className="card settings-card">
+              <section className="card settings-card settings-card-pro">
                 <SectionTitle k="settings.dataBackup" />
                 <p className="settings-hint"><Label k="settings.dataBackupHint" variant="compact" /></p>
                 <button type="button" className="btn primary" onClick={handleExport} disabled={busy || !appDb}>
@@ -417,7 +419,7 @@ export default function Settings() {
                 </button>
               </section>
 
-              <section className="card settings-card settings-danger-zone">
+              <section className="card settings-card settings-card-pro settings-danger-zone">
                 <SectionTitle k="settings.resetTitle" />
                 <p className="settings-hint"><Label k="settings.resetHint" variant="compact" /></p>
 

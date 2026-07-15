@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import AuthField from '../components/AuthField';
 import AuthLayout from '../components/AuthLayout';
+import AuthPageHeader from '../components/AuthPageHeader';
 import { useAuth } from '../context/AuthContext';
 import { Label } from '../i18n/useLabel';
 import { ApiError, authApi, authHealth, getApiBase, isNativeAuthMode } from '../services/authApi';
@@ -105,10 +107,16 @@ export default function Login() {
 
   return (
     <AuthLayout>
-      <div className="auth-brand">
-        <div className="auth-logo">🍵</div>
-        <h1><Label k="appName" variant="stacked" /></h1>
-        <p className="auth-tagline"><Label k="auth.loginSubtitle" variant="compact" /></p>
+      <AuthPageHeader
+        titleKey="auth.login"
+        subtitleKey="auth.loginSubtitle"
+        badge="Welcome back"
+      />
+
+      <div className="auth-trust-row">
+        <span className="auth-trust-pill">📱 Mobile friendly</span>
+        <span className="auth-trust-pill">🇵🇰 Urdu + English</span>
+        <span className="auth-trust-pill">☁️ Cloud sync</span>
       </div>
 
       {serverOnline === false && !isNativeAuthMode() && (
@@ -139,44 +147,42 @@ export default function Login() {
         </div>
       )}
 
-      <form className="auth-form" onSubmit={handleSubmit}>
+      <form className="auth-form auth-form-panel" onSubmit={handleSubmit}>
         {info && <div className="auth-banner info">{info}</div>}
         {error && serverOnline !== false && <div className="auth-banner error">{error}</div>}
 
-        <label className="auth-field animate-fade-in-up stagger-1">
-          <span><Label k="auth.loginOrEmail" variant="compact" /></span>
-          <input
-            type="text"
-            autoComplete="username"
-            value={loginId}
-            onChange={(e) => setLoginId(e.target.value)}
-            placeholder="Email or username"
-            required
-            minLength={3}
-          />
-        </label>
+        <AuthField
+          label={<Label k="auth.loginOrEmail" variant="compact" />}
+          icon="✉️"
+          type="text"
+          autoComplete="username"
+          value={loginId}
+          onChange={(e) => setLoginId(e.target.value)}
+          placeholder="Email or username"
+          required
+          minLength={3}
+        />
 
-        <label className="auth-field animate-fade-in-up stagger-2">
-          <span><Label k="auth.password" variant="compact" /></span>
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-            minLength={6}
-          />
-        </label>
+        <AuthField
+          label={<Label k="auth.password" variant="compact" />}
+          icon="🔒"
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+          required
+          minLength={6}
+        />
 
-        <button type="submit" className="btn primary auth-submit animate-fade-in-up stagger-3" disabled={submitting}>
+        <button type="submit" className="btn primary auth-submit" disabled={submitting}>
           {submitting
             ? <span className="auth-spinner" style={{ width: 24, height: 24, borderWidth: 2 }} />
             : <Label k="auth.login" variant="compact" />}
         </button>
       </form>
 
-      <div className="auth-links-grid animate-fade-in-up stagger-4">
+      <div className="auth-links-grid">
         <p className="auth-switch auth-switch-primary">
           <Label k="auth.noAccount" variant="compact" />{' '}
           <Link to="/register"><Label k="auth.registerLink" variant="compact" /></Link>
@@ -187,7 +193,6 @@ export default function Login() {
         <Link to="/subscription-renew" className="auth-quick-link">
           <Label k="auth.renewSubscription" variant="compact" />
         </Link>
-        <Link to="/" className="auth-quick-link">← Back to home</Link>
       </div>
     </AuthLayout>
   );

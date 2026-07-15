@@ -578,6 +578,28 @@ body {
   background-clip: text;
 }
 
+/* ─── Section titles (auth-form-section style) ─── */
+.section-title {
+  font-family: var(--font-display);
+}
+
+.section-title-bar {
+  width: 28px;
+  height: 28px;
+  background: var(--tea-soft);
+  border-radius: 8px;
+  border: none;
+  position: relative;
+}
+
+.section-title-bar::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, var(--tea-primary), var(--gold));
+}
+
 /* ─── Sidebar enhancements ─── */
 .sidebar {
   background:

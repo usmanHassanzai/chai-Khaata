@@ -86,16 +86,18 @@ function LayoutShell() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <aside className="sidebar sidebar-pro">
         <div className="sidebar-top">
           <div className="sidebar-brand">
-            <div className="sidebar-logo-wrap">
-              <img
-                src={TEA_GALLERY[sidebarTea].image}
-                alt=""
-                className="sidebar-logo-img animate-scale-in"
-              />
-              <span className="sidebar-logo-steam" aria-hidden>🍵</span>
+            <div className="sidebar-logo-ring">
+              <div className="sidebar-logo-wrap">
+                <img
+                  src={TEA_GALLERY[sidebarTea].image}
+                  alt=""
+                  className="sidebar-logo-img animate-scale-in"
+                />
+                <span className="sidebar-logo-steam" aria-hidden>🍵</span>
+              </div>
             </div>
             <div className="sidebar-brand-text">
               <span className="sidebar-brand-name"><Label k="appName" variant="compact" /></span>
@@ -157,10 +159,10 @@ function LayoutShell() {
       </aside>
 
       <div className="app-main">
-        <header className="app-header">
+        <header className="app-header app-header-pro">
           <div className="header-inner">
             <div className="header-title-mobile">
-              <span className="header-logo-sm">🍵</span>
+              <span className="header-logo-sm" aria-hidden>🍵</span>
               <div className="header-title-stack">
                 <span className="header-page-name">{mobilePageTitle}</span>
                 <span className="header-shop-name">{user?.shopName || user?.username || 'Chai Khata'}</span>
@@ -174,7 +176,7 @@ function LayoutShell() {
                   aria-label="Cloud sync status"
                 />
               )}
-              <span className="header-badge">Patiwala</span>
+              <span className="header-badge auth-page-badge">Patiwala</span>
               <span className="header-date">
                 {new Date().toLocaleDateString('en-PK', { weekday: 'short', day: 'numeric', month: 'short' })}
               </span>
@@ -202,7 +204,7 @@ function LayoutShell() {
         </main>
       </div>
 
-      <nav className="bottom-nav" aria-label="Main navigation">
+      <nav className="bottom-nav bottom-nav-pro" aria-label="Main navigation">
         <div className="bottom-nav-scroll">
           {bottomLinks.map(({ to, key, icon }) => (
             <NavLink

@@ -9,6 +9,7 @@ import { initAppPreferences } from './services/appPreferences';
 import './index.css';
 import './styles/animations.css';
 import './styles/theme-advanced.css';
+import './styles/auth-pro.css';
 import './styles/settings-pro.css';
 import './styles/interior-pro.css';
 import './styles/export.css';

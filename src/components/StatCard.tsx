@@ -27,7 +27,7 @@ interface StatCardProps {
 export default function StatCard({ labelKey, value, accent = 'green', delay = 0 }: StatCardProps) {
   return (
     <div
-      className={`stat-card stat-${accent} stat-card-premium animate-fade-in-up`}
+      className={`stat-card stat-${accent} stat-card-premium stat-card-pro animate-fade-in-up`}
       style={{
         animationDelay: `${delay}ms`,
         '--stat-tea-bg': `url(${TEA_BG[accent]})`,

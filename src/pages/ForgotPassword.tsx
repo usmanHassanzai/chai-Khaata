@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import AuthField from '../components/AuthField';
 import AuthLayout from '../components/AuthLayout';
+import AuthPageHeader from '../components/AuthPageHeader';
 import { Label } from '../i18n/useLabel';
 import { ApiError, authApi } from '../services/authApi';
 
@@ -90,11 +92,12 @@ export default function ForgotPassword() {
 
   return (
     <AuthLayout>
-      <div className="auth-brand">
-        <div className="auth-logo">🔐</div>
-        <h1><Label k="auth.forgotTitle" variant="stacked" /></h1>
-        <p className="auth-tagline"><Label k="auth.forgotEmailSubtitle" variant="compact" /></p>
-      </div>
+      <AuthPageHeader
+        icon="🔐"
+        titleKey="auth.forgotTitle"
+        subtitleKey="auth.forgotEmailSubtitle"
+        badge="Account recovery"
+      />
 
       {step === 'request' && (
         <>
@@ -104,22 +107,23 @@ export default function ForgotPassword() {
               {adminEmail && <> Admin: <strong>{adminEmail}</strong></>}
             </div>
           )}
-          <form className="auth-form" onSubmit={handleRecoverByEmail}>
+          <form className="auth-form auth-form-panel" onSubmit={handleRecoverByEmail}>
             {error && <div className="auth-banner error">{error}</div>}
-            <label className="auth-field">
-              <span><Label k="auth.email" variant="compact" /></span>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
-                required
-                autoComplete="email"
-              />
-            </label>
-            <p className="settings-note"><Label k="auth.forgotEmailHint" variant="compact" /></p>
+            <AuthField
+              label={<Label k="auth.email" variant="compact" />}
+              icon="✉️"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              required
+              autoComplete="email"
+              hint={<Label k="auth.forgotEmailHint" variant="compact" />}
+            />
             <button type="submit" className="btn primary auth-submit" disabled={submitting}>
-              {submitting ? '…' : <Label k="auth.sendPasswordToEmail" variant="compact" />}
+              {submitting
+                ? <span className="auth-spinner" style={{ width: 24, height: 24, borderWidth: 2 }} />
+                : <Label k="auth.sendPasswordToEmail" variant="compact" />}
             </button>
             <button type="button" className="btn auth-submit" onClick={() => setStep('otp-request')}>
               <Label k="auth.useOtpInstead" variant="compact" />
@@ -129,18 +133,17 @@ export default function ForgotPassword() {
       )}
 
       {step === 'otp-request' && (
-        <form className="auth-form" onSubmit={handleRequestOtp}>
+        <form className="auth-form auth-form-panel" onSubmit={handleRequestOtp}>
           {error && <div className="auth-banner error">{error}</div>}
-          <label className="auth-field">
-            <span><Label k="auth.loginOrEmail" variant="compact" /></span>
-            <input
-              type="text"
-              value={login}
-              onChange={(e) => setLogin(e.target.value)}
-              placeholder="email or username"
-              required
-            />
-          </label>
+          <AuthField
+            label={<Label k="auth.loginOrEmail" variant="compact" />}
+            icon="👤"
+            type="text"
+            value={login}
+            onChange={(e) => setLogin(e.target.value)}
+            placeholder="email or username"
+            required
+          />
           <fieldset className="auth-channel-field">
             <legend><Label k="auth.otpVia" variant="compact" /></legend>
             <label className="auth-radio">
@@ -153,7 +156,9 @@ export default function ForgotPassword() {
             </label>
           </fieldset>
           <button type="submit" className="btn primary auth-submit" disabled={submitting}>
-            {submitting ? '…' : <Label k="auth.sendOtp" variant="compact" />}
+            {submitting
+              ? <span className="auth-spinner" style={{ width: 24, height: 24, borderWidth: 2 }} />
+              : <Label k="auth.sendOtp" variant="compact" />}
           </button>
           <button type="button" className="btn auth-submit" onClick={() => setStep('request')}>
             ← <Label k="auth.sendPasswordToEmail" variant="compact" />
@@ -162,7 +167,7 @@ export default function ForgotPassword() {
       )}
 
       {step === 'otp-reset' && (
-        <form className="auth-form" onSubmit={handleReset}>
+        <form className="auth-form auth-form-panel" onSubmit={handleReset}>
           {info && <div className="auth-banner info">{info}</div>}
           {displayOtp && (
             <div className="otp-display-box">
@@ -172,46 +177,45 @@ export default function ForgotPassword() {
             </div>
           )}
           {error && <div className="auth-banner error">{error}</div>}
-          <label className="auth-field">
-            <span><Label k="auth.enterOtp" variant="compact" /></span>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-              placeholder="6-digit OTP"
-              required
-            />
-          </label>
-          <label className="auth-field">
-            <span><Label k="auth.newPassword" variant="compact" /></span>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              minLength={6}
-              required
-            />
-          </label>
-          <label className="auth-field">
-            <span><Label k="auth.confirmPassword" variant="compact" /></span>
-            <input
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              minLength={6}
-              required
-            />
-          </label>
+          <AuthField
+            label={<Label k="auth.enterOtp" variant="compact" />}
+            icon="🔢"
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            value={otp}
+            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+            placeholder="6-digit OTP"
+            required
+          />
+          <AuthField
+            label={<Label k="auth.newPassword" variant="compact" />}
+            icon="🔒"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            minLength={6}
+            required
+          />
+          <AuthField
+            label={<Label k="auth.confirmPassword" variant="compact" />}
+            icon="✓"
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            minLength={6}
+            required
+          />
           <button type="submit" className="btn primary auth-submit" disabled={submitting}>
-            {submitting ? '…' : <Label k="auth.resetPassword" variant="compact" />}
+            {submitting
+              ? <span className="auth-spinner" style={{ width: 24, height: 24, borderWidth: 2 }} />
+              : <Label k="auth.resetPassword" variant="compact" />}
           </button>
         </form>
       )}
 
       {step === 'done' && (
-        <div className="auth-form">
+        <div className="auth-form auth-form-panel">
           <div className="auth-banner success">{info}</div>
           <Link to="/login" className="btn primary auth-submit auth-link-btn">
             <Label k="auth.loginLink" variant="compact" />
@@ -220,7 +224,7 @@ export default function ForgotPassword() {
       )}
 
       {step !== 'done' && (
-        <p className="auth-switch">
+        <p className="auth-switch auth-switch-primary">
           <Link to="/login"><Label k="auth.backToLogin" variant="compact" /></Link>
         </p>
       )}

@@ -42,6 +42,19 @@ export default function AuthTeaPanel() {
             </figure>
           ))}
         </div>
+
+        <div className="auth-tea-features">
+          {[
+            { icon: '📊', text: 'Sales & profit dashboard' },
+            { icon: '☁️', text: 'Cloud sync on any network' },
+            { icon: '🔐', text: 'Secure shop accounts' },
+          ].map(({ icon, text }) => (
+            <div key={text} className="auth-tea-feature">
+              <span>{icon}</span>
+              <span>{text}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="floating-leaves" aria-hidden>

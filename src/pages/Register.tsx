@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
+import AuthField from '../components/AuthField';
 import AuthLayout from '../components/AuthLayout';
+import AuthPageHeader from '../components/AuthPageHeader';
 import PaymentInstructions from '../components/PaymentInstructions';
 import ImageUpload from '../components/ImageUpload';
 import { useAuth } from '../context/AuthContext';
@@ -52,6 +54,7 @@ export default function Register() {
   }, []);
 
   const selectedPlan = plans.find((p) => p.id === subscriptionPlan);
+  const trialDays = Math.max(1, Math.round((payment.pendingTrialHours || 7 * 24) / 24));
 
   if (user?.status === 'approved' || user?.role === 'admin' || (user?.status === 'pending' && user.trialActive)) {
     return <Navigate to="/dashboard" replace />;
@@ -121,10 +124,11 @@ export default function Register() {
   if (registered) {
     return (
       <AuthLayout wide>
-        <div className="auth-brand">
-          <div className="auth-logo">✅</div>
-          <h1>Account created</h1>
-          <p className="auth-tagline">{successMessage}</p>
+        <div className="register-success-hero">
+          <div className="register-success-icon">✅</div>
+          <h1 className="auth-page-title">Account created</h1>
+          <p className="auth-tagline auth-page-subtitle">{successMessage}</p>
+          <span className="auth-page-badge">Almost there</span>
         </div>
 
         {adminNotified ? (
@@ -153,11 +157,11 @@ export default function Register() {
           <p className="settings-note">Or send on WhatsApp with Payment ID <code>{paymentRefId}</code></p>
           <ImageUpload labelKey="auth.paymentScreenshot" value={screenshot} onChange={setScreenshot} />
           {uploadMsg && <div className={`auth-banner ${uploadMsg.includes('received') ? 'success' : 'info'}`}>{uploadMsg}</div>}
-          <button type="button" className="btn primary" disabled={uploading || !screenshot} onClick={submitScreenshot}>
-            {uploading ? '…' : 'Submit screenshot'}
+          <button type="button" className="btn primary auth-submit" disabled={uploading || !screenshot} onClick={submitScreenshot}>
+            {uploading ? <span className="auth-spinner" style={{ width: 24, height: 24, borderWidth: 2 }} /> : 'Submit screenshot'}
           </button>
-          <button type="button" className="btn" onClick={() => navigate('/login')}>
-            Log in for {Math.max(1, Math.round((payment.pendingTrialHours || 7 * 24) / 24))}-day preview
+          <button type="button" className="btn auth-submit" onClick={() => navigate('/login')}>
+            Log in for {trialDays}-day preview
           </button>
         </div>
       </AuthLayout>
@@ -166,10 +170,16 @@ export default function Register() {
 
   return (
     <AuthLayout wide>
-      <div className="auth-brand">
-        <div className="auth-logo">🍵</div>
-        <h1><Label k="auth.registerTitle" variant="stacked" /></h1>
-        <p className="auth-tagline"><Label k="auth.registerSubtitle" variant="compact" /></p>
+      <AuthPageHeader
+        titleKey="auth.registerTitle"
+        subtitleKey="auth.registerSubtitle"
+        badge="Get started"
+      />
+
+      <div className="auth-steps">
+        <div className="auth-step is-active"><span>1</span> Plan</div>
+        <div className="auth-step"><span>2</span> Details</div>
+        <div className="auth-step"><span>3</span> Pay</div>
       </div>
 
       {adminEmail && (
@@ -182,84 +192,144 @@ export default function Register() {
         </p>
       )}
 
-      <form className="auth-form" onSubmit={handleSubmit}>
+      <form className="auth-form auth-form-panel" onSubmit={handleSubmit}>
         {error && <div className="auth-banner error">{error}</div>}
 
-        <fieldset className="subscription-fieldset">
-          <legend><Label k="auth.chooseSubscription" variant="compact" /></legend>
-          <div className="subscription-plans subscription-plans-two">
-            {plans.map((plan) => (
-              <label
-                key={plan.id}
-                className={`subscription-plan-card${subscriptionPlan === plan.id ? ' selected' : ''}`}
-              >
-                <input
-                  type="radio"
-                  name="subscriptionPlan"
-                  value={plan.id}
-                  checked={subscriptionPlan === plan.id}
-                  onChange={() => setSubscriptionPlan(plan.id as SubscriptionPlanId)}
-                />
-                <span className="plan-label">{plan.label}</span>
-                <span className="plan-price">Rs {plan.price.toLocaleString()}</span>
-                <span className="plan-duration">
-                  {plan.months === 1 ? '1 month' : `${plan.months} months`}
-                </span>
-              </label>
-            ))}
+        <section className="auth-form-section">
+          <h2 className="auth-form-section-title">
+            <span>💳</span>
+            <Label k="auth.chooseSubscription" variant="compact" />
+          </h2>
+          <fieldset className="subscription-fieldset">
+            <legend className="sr-only"><Label k="auth.chooseSubscription" variant="compact" /></legend>
+            <div className="subscription-plans subscription-plans-two">
+              {plans.map((plan) => (
+                <label
+                  key={plan.id}
+                  className={`subscription-plan-card${subscriptionPlan === plan.id ? ' selected' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="subscriptionPlan"
+                    value={plan.id}
+                    checked={subscriptionPlan === plan.id}
+                    onChange={() => setSubscriptionPlan(plan.id as SubscriptionPlanId)}
+                  />
+                  <span className="plan-label">{plan.label}</span>
+                  <span className="plan-price">Rs {plan.price.toLocaleString()}</span>
+                  <span className="plan-duration">
+                    {plan.months === 1 ? '1 month' : `${plan.months} months`}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          {selectedPlan && (
+            <PaymentInstructions
+              payment={payment}
+              planPrice={selectedPlan.price}
+              planLabel={selectedPlan.label}
+              compact
+            />
+          )}
+        </section>
+
+        <section className="auth-form-section">
+          <h2 className="auth-form-section-title">
+            <span>🏪</span>
+            Shop details
+          </h2>
+          <div className="auth-form-grid">
+            <AuthField
+              label={<Label k="auth.username" variant="compact" />}
+              icon="👤"
+              type="text"
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              minLength={3}
+            />
+            <AuthField
+              label={<Label k="auth.email" variant="compact" />}
+              icon="✉️"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            <AuthField
+              label={<Label k="auth.phone" variant="compact" />}
+              icon="📱"
+              type="tel"
+              autoComplete="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              required
+              minLength={10}
+            />
+            <AuthField
+              label={<Label k="auth.shopName" variant="compact" />}
+              icon="🏪"
+              type="text"
+              value={shopName}
+              onChange={(e) => setShopName(e.target.value)}
+              placeholder="My Tea Shop"
+            />
+            <AuthField
+              label={<Label k="auth.paymentFeeDate" variant="compact" />}
+              icon="📅"
+              type="date"
+              value={paymentFeeDate}
+              onChange={(e) => setPaymentFeeDate(e.target.value)}
+              required
+            />
           </div>
-        </fieldset>
+        </section>
 
-        {selectedPlan && (
-          <PaymentInstructions
-            payment={payment}
-            planPrice={selectedPlan.price}
-            planLabel={selectedPlan.label}
-            compact
-          />
-        )}
+        <section className="auth-form-section">
+          <h2 className="auth-form-section-title">
+            <span>🔒</span>
+            Secure password
+          </h2>
+          <div className="auth-form-grid">
+            <AuthField
+              label={<Label k="auth.password" variant="compact" />}
+              icon="🔒"
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+            />
+            <AuthField
+              label={<Label k="auth.confirmPassword" variant="compact" />}
+              icon="✓"
+              type="password"
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+              minLength={6}
+            />
+          </div>
+        </section>
 
-        <label className="auth-field">
-          <span><Label k="auth.username" variant="compact" /></span>
-          <input type="text" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required minLength={3} />
-        </label>
-
-        <label className="auth-field">
-          <span><Label k="auth.email" variant="compact" /></span>
-          <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
-
-        <label className="auth-field">
-          <span><Label k="auth.phone" variant="compact" /></span>
-          <input type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required minLength={10} />
-        </label>
-
-        <label className="auth-field">
-          <span><Label k="auth.shopName" variant="compact" /></span>
-          <input type="text" value={shopName} onChange={(e) => setShopName(e.target.value)} placeholder="My Tea Shop" />
-        </label>
-
-        <label className="auth-field">
-          <span><Label k="auth.paymentFeeDate" variant="compact" /></span>
-          <input type="date" value={paymentFeeDate} onChange={(e) => setPaymentFeeDate(e.target.value)} required />
-        </label>
-
-        <label className="auth-field">
-          <span><Label k="auth.password" variant="compact" /></span>
-          <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
-        </label>
-
-        <label className="auth-field">
-          <span><Label k="auth.confirmPassword" variant="compact" /></span>
-          <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={6} />
-        </label>
+        <p className="auth-field-hint" style={{ textAlign: 'center' }}>
+          {trialDays}-day free preview after signup while admin verifies payment
+        </p>
 
         <button type="submit" className="btn primary auth-submit" disabled={submitting || plans.length === 0}>
-          {submitting ? '…' : <Label k="auth.register" variant="compact" />}
+          {submitting
+            ? <span className="auth-spinner" style={{ width: 24, height: 24, borderWidth: 2 }} />
+            : <Label k="auth.register" variant="compact" />}
         </button>
       </form>
 
-      <p className="auth-switch">
+      <p className="auth-switch auth-switch-primary">
         <Label k="auth.haveAccount" variant="compact" />{' '}
         <Link to="/login"><Label k="auth.loginLink" variant="compact" /></Link>
         {' · '}

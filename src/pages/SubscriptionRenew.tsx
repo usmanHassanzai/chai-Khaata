@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import AuthField from '../components/AuthField';
 import AuthLayout from '../components/AuthLayout';
+import AuthPageHeader from '../components/AuthPageHeader';
 import { useAuth } from '../context/AuthContext';
 import ImageUpload from '../components/ImageUpload';
 import { Label } from '../i18n/useLabel';
@@ -181,74 +183,66 @@ export default function SubscriptionRenew() {
 
   return (
     <AuthLayout wide>
-        <div className="auth-brand">
-          <div className="auth-logo">{isEarlyRenewal ? '⏰' : '⏳'}</div>
-          <h1>
-            <Label
-              k={isEarlyRenewal ? 'auth.subscriptionExpiringTitle' : 'auth.subscriptionExpiredTitle'}
-              variant="stacked"
-            />
-          </h1>
-          <p className="auth-tagline">
-            <Label
-              k={isEarlyRenewal ? 'auth.subscriptionExpiringSubtitle' : 'auth.subscriptionExpiredSubtitle'}
-              variant="compact"
-            />
+      <AuthPageHeader
+        icon={isEarlyRenewal ? '⏰' : '⏳'}
+        titleKey={isEarlyRenewal ? 'auth.subscriptionExpiringTitle' : 'auth.subscriptionExpiredTitle'}
+        subtitleKey={isEarlyRenewal ? 'auth.subscriptionExpiringSubtitle' : 'auth.subscriptionExpiredSubtitle'}
+        badge={isEarlyRenewal ? 'Renew early' : 'Renew now'}
+      />
+
+      {isEarlyRenewal && displayDaysLeft != null && displayDaysLeft >= 1 && (
+        <p className="auth-approval-hint">
+          <Label k="auth.daysUntilExpiry" variant="compact" vars={{ days: String(displayDaysLeft) }} />
+        </p>
+      )}
+
+      {expiresAt && !isEarlyRenewal && (
+        <p className="auth-approval-hint">
+          <Label k="auth.subscriptionEnded" variant="compact" />:{' '}
+          <strong>{new Date(expiresAt).toLocaleDateString()}</strong>
+        </p>
+      )}
+
+      {expiresAt && isEarlyRenewal && (
+        <p className="auth-approval-hint">
+          <Label k="auth.subscriptionExpires" variant="compact" />:{' '}
+          <strong>{new Date(expiresAt).toLocaleDateString()}</strong>
+        </p>
+      )}
+
+      {success && <div className="auth-banner success">{success}</div>}
+      {error && <div className="auth-banner error">{error}</div>}
+      {pendingReview && !success && (
+        <div className="auth-banner info"><Label k="auth.renewalPending" variant="compact" /></div>
+      )}
+
+      {(pendingReview || success) && (
+        <div className="register-upload-block">
+          {adminNotified && (
+            <div className="auth-banner success">
+              <Label k="auth.renewalAdminNotified" variant="compact" />
+              {adminEmail && <> — <strong>{adminEmail}</strong></>}
+            </div>
+          )}
+          <p className="settings-note">
+            <Label k="auth.renewalWhatsappHint" variant="compact" />
+            {paymentRefId && <> Payment ID: <code>{paymentRefId}</code></>}
           </p>
+          <a
+            href={whatsappRenewalUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn primary payment-wa-btn"
+          >
+            📱 <Label k="auth.renewalSendWhatsapp" variant="compact" /> — {payment.whatsappDisplay}
+          </a>
         </div>
+      )}
 
-        {isEarlyRenewal && displayDaysLeft != null && displayDaysLeft >= 1 && (
-          <p className="auth-approval-hint">
-            <Label k="auth.daysUntilExpiry" variant="compact" vars={{ days: String(displayDaysLeft) }} />
-          </p>
-        )}
-
-        {expiresAt && !isEarlyRenewal && (
-          <p className="auth-approval-hint">
-            <Label k="auth.subscriptionEnded" variant="compact" />:{' '}
-            <strong>{new Date(expiresAt).toLocaleDateString()}</strong>
-          </p>
-        )}
-
-        {expiresAt && isEarlyRenewal && (
-          <p className="auth-approval-hint">
-            <Label k="auth.subscriptionExpires" variant="compact" />:{' '}
-            <strong>{new Date(expiresAt).toLocaleDateString()}</strong>
-          </p>
-        )}
-
-        {success && <div className="auth-banner success">{success}</div>}
-        {error && <div className="auth-banner error">{error}</div>}
-        {pendingReview && !success && (
-          <div className="auth-banner info"><Label k="auth.renewalPending" variant="compact" /></div>
-        )}
-
-        {(pendingReview || success) && (
-          <div className="register-upload-block">
-            {adminNotified && (
-              <div className="auth-banner success">
-                <Label k="auth.renewalAdminNotified" variant="compact" />
-                {adminEmail && <> — <strong>{adminEmail}</strong></>}
-              </div>
-            )}
-            <p className="settings-note">
-              <Label k="auth.renewalWhatsappHint" variant="compact" />
-              {paymentRefId && <> Payment ID: <code>{paymentRefId}</code></>}
-            </p>
-            <a
-              href={whatsappRenewalUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn primary payment-wa-btn"
-            >
-              📱 <Label k="auth.renewalSendWhatsapp" variant="compact" /> — {payment.whatsappDisplay}
-            </a>
-          </div>
-        )}
-
+      <section className="auth-form-section">
         <fieldset className="subscription-fieldset">
           <legend><Label k="auth.renewSubscription" variant="compact" /></legend>
-          <div className="subscription-plans">
+          <div className="subscription-plans subscription-plans-two">
             {plans.map((plan) => (
               <label
                 key={plan.id}
@@ -278,53 +272,56 @@ export default function SubscriptionRenew() {
             />
           )}
         </fieldset>
+      </section>
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <label className="auth-field">
-            <span><Label k="auth.loginOrEmail" variant="compact" /></span>
-            <input
-              type="text"
-              value={loginId}
-              onChange={(e) => setLoginId(e.target.value)}
-              required
-            />
-          </label>
+      <form className="auth-form auth-form-panel" onSubmit={handleSubmit}>
+        <AuthField
+          label={<Label k="auth.loginOrEmail" variant="compact" />}
+          icon="✉️"
+          type="text"
+          value={loginId}
+          onChange={(e) => setLoginId(e.target.value)}
+          required
+        />
 
-          <label className="auth-field">
-            <span><Label k="auth.password" variant="compact" /></span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </label>
+        <AuthField
+          label={<Label k="auth.password" variant="compact" />}
+          icon="🔒"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
 
-          <div className="auth-field">
-            <span><Label k="auth.uploadPaymentScreenshot" variant="compact" /></span>
-            <p className="settings-note"><Label k="auth.renewalWhatsappHint" variant="compact" /></p>
+        <div className="auth-field auth-field-pro">
+          <span className="auth-field-label"><Label k="auth.uploadPaymentScreenshot" variant="compact" /></span>
+          <p className="auth-field-hint"><Label k="auth.renewalWhatsappHint" variant="compact" /></p>
           <ImageUpload labelKey="auth.paymentScreenshot" value={screenshot} onChange={setScreenshot} />
-          </div>
+        </div>
 
-          <button type="submit" className="btn primary auth-submit" disabled={submitting || pendingReview}>
-            {submitting ? '…' : <Label k="auth.submitRenewal" variant="compact" />}
-          </button>
-        </form>
-
-        <button type="button" className="btn sm auth-submit" disabled={checking} onClick={checkStatus}>
-          {checking ? '…' : <Label k="auth.checkRenewalStatus" variant="compact" />}
+        <button type="submit" className="btn primary auth-submit" disabled={submitting || pendingReview}>
+          {submitting
+            ? <span className="auth-spinner" style={{ width: 24, height: 24, borderWidth: 2 }} />
+            : <Label k="auth.submitRenewal" variant="compact" />}
         </button>
+      </form>
 
-        <p className="auth-switch">
-          <Link to="/login"><Label k="auth.backToLogin" variant="compact" /></Link>
-        </p>
+      <button type="button" className="btn sm auth-submit" disabled={checking} onClick={checkStatus}>
+        {checking
+          ? <span className="auth-spinner" style={{ width: 20, height: 20, borderWidth: 2 }} />
+          : <Label k="auth.checkRenewalStatus" variant="compact" />}
+      </button>
+
+      <div className="auth-links-grid">
+        <Link to="/login" className="auth-quick-link">
+          <Label k="auth.backToLogin" variant="compact" />
+        </Link>
         {user && (
-          <p className="auth-switch">
-            <button type="button" className="link-btn" onClick={logout}>
-              <Label k="auth.logout" variant="compact" />
-            </button>
-          </p>
+          <button type="button" className="auth-quick-link link-btn" onClick={logout}>
+            <Label k="auth.logout" variant="compact" />
+          </button>
         )}
+      </div>
     </AuthLayout>
   );
 }

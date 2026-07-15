@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import AuthField from '../components/AuthField';
 import AuthLayout from '../components/AuthLayout';
+import AuthPageHeader from '../components/AuthPageHeader';
 import { useAuth } from '../context/AuthContext';
 import ImageUpload from '../components/ImageUpload';
 import { Label } from '../i18n/useLabel';
@@ -95,85 +97,87 @@ export default function PaymentDue() {
 
   return (
     <AuthLayout wide>
-        <div className="auth-brand">
-          <div className="auth-logo">⛔</div>
-          <h1><Label k="auth.paymentBlockedTitle" variant="stacked" /></h1>
-          <p className="auth-tagline"><Label k="auth.paymentBlockedSubtitle" variant="compact" /></p>
+      <AuthPageHeader
+        icon="⛔"
+        titleKey="auth.paymentBlockedTitle"
+        subtitleKey="auth.paymentBlockedSubtitle"
+        badge="Payment required"
+      />
+
+      <div className="payment-due-amount">Rs {dueAmount.toLocaleString()}</div>
+
+      <PaymentInstructions payment={payment} planPrice={dueAmount} planLabel="Amount due" compact />
+
+      {user?.paymentDueNote && <p className="settings-note">{user.paymentDueNote}</p>}
+
+      {pendingReview && (
+        <div className="auth-banner info">
+          <Label k="auth.paymentProofPending" variant="compact" />
         </div>
+      )}
 
-        <div className="payment-due-amount">Rs {dueAmount.toLocaleString()}</div>
+      {success && <div className="auth-banner success">{success}</div>}
+      {error && <div className="auth-banner error">{error}</div>}
 
-        <PaymentInstructions payment={payment} planPrice={dueAmount} planLabel="Amount due" compact />
+      <form className="auth-form auth-form-panel" onSubmit={handleSubmitProof}>
+        <p className="auth-field-hint"><Label k="auth.paymentProofHint" variant="compact" /></p>
 
-        {user?.paymentDueNote && <p className="settings-note">{user.paymentDueNote}</p>}
+        <AuthField
+          label={<Label k="auth.loginOrEmail" variant="compact" />}
+          icon="✉️"
+          type="text"
+          value={loginId}
+          onChange={(e) => setLoginId(e.target.value)}
+          placeholder="your@email.com"
+          required
+        />
 
-        {pendingReview && (
-          <div className="auth-banner info">
-            <Label k="auth.paymentProofPending" variant="compact" />
-          </div>
-        )}
+        <AuthField
+          label={<Label k="auth.password" variant="compact" />}
+          icon="🔒"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          minLength={6}
+        />
 
-        {success && <div className="auth-banner success">{success}</div>}
-        {error && <div className="auth-banner error">{error}</div>}
+        <ImageUpload
+          labelKey="auth.paymentScreenshot"
+          value={screenshot}
+          onChange={setScreenshot}
+        />
 
-        <form className="auth-form" onSubmit={handleSubmitProof}>
-          <p className="settings-hint"><Label k="auth.paymentProofHint" variant="compact" /></p>
+        <button
+          type="submit"
+          className="btn primary auth-submit"
+          disabled={submitting || pendingReview}
+        >
+          {submitting
+            ? <span className="auth-spinner" style={{ width: 24, height: 24, borderWidth: 2 }} />
+            : <Label k="auth.submitPaymentProof" variant="compact" />}
+        </button>
+      </form>
 
-          <label className="auth-field">
-            <span><Label k="auth.loginOrEmail" variant="compact" /></span>
-            <input
-              type="text"
-              value={loginId}
-              onChange={(e) => setLoginId(e.target.value)}
-              placeholder="your@email.com"
-              required
-            />
-          </label>
+      <div className="auth-links-grid">
+        <button type="button" className="auth-quick-link link-btn" onClick={checkPayment} disabled={checking}>
+          {checking
+            ? 'Checking…'
+            : <Label k="auth.checkPayment" variant="compact" />}
+        </button>
+        <button type="button" className="auth-quick-link link-btn" onClick={logout}>
+          <Label k="auth.logout" variant="compact" />
+        </button>
+        <Link to="/login" className="auth-quick-link">
+          <Label k="auth.backToLogin" variant="compact" />
+        </Link>
+      </div>
 
-          <label className="auth-field">
-            <span><Label k="auth.password" variant="compact" /></span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
-          </label>
-
-          <ImageUpload
-            labelKey="auth.paymentScreenshot"
-            value={screenshot}
-            onChange={setScreenshot}
-          />
-
-          <button
-            type="submit"
-            className="btn primary auth-submit"
-            disabled={submitting || pendingReview}
-          >
-            {submitting ? '…' : <Label k="auth.submitPaymentProof" variant="compact" />}
-          </button>
-        </form>
-
-        <div className="auth-form">
-          <button type="button" className="btn auth-submit" onClick={checkPayment} disabled={checking}>
-            {checking ? '…' : <Label k="auth.checkPayment" variant="compact" />}
-          </button>
-          <button type="button" className="btn auth-submit" onClick={logout}>
-            <Label k="auth.logout" variant="compact" />
-          </button>
-        </div>
-
-        {adminEmail && (
-          <p className="auth-admin-note">
-            Admin: {adminEmail}
-          </p>
-        )}
-
-        <p className="auth-switch">
-          <Link to="/login"><Label k="auth.backToLogin" variant="compact" /></Link>
+      {adminEmail && (
+        <p className="auth-admin-note">
+          Admin: {adminEmail}
         </p>
+      )}
     </AuthLayout>
   );
 }
