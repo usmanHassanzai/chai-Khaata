@@ -9,10 +9,18 @@ function isLocalHostUrl(url: string): boolean {
 }
 
 /** True when the app is served from a public deployed origin (not local dev). */
-function isDeployedWebOrigin(): boolean {
+function isDeployedWebOriginInternal(): boolean {
   if (typeof window === 'undefined' || !window.location?.origin) return false;
   return !isLocalHostUrl(window.location.origin);
 }
+
+function isCapacitorOrAppShellOrigin(): boolean {
+  if (typeof window === 'undefined' || !window.location?.origin) return false;
+  const o = window.location.origin;
+  return o === 'capacitor://localhost' || o === 'https://localhost' || o === 'http://localhost';
+}
+
+const PRODUCTION_CLOUD_URL = 'https://patiwala.pk';
 
 export function getCloudApiUrl(): string {
   // Dev: always sync/auth via same-origin Vite proxy — ignore saved remote URLs
@@ -21,9 +29,20 @@ export function getCloudApiUrl(): string {
   }
 
   // Live site (patiwala.pk, *.vercel.app): API is always same-origin.
-  // Ignore stale Cloud Sync URLs saved during local testing (e.g. localhost:5173).
-  if (isDeployedWebOrigin()) {
+  if (isDeployedWebOriginInternal()) {
     return normalizeUrl(window.location.origin);
+  }
+
+  // Mobile app (Capacitor APK) — never use capacitor:// as API host
+  if (isCapacitorOrAppShellOrigin()) {
+    const saved = localStorage.getItem(CLOUD_URL_KEY)?.trim();
+    if (saved) {
+      const normalized = normalizeUrl(saved);
+      if (!isLocalHostUrl(normalized)) return normalized;
+    }
+    const defaultCloud = import.meta.env.VITE_DEFAULT_CLOUD_URL as string | undefined;
+    if (defaultCloud?.trim()) return normalizeUrl(defaultCloud);
+    return PRODUCTION_CLOUD_URL;
   }
 
   const saved = localStorage.getItem(CLOUD_URL_KEY)?.trim();
@@ -53,6 +72,11 @@ export function setCloudApiUrl(url: string) {
 
 export function isCloudSyncEnabled(): boolean {
   return Boolean(getCloudApiUrl());
+}
+
+export function isDeployedWebOrigin(): boolean {
+  if (typeof window === 'undefined' || !window.location?.origin) return false;
+  return !/localhost|127\.0\.0\.1/.test(window.location.origin);
 }
 
 export async function testCloudConnection(testUrl?: string): Promise<{ ok: boolean; message: string }> {

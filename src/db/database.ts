@@ -1,9 +1,12 @@
 import Dexie, { type EntityTable } from 'dexie';
 import {
   attachLedgerSyncHooks,
+  runWithSuppressedAutoPush,
   startLedgerSyncLoop,
+  stopLedgerSyncLoop,
   syncLedgerWithCloud,
   touchLocalLedgerUpdatedAt,
+  getLocalLedgerUpdatedAt,
 } from '../services/ledgerSync';
 import { isCloudSyncEnabled } from '../services/cloudConfig';
 import type {
@@ -51,32 +54,40 @@ export function isDbInitialized(): boolean {
   return Boolean(db);
 }
 
-export async function initUserDatabase(userId: string): Promise<void> {
+export async function initUserDatabase(userId: string): Promise<{ syncOk: boolean; syncError?: string }> {
+  stopLedgerSyncLoop();
+
   if (db) {
     db.close();
   }
+
   db = new ChaiKhataDB(`ChaiKhataDB_${userId}`);
-  await ensureSettings();
 
+  // Attach auto-save hooks before any writes so every change pushes to Supabase
   if (isCloudSyncEnabled()) {
-    // Sync in background so login is not blocked on slow/unreachable cloud API
-    void syncLedgerWithCloud(db)
-      .then(() => {
-        attachLedgerSyncHooks(db);
-        startLedgerSyncLoop(db);
-      })
-      .catch((err) => {
-        console.warn('[Chai Khata] Cloud sync after login:', err);
-        attachLedgerSyncHooks(db);
-        startLedgerSyncLoop(db);
-      });
-  } else if (!getLocalLedgerUpdatedAt()) {
-    touchLocalLedgerUpdatedAt();
+    attachLedgerSyncHooks(db, userId);
   }
-}
 
-function getLocalLedgerUpdatedAt() {
-  return localStorage.getItem('chai-khata-ledger-updated-at') || '';
+  await runWithSuppressedAutoPush(async () => {
+    await ensureSettings();
+  });
+
+  if (!isCloudSyncEnabled()) {
+    if (!getLocalLedgerUpdatedAt(userId)) {
+      touchLocalLedgerUpdatedAt(userId);
+    }
+    return { syncOk: true };
+  }
+
+  startLedgerSyncLoop(db, userId);
+  const result = await syncLedgerWithCloud(db, userId);
+
+  if (!result.ok) {
+    console.warn('[Chai Khata] Initial cloud sync failed:', result.error);
+    return { syncOk: false, syncError: result.error };
+  }
+
+  return { syncOk: true };
 }
 
 export async function ensureSettings(): Promise<AppSettings> {

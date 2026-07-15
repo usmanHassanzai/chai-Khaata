@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { sendOtpEmail } from './email.js';
 import { sendOtpSms } from './twilio.js';
 import { readLedger, writeLedger, shouldAcceptIncoming, deleteLedger } from './ledgerStore.js';
+import { isServerlessEnv } from './dataPaths.js';
 import { deliverOtp, otpDeliveryStatus } from './otpDelivery.js';
 import { clearOtp, createOtp, getOtpForUser, verifyOtp } from './otpStore.js';
 import { registerErrorResponse, registerNewUser } from './registerUser.js';
@@ -967,6 +968,13 @@ app.patch('/api/admin/users/:id/mark-paid', authMiddleware, adminMiddleware, asy
 
 app.get('/api/sync/ledger', authMiddleware, async (req, res) => {
   try {
+    if (!isSupabaseEnabled() && isServerlessEnv()) {
+      return res.status(503).json({
+        error: 'SERVER_CONFIG',
+        message: 'Cloud database not configured. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel, run supabase/schema.sql, then redeploy.',
+      });
+    }
+
     const ledger = await readLedger(req.userId);
     if (!ledger) {
       return res.json({ empty: true, ledger: null });
@@ -980,6 +988,13 @@ app.get('/api/sync/ledger', authMiddleware, async (req, res) => {
 
 app.put('/api/sync/ledger', authMiddleware, async (req, res) => {
   try {
+    if (!isSupabaseEnabled() && isServerlessEnv()) {
+      return res.status(503).json({
+        error: 'SERVER_CONFIG',
+        message: 'Cloud database not configured. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel, run supabase/schema.sql, then redeploy.',
+      });
+    }
+
     const incoming = req.body ?? {};
     const existing = await readLedger(req.userId);
 

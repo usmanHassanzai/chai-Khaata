@@ -5,6 +5,7 @@ import { AdminUsersProvider, useAdminPendingCount } from '../context/AdminUsersC
 import { isCloudSyncEnabled } from '../services/cloudConfig';
 import { onSyncStatus, type SyncStatus } from '../services/ledgerSync';
 import AppInterior from './AppInterior';
+import AppLoading from './AppLoading';
 import TrialBanner from './TrialBanner';
 import RenewalGraceBanner from './RenewalGraceBanner';
 import SubscriptionBanner from './SubscriptionBanner';
@@ -60,7 +61,7 @@ export default function Layout() {
 function LayoutShell() {
   const mode = useLabelMode();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, dbReady } = useAuth();
   const pendingCount = useAdminPendingCount();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
 
@@ -201,10 +202,16 @@ function LayoutShell() {
           <TrialBanner />
           <SubscriptionBanner />
           <RenewalGraceBanner />
-          <AppInterior />
-          <div key={location.pathname} className="page-container page-enter">
-            <Outlet />
-          </div>
+          {!dbReady ? (
+            <AppLoading message="Loading your inventory from cloud…" />
+          ) : (
+            <>
+              <AppInterior />
+              <div key={location.pathname} className="page-container page-enter">
+                <Outlet />
+              </div>
+            </>
+          )}
         </main>
       </div>
 

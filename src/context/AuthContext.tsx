@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { initUserDatabase } from '../db/database';
+import { stopLedgerSyncLoop } from '../services/ledgerSync';
 import {
   ApiError,
   authApi,
@@ -45,8 +46,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const prepareDatabase = useCallback(async (userId: string) => {
     setDbReady(false);
-    await initUserDatabase(userId);
-    setDbReady(true);
+    try {
+      const result = await initUserDatabase(userId);
+      if (!result.syncOk && result.syncError) {
+        console.warn('[Chai Khata] Cloud sync:', result.syncError);
+      }
+      setDbReady(true);
+    } catch (dbErr) {
+      console.warn('[Chai Khata] Database init:', dbErr);
+      setDbReady(false);
+      throw dbErr;
+    }
   }, []);
 
   const refreshUser = useCallback(async () => {
@@ -87,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onSessionInvalid = () => {
+      stopLedgerSyncLoop();
       setUser(null);
       setDbReady(false);
     };
@@ -99,10 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { token, user: loggedIn } = await authApi.login(emailOrLogin, password);
       setStoredToken(token);
       setUser(loggedIn);
-      void prepareDatabase(loggedIn.id).catch((dbErr) => {
-        console.warn('[Chai Khata] Database init:', dbErr);
-        setDbReady(false);
-      });
+      await prepareDatabase(loggedIn.id);
     } catch (err) {
       if (err instanceof ApiError && err.code === 'PAYMENT_DUE' && err.user) {
         setUser(err.user);
@@ -134,6 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    stopLedgerSyncLoop();
     setStoredToken(null);
     setUser(null);
     setDbReady(false);
