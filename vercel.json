@@ -12,6 +12,7 @@
     { "source": "/api/auth/login", "destination": "/api/auth/login" },
     { "source": "/api/auth/config", "destination": "/api/auth/config" },
     { "source": "/api/auth/me", "destination": "/api/auth/me" },
+    { "source": "/api/auth/register", "destination": "/api/auth/register" },
     { "source": "/api/auth/recover-password-by-email", "destination": "/api/auth/recover-password-by-email" },
     { "source": "/api/cron/subscription-reminders", "destination": "/api/cron/subscription-reminders" },
     { "source": "/api/admin/(.*)", "destination": "/api/admin/$1" },

@@ -112,6 +112,17 @@ export async function sbFindUserById(id) {
   return data ? rowToUser(data) : null;
 }
 
+export async function sbPaymentRefIdExists(refId) {
+  const { data, error } = await getSupabase()
+    .from('users')
+    .select('id')
+    .eq('payment_ref_id', refId)
+    .maybeSingle();
+
+  if (error) throwSupabaseError(error);
+  return Boolean(data);
+}
+
 export async function sbInsertUser(user) {
   const { data, error } = await getSupabase()
     .from('users')

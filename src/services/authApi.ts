@@ -211,6 +211,7 @@ export const remoteAuthApi = {
       paymentRefId: string;
       payment: PaymentConfig;
       adminNotified?: boolean;
+      adminNotifyError?: string;
     }>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ username, email, phone, password, subscriptionPlan, paymentFeeDate, shopName }),

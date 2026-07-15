@@ -29,6 +29,7 @@ export default function Register() {
   const [paymentRefId, setPaymentRefId] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [adminNotified, setAdminNotified] = useState(false);
+  const [adminNotifyError, setAdminNotifyError] = useState('');
   const [adminNotificationsConfigured, setAdminNotificationsConfigured] = useState(false);
   const [savedLogin, setSavedLogin] = useState('');
   const [savedPassword, setSavedPassword] = useState('');
@@ -87,6 +88,7 @@ export default function Register() {
       setPaymentRefId(result.paymentRefId);
       setSuccessMessage(result.message);
       setAdminNotified(Boolean(result.adminNotified));
+      setAdminNotifyError(result.adminNotifyError || '');
       setRegistered(true);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -131,7 +133,7 @@ export default function Register() {
           </div>
         ) : adminNotificationsConfigured ? (
           <div className="auth-banner info">
-            Registration saved. If admin email was not received, contact <strong>{adminEmail}</strong> with your Payment ID.
+            Registration saved. Admin email was not sent{adminNotifyError ? `: ${adminNotifyError}` : ''}. Contact <strong>{adminEmail}</strong> with Payment ID <code>{paymentRefId}</code>.
           </div>
         ) : (
           <div className="auth-banner info">

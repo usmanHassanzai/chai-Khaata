@@ -7,7 +7,7 @@ import { sendOtpSms } from './twilio.js';
 import { readLedger, writeLedger, shouldAcceptIncoming, deleteLedger } from './ledgerStore.js';
 import { deliverOtp, otpDeliveryStatus } from './otpDelivery.js';
 import { clearOtp, createOtp, getOtpForUser, listActiveOtps, verifyOtp } from './otpStore.js';
-import { notifyAdminNewSignup } from './authHelpers.js';
+import { registerErrorResponse, registerNewUser } from './registerUser.js';
 import { recoverPasswordByEmail, adminSendPasswordToUser } from './passwordRecovery.js';
 import { clearExpiryReminderFields, runSubscriptionExpiryReminders } from './subscriptionReminders.js';
 import {
@@ -201,82 +201,15 @@ app.get('/api/auth/subscription-plans', (_req, res) => {
 
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, email, phone, password, shopName, paymentFeeDate, subscriptionPlan } = req.body ?? {};
-
-    if (!username?.trim() || !email?.trim() || !phone?.trim() || !password) {
-      return res.status(400).json({
-        error: 'VALIDATION',
-        message: 'Username, email, phone, and password are required',
-      });
+    const result = await registerNewUser(req.body ?? {});
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error, message: result.message });
     }
-
-    if (!subscriptionPlan || !isValidPlanId(String(subscriptionPlan))) {
-      return res.status(400).json({ error: 'VALIDATION', message: 'Please select a subscription plan' });
-    }
-
-    const plan = getPlan(String(subscriptionPlan));
-    const feeAmount = plan.price;
-
-    if (!paymentFeeDate?.trim()) {
-      return res.status(400).json({ error: 'VALIDATION', message: 'Payment date is required' });
-    }
-
-    if (String(username).trim().length < 3) {
-      return res.status(400).json({ error: 'VALIDATION', message: 'Username must be at least 3 characters' });
-    }
-
-    if (!isValidEmail(String(email))) {
-      return res.status(400).json({ error: 'VALIDATION', message: 'Please enter a valid email address' });
-    }
-
-    if (String(phone).trim().length < 10) {
-      return res.status(400).json({ error: 'VALIDATION', message: 'Please enter a valid phone number' });
-    }
-
-    if (String(password).length < 6) {
-      return res.status(400).json({ error: 'VALIDATION', message: 'Password must be at least 6 characters' });
-    }
-
-    const passwordHash = await bcrypt.hash(String(password), 10);
-    const plainPassword = String(password);
-
-    const user = await createUser({
-      username: String(username).trim().toLowerCase(),
-      email: String(email),
-      phone: String(phone).trim(),
-      passwordHash,
-      registrationPassword: plainPassword,
-      registrationFee: feeAmount,
-      paymentFeeDate: String(paymentFeeDate).trim(),
-      subscriptionPlan: plan.id,
-      subscriptionPlanLabel: plan.label,
-      shopName: shopName?.trim() || '',
-      status: 'pending',
-      role: 'user',
-    });
-
-    console.log(`[Chai Khata] Signup saved: ${user.username} | ref=${user.paymentRefId} | phone=${user.phone} | plan=${plan.label}`);
-
-    const notifyResult = await notifyAdminNewSignup(ADMIN_EMAIL, user, plainPassword, feeAmount, plan);
-
-    res.status(201).json({
-      message: notifyResult.sent
-        ? `Sign up successful! Payment ID: ${user.paymentRefId}. Admin has been notified at ${ADMIN_EMAIL}. Send payment screenshot on WhatsApp with your Payment ID.`
-        : `Sign up successful! Send Rs ${feeAmount.toLocaleString()} via Easypaisa/UBL/Nayapay/JS Bank and WhatsApp your screenshot with Payment ID ${user.paymentRefId}. Admin will approve after verification.`,
-      user: publicUser(user),
-      paymentRefId: user.paymentRefId,
-      payment: getPaymentConfig(),
-      adminNotified: notifyResult.sent === true,
-    });
+    res.status(result.status).json(result.body);
   } catch (err) {
-    if (err instanceof Error && err.message === 'USERNAME_TAKEN') {
-      return res.status(409).json({ error: 'USERNAME_TAKEN', message: 'This username is already taken' });
-    }
-    if (err instanceof Error && err.message === 'EMAIL_TAKEN') {
-      return res.status(409).json({ error: 'EMAIL_TAKEN', message: 'This email is already registered' });
-    }
+    const failure = registerErrorResponse(err);
     console.error('Register error:', err);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not register user' });
+    res.status(failure.status).json({ error: failure.error, message: failure.message });
   }
 });
 

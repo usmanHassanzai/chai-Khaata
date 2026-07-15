@@ -219,19 +219,35 @@ export async function findUserById(id) {
   );
 }
 
+/** Generate a unique payment ref without loading all users (Supabase). */
+async function generateUniquePaymentRefId() {
+  const { sbPaymentRefIdExists } = await import('./persistence/supabase.js');
+  for (let i = 0; i < 20; i++) {
+    const num = Math.floor(100000 + Math.random() * 899999);
+    const id = `PAT-${num}`;
+    const exists = await sbPaymentRefIdExists(id);
+    if (!exists) return id;
+  }
+  return `PAT-${Date.now().toString().slice(-6)}`;
+}
+
 /**
  * @param {Omit<UserRecord, 'id' | 'createdAt'> & { id?: string }}
  */
 export async function createUser(user) {
-  const users = await readUsers();
   const normalizedUsername = user.username.trim().toLowerCase();
   const normalizedEmail = normalizeEmail(user.email);
 
-  if (users.some((u) => u.username === normalizedUsername)) {
+  const [existingUsername, existingEmail] = await Promise.all([
+    findUserByUsername(normalizedUsername),
+    findUserByEmail(normalizedEmail),
+  ]);
+
+  if (existingUsername) {
     throw new Error('USERNAME_TAKEN');
   }
 
-  if (users.some((u) => u.email === normalizedEmail)) {
+  if (existingEmail) {
     throw new Error('EMAIL_TAKEN');
   }
 
@@ -242,7 +258,15 @@ export async function createUser(user) {
     email: normalizedEmail,
   });
 
-  const paymentRefId = user.paymentRefId ?? generatePaymentRefId(users);
+  let paymentRefId = user.paymentRefId;
+  if (!paymentRefId) {
+    if (await preferSupabase()) {
+      paymentRefId = await generateUniquePaymentRefId();
+    } else {
+      const users = await readUsersFromFile();
+      paymentRefId = generatePaymentRefId(users);
+    }
+  }
 
   /** @type {UserRecord} */
   const record = {

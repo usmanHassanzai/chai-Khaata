@@ -47,6 +47,16 @@ function isVercelRuntime() {
   return Boolean(process.env.VERCEL);
 }
 
+async function fetchWithTimeout(url, options = {}, ms = 10_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const VERCEL_SMTP_HINT =
   'Gmail SMTP cannot send from Vercel (ports 587/465 blocked). Use free Brevo: sign up at brevo.com, verify your Gmail sender, add BREVO_API_KEY + BREVO_FROM in Vercel, redeploy.';
 
@@ -74,7 +84,7 @@ async function sendViaBrevo(to, subject, text, html) {
   const key = String(process.env.BREVO_API_KEY).trim();
   const sender = parseFromAddress(mailFromAddress());
 
-  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+  const response = await fetchWithTimeout('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
       accept: 'application/json',
@@ -100,6 +110,12 @@ async function sendViaBrevo(to, subject, text, html) {
 
 function formatBrevoError(status, body) {
   const raw = String(body || '');
+  if (/aborted|abort/i.test(raw)) {
+    return 'Brevo email timed out. Registration was saved — check Admin → Approvals.';
+  }
+  if (status === 401 || /key not found|unauthorized/i.test(raw)) {
+    return 'Brevo API key invalid. In Vercel set BREVO_API_KEY to a new key from brevo.com → Settings → SMTP & API, then redeploy.';
+  }
   if (status === 403 && /sender.*not.*valid|not verified|unverified/i.test(raw)) {
     return 'Brevo: verify your sender email at brevo.com → Senders, then set BREVO_FROM to that address in Vercel.';
   }
@@ -116,7 +132,7 @@ async function sendViaResend(to, subject, text, html) {
   if (!isResendConfigured()) return null;
 
   const key = String(process.env.RESEND_API_KEY).trim();
-  const response = await fetch('https://api.resend.com/emails', {
+  const response = await fetchWithTimeout('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${key}`,
@@ -200,12 +216,21 @@ async function sendPlainEmail(to, subject, text, html) {
         return brevoResult;
       }
     } catch (err) {
-      const reason = err instanceof Error ? err.message : 'Brevo send failed';
+      const reason =
+        err instanceof Error && err.name === 'AbortError'
+          ? 'Brevo email timed out'
+          : err instanceof Error
+            ? err.message
+            : 'Brevo send failed';
       console.error(`[Chai Khata] Brevo failed for ${to}:`, reason);
-      if (!isResendConfigured() && (!isEmailConfigured() || isVercelRuntime())) {
+      if (isVercelRuntime() || !isResendConfigured() && (!isEmailConfigured() || isVercelRuntime())) {
         return { sent: false, reason: `Email failed: ${reason}` };
       }
     }
+  }
+
+  if (isVercelRuntime() && isBrevoConfigured()) {
+    return { sent: false, reason: 'Brevo email failed on server — check BREVO_API_KEY in Vercel' };
   }
 
   if (isResendConfigured()) {
@@ -250,7 +275,12 @@ async function sendPlainEmail(to, subject, text, html) {
         return brevoResult;
       }
     } catch (err) {
-      const reason = err instanceof Error ? err.message : 'Brevo send failed';
+      const reason =
+        err instanceof Error && err.name === 'AbortError'
+          ? 'Brevo email timed out'
+          : err instanceof Error
+            ? err.message
+            : 'Brevo send failed';
       console.error(`[Chai Khata] Brevo failed for ${to}:`, reason);
       if (!isResendConfigured()) {
         return { sent: false, reason: `Email failed: ${reason}` };
