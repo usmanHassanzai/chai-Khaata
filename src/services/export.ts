@@ -257,12 +257,17 @@ export function buildCustomerReceiptRows(sale: Sale) {
 export function printCustomerReceipt(options: {
   sale: Sale;
   customer?: Customer;
+  /** Used when customer record is missing but sale has customerId. */
+  customerName?: string;
   shopProfile?: ShopPrintProfile;
 }) {
-  const { sale, customer, shopProfile } = options;
+  const { sale, customer, customerName, shopProfile } = options;
+  const subtitle = customer
+    ? `${customer.name}${customer.customerId ? ` · ${customer.customerId}` : ''}`
+    : customerName || undefined;
   printTable({
     title: `Receipt — ${sale.teaName} (${sale.date})`,
-    subtitle: customer ? `${customer.name}${customer.customerId ? ` · ${customer.customerId}` : ''}` : undefined,
+    subtitle,
     shopProfile,
     columns: CUSTOMER_RECEIPT_COLUMNS,
     rows: buildCustomerReceiptRows(sale),

@@ -11,7 +11,6 @@ import { Label, PageTitle, SectionTitle, useLabel } from '../i18n/useLabel';
 import type { Customer, Sale } from '../models/types';
 import {
   computeCustomerSummary,
-  computeSaleProfit,
   DEFAULT_BAG_WEIGHT_KG,
   formatBags,
   formatCurrency,
@@ -449,10 +448,8 @@ export default function Customers() {
                 <th><Label k="dukaan.teaName" variant="compact" /></th>
                 <th><Label k="customers.totalMaal" variant="compact" /></th>
                 <th><Label k="customers.totalBagsSold" variant="compact" /></th>
-                <th><Label k="dukaan.purchasePricePerKg" variant="compact" /></th>
                 <th><Label k="customers.salePricePerKg" variant="compact" /></th>
                 <th><Label k="customers.totalAmount" variant="compact" /></th>
-                <th><Label k="dukaan.profit" variant="compact" /></th>
                 <th><Label k="customers.receivingAmount" variant="compact" /></th>
                 <th><Label k="customers.saleDues" variant="compact" /></th>
                 <th><Label k="dukaan.billImage" variant="compact" /></th>
@@ -462,11 +459,10 @@ export default function Customers() {
             </thead>
             <tbody>
               {filteredLedger.length === 0 ? (
-                <tr><td colSpan={16} className="empty">{l('common.noData')}</td></tr>
+                <tr><td colSpan={14} className="empty">{l('common.noData')}</td></tr>
               ) : (
                 filteredLedger.map((s) => {
                   const c = customerForSale(s);
-                  const profit = computeSaleProfit(s, purchases, sales);
                   return (
                     <tr key={s.id}>
                       <td>{s.date}</td>
@@ -476,10 +472,8 @@ export default function Customers() {
                       <td>{s.teaName}</td>
                       <td>{formatKg(s.quantityKg)}</td>
                       <td>{formatBags(saleBagsSold(s))}</td>
-                      <td>{s.purchasePricePerKg != null ? formatCurrency(s.purchasePricePerKg) : '—'}</td>
                       <td>{formatCurrency(s.salePricePerKg)}</td>
                       <td>{formatCurrency(saleTotal(s))}</td>
-                      <td className={profit >= 0 ? 'profit-positive' : 'profit-negative'}>{formatCurrency(profit)}</td>
                       <td>{formatCurrency(s.amountReceived)}</td>
                       <td className={saleDues(s) > 0 ? 'warn-text' : ''}>{formatCurrency(saleDues(s))}</td>
                       <td><ImageThumb src={s.billImage} /></td>
@@ -535,10 +529,8 @@ export default function Customers() {
                     <th><Label k="dukaan.teaName" variant="compact" /></th>
                     <th>kg</th>
                     <th><Label k="customers.bagsSold" variant="compact" /></th>
-                    <th><Label k="dukaan.purchasePricePerKg" variant="compact" /></th>
                     <th><Label k="customers.salePricePerKg" variant="compact" /></th>
                     <th><Label k="customers.totalAmount" variant="compact" /></th>
-                    <th><Label k="dukaan.profit" variant="compact" /></th>
                     <th><Label k="customers.receivingAmount" variant="compact" /></th>
                     <th><Label k="customers.saleDues" variant="compact" /></th>
                     <th><Label k="dukaan.billImage" variant="compact" /></th>
@@ -547,18 +539,14 @@ export default function Customers() {
                   </tr>
                 </thead>
                 <tbody>
-                  {detailSales.map((s) => {
-                    const profit = computeSaleProfit(s, purchases, sales);
-                    return (
+                  {detailSales.map((s) => (
                       <tr key={s.id}>
                         <td>{s.date}</td>
                         <td>{s.teaName}</td>
                         <td>{s.quantityKg}</td>
                         <td>{formatBags(saleBagsSold(s))}</td>
-                        <td>{s.purchasePricePerKg != null ? formatCurrency(s.purchasePricePerKg) : '—'}</td>
                         <td>{formatCurrency(s.salePricePerKg)}</td>
                         <td>{formatCurrency(saleTotal(s))}</td>
-                        <td className={profit >= 0 ? 'profit-positive' : 'profit-negative'}>{formatCurrency(profit)}</td>
                         <td>{formatCurrency(s.amountReceived)}</td>
                         <td className={saleDues(s) > 0 ? 'warn-text' : ''}>{formatCurrency(saleDues(s))}</td>
                         <td><ImageThumb src={s.billImage} /></td>
@@ -567,8 +555,7 @@ export default function Customers() {
                           <button type="button" className="btn sm" onClick={() => printCustomerSale(s)} title={l('customers.printReceipt')}>🖨</button>
                         </td>
                       </tr>
-                    );
-                  })}
+                  ))}
                 </tbody>
               </table>
             </div>

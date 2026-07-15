@@ -113,6 +113,7 @@ export const labels = {
     saleNotes: { ur: 'اضافی نوٹ', en: 'Miscellaneous Notes', roman: 'Extra Note' },
     stockAvailable: { ur: '{{kg}} کلو موجود ہے', en: '{{kg}} kg available', roman: '{{kg}} kg mojood hai' },
     noStock: { ur: 'اس چائے کا اسٹاک نہیں', en: 'No stock for this tea', roman: 'Is chai ka stock nahi hai' },
+    printInternal: { ur: 'اندرونی پرنٹ (منافع سمیت)', en: 'Print internal (with profit)', roman: 'Internal print (profit ke sath)' },
   },
 
   godaam: {

@@ -169,12 +169,7 @@ export default function Dukaan() {
     [filteredSales, purchases, sales, customers],
   );
 
-  function printOneSale(s: Sale) {
-    const customer = s.customerId ? customers.find((c) => c.id === s.customerId) : undefined;
-    if (s.customerId && customer) {
-      printCustomerReceipt({ sale: s, customer, shopProfile });
-      return;
-    }
+  function printInternalSale(s: Sale) {
     const rows = buildSalesExportRows([s], purchases, sales, customers);
     printTable({
       title: `Sale — ${s.teaName} (${s.date})`,
@@ -183,6 +178,20 @@ export default function Dukaan() {
       columns: SALES_EXPORT_COLUMNS,
       rows,
     });
+  }
+
+  function printOneSale(s: Sale) {
+    if (s.customerId) {
+      const customer = customers.find((c) => c.id === s.customerId);
+      printCustomerReceipt({
+        sale: s,
+        customer,
+        customerName: customer ? undefined : customerLabel(s),
+        shopProfile,
+      });
+      return;
+    }
+    printInternalSale(s);
   }
 
   return (
@@ -337,6 +346,7 @@ export default function Dukaan() {
                 <tr><td colSpan={12} className="empty">{l('common.noData')}</td></tr>
               ) : (
                 filteredSales.map((s) => {
+                  const isCustomerSale = !!s.customerId;
                   const profit = rowProfit(s);
                   const cost = s.purchasePricePerKg ?? getStockForTea(s.teaName, purchases, sales).avgCostPerKg;
                   const pkg = profitPerKg(s.salePricePerKg, cost);
@@ -346,15 +356,32 @@ export default function Dukaan() {
                       <td>{s.teaName}{s.notes ? <small className="row-note">{s.notes}</small> : null}</td>
                       <td>{formatBags(saleBagsSold(s))}</td>
                       <td>{s.quantityKg}</td>
-                      <td>{s.purchasePricePerKg != null ? formatCurrency(s.purchasePricePerKg) : formatCurrency(cost)}</td>
+                      <td>{isCustomerSale ? '—' : (s.purchasePricePerKg != null ? formatCurrency(s.purchasePricePerKg) : formatCurrency(cost))}</td>
                       <td>{formatCurrency(s.salePricePerKg)}</td>
                       <td>{formatCurrency(saleTotal(s))}</td>
-                      <td className={profit >= 0 ? 'profit-positive' : 'profit-negative'}>{formatCurrency(profit)}</td>
-                      <td className={pkg >= 0 ? 'profit-positive' : 'profit-negative'}>{formatCurrency(pkg)}</td>
+                      <td className={isCustomerSale ? undefined : profit >= 0 ? 'profit-positive' : 'profit-negative'}>{isCustomerSale ? '—' : formatCurrency(profit)}</td>
+                      <td className={isCustomerSale ? undefined : pkg >= 0 ? 'profit-positive' : 'profit-negative'}>{isCustomerSale ? '—' : formatCurrency(pkg)}</td>
                       <td>{customerLabel(s)}</td>
                       <td><ImageThumb src={s.billImage} /></td>
                       <td>
-                        <button type="button" className="btn sm" onClick={() => printOneSale(s)} title="Print">🖨</button>
+                        <button
+                          type="button"
+                          className="btn sm"
+                          onClick={() => printOneSale(s)}
+                          title={s.customerId ? l('customers.printReceipt') : l('dukaan.printInternal')}
+                        >
+                          🖨
+                        </button>
+                        {s.customerId ? (
+                          <button
+                            type="button"
+                            className="btn sm"
+                            onClick={() => printInternalSale(s)}
+                            title={l('dukaan.printInternal')}
+                          >
+                            📋
+                          </button>
+                        ) : null}
                         <button type="button" className="btn danger sm" onClick={() => handleDelete(s.id!)}>{l('common.delete')}</button>
                       </td>
                     </tr>
