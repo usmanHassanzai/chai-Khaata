@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import { setCors, sendJson, withTimeout } from '../../server/httpUtils.js';
 import { JWT_SECRET, ADMIN_EMAIL } from '../../server/env.js';
 import { findUserById, isPaymentBlocked, paymentDueAmount, publicUser } from '../../server/store.js';
-import { isSubscriptionExpired } from '../../server/subscriptions.js';
+import { isSubscriptionAccessBlocked } from '../../server/renewalGrace.js';
 import { isTrialActive } from '../../server/trialAccess.js';
 
 function readUserId(req) {
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    if (isSubscriptionExpired(user)) {
+    if (isSubscriptionAccessBlocked(user)) {
       sendJson(res, 403, {
         error: 'SUBSCRIPTION_EXPIRED',
         message: 'Your subscription expired. Renew to continue.',

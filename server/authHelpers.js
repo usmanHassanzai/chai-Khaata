@@ -45,3 +45,27 @@ export async function notifyAdminPendingLogin(adminEmail, user) {
     console.warn('[Chai Khata] Admin pending-login email failed:', err);
   }
 }
+
+/** Notify admin when a user submits subscription renewal payment proof. */
+export async function notifyAdminRenewalPayment(adminEmail, user, submission, plan, screenshot) {
+  console.log(
+    `[Chai Khata] SUBSCRIPTION RENEWAL PAYMENT
+  User:       ${user.username} (${user.email})
+  Payment ID: ${user.paymentRefId ?? '—'}
+  Plan:       ${plan?.label ?? submission.subscriptionPlan ?? '—'} — Rs ${submission.paymentDue}
+  → Approve in Admin → Payment Proofs`,
+  );
+
+  try {
+    const { sendAdminRenewalPaymentEmail } = await import('./email.js');
+    const result = await sendAdminRenewalPaymentEmail(adminEmail, user, submission, plan, screenshot);
+    if (!result.sent) {
+      console.warn(`[Chai Khata] Admin renewal email NOT sent to ${adminEmail}: ${result.reason ?? 'unknown'}`);
+    }
+    return result;
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : 'Notification failed';
+    console.error('[Chai Khata] Admin renewal notification error:', reason);
+    return { sent: false, reason };
+  }
+}

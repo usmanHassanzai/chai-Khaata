@@ -23,6 +23,7 @@ import {
   isValidPlanId,
 } from './subscriptions.js';
 import { clearExpiryReminderFields } from './subscriptionReminders.js';
+import { clearRenewalGraceFields } from './renewalGrace.js';
 
 export async function approveUserById(id) {
   const user = await findUserById(id);
@@ -227,13 +228,19 @@ export async function approvePaymentSubmissionById(id) {
     paymentDue: 0,
     paymentDueNote: '',
     lastPaidAt: new Date().toISOString(),
+    ...clearRenewalGraceFields(),
   };
 
   const renewalPlan = submission.subscriptionPlan || user.subscriptionPlan;
+  let renewalMessage = `Payment approved for ${user.username}. Account unblocked.`;
+
   if (submission.kind === 'subscription_renewal' && renewalPlan && isValidPlanId(renewalPlan)) {
     Object.assign(patch, extendSubscription(user, renewalPlan));
     Object.assign(patch, clearExpiryReminderFields());
     patch.registrationFee = getPlan(renewalPlan).price;
+    const plan = getPlan(renewalPlan);
+    const updatedExpiry = patch.subscriptionExpiresAt || user.subscriptionExpiresAt;
+    renewalMessage = `Subscription renewed for ${user.username} (${plan.label}) until ${updatedExpiry ? new Date(updatedExpiry).toLocaleDateString() : '—'}.`;
   } else if (user.status === 'approved' && renewalPlan && isValidPlanId(renewalPlan) && isSubscriptionExpired(user)) {
     Object.assign(patch, extendSubscription(user, renewalPlan));
     Object.assign(patch, clearExpiryReminderFields());
@@ -249,7 +256,7 @@ export async function approvePaymentSubmissionById(id) {
   return {
     status: 200,
     body: {
-      message: `Payment approved for ${user.username}. Account unblocked.`,
+      message: renewalMessage,
       submission: publicSubmission(updated),
       user: adminUser(await findUserById(user.id)),
     },
@@ -261,6 +268,11 @@ export async function rejectPaymentSubmissionById(id, note) {
   const submission = list.find((s) => s.id === id);
   if (!submission) {
     return { status: 404, body: { error: 'NOT_FOUND', message: 'Submission not found' } };
+  }
+
+  const user = await findUserById(submission.userId);
+  if (user && submission.kind === 'subscription_renewal') {
+    await updateUser(user.id, clearRenewalGraceFields());
   }
 
   const updated = await updateSubmission(submission.id, {

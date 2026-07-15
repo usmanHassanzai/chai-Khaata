@@ -34,6 +34,7 @@ export function rowToUser(row) {
     trialStartedAt: row.trial_started_at ?? undefined,
     trialEndsAt: row.trial_ends_at ?? undefined,
     lastExpiryReminderDate: row.last_expiry_reminder_date ?? undefined,
+    renewalGraceEndsAt: row.renewal_grace_ends_at ?? undefined,
   };
 }
 
@@ -64,6 +65,7 @@ export function userToRow(user) {
     trial_started_at: user.trialStartedAt ?? null,
     trial_ends_at: user.trialEndsAt ?? null,
     last_expiry_reminder_date: user.lastExpiryReminderDate ?? null,
+    renewal_grace_ends_at: user.renewalGraceEndsAt ?? null,
   };
 }
 
@@ -296,12 +298,26 @@ export async function sbUpdateUser(id, patch) {
     delete merged.lastExpiryReminderDate;
   }
 
-  const { data, error } = await getSupabase()
+  let result = await getSupabase()
     .from('users')
     .update(userToRow(merged))
     .eq('id', id)
     .select('*')
     .single();
+
+  if (result.error && isMissingColumnError(result.error) && merged.renewalGraceEndsAt !== undefined) {
+    console.warn('[Chai Khata] renewal_grace_ends_at missing — run supabase/migrate-production.sql');
+    const fallback = { ...merged };
+    delete fallback.renewalGraceEndsAt;
+    result = await getSupabase()
+      .from('users')
+      .update(userToRow(fallback))
+      .eq('id', id)
+      .select('*')
+      .single();
+  }
+
+  const { data, error } = result;
 
   if (error) {
     if (error.code === '23505') {

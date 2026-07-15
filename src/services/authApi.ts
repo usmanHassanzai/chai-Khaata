@@ -48,6 +48,8 @@ export interface AuthUser {
   subscriptionPrice?: number;
   renewalAvailable?: boolean;
   daysUntilExpiry?: number | null;
+  renewalGraceActive?: boolean;
+  renewalGraceEndsAt?: string;
   paymentDue?: number;
   paymentDueNote?: string;
   paymentBlocked?: boolean;
@@ -294,7 +296,16 @@ export const remoteAuthApi = {
   },
 
   submitPaymentProof(login: string, password: string, screenshot: string, subscriptionPlan?: SubscriptionPlanId) {
-    return request<{ message: string }>('/api/auth/submit-payment-proof', {
+    return request<{
+      message: string;
+      adminNotified?: boolean;
+      adminNotifyError?: string;
+      paymentRefId?: string;
+      whatsappLink?: string;
+      whatsappDisplay?: string;
+      renewalGraceActive?: boolean;
+      renewalGraceEndsAt?: string;
+    }>('/api/auth/submit-payment-proof', {
       method: 'POST',
       body: JSON.stringify({ login, password, screenshot, subscriptionPlan }),
     });
@@ -310,6 +321,8 @@ export const remoteAuthApi = {
       subscriptionPlan?: string;
       renewalAvailable?: boolean;
       daysUntilExpiry?: number | null;
+      renewalGraceActive?: boolean;
+      renewalGraceEndsAt?: string;
       pendingSubmission: boolean;
       pendingSubmittedAt?: string;
     }>('/api/auth/check-payment-submission', {

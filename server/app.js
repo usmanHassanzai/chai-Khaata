@@ -46,6 +46,7 @@ import { performLogin } from './authLogin.js';
 import { isSupabaseEnabled, getStorageMode, testSupabaseConnection, validateSupabaseConfig } from './supabase.js';
 import { ADMIN_EMAIL, ADMIN_PASSWORD, JWT_SECRET, PORT } from './env.js';
 import { getPaymentConfig } from './paymentConfig.js';
+import { isSubscriptionAccessBlocked } from './renewalGrace.js';
 import { isTrialActive } from './trialAccess.js';
 import { withTimeout } from './httpUtils.js';
 import {
@@ -249,7 +250,7 @@ function subscriptionExpiredResponse(user, res) {
 
 function accessBlockedResponse(user, res) {
   if (isPaymentBlocked(user)) return paymentBlockedResponse(user, res);
-  if (isSubscriptionExpired(user)) return subscriptionExpiredResponse(user, res);
+  if (isSubscriptionAccessBlocked(user)) return subscriptionExpiredResponse(user, res);
   return res.status(403).json({ error: 'FORBIDDEN', message: 'Access blocked', user: publicUser(user) });
 }
 
@@ -504,7 +505,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
       return paymentBlockedResponse(user, res);
     }
 
-    if (isSubscriptionExpired(user)) {
+    if (isSubscriptionAccessBlocked(user)) {
       return subscriptionExpiredResponse(user, res);
     }
 

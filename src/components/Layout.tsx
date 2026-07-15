@@ -6,6 +6,7 @@ import { isCloudSyncEnabled } from '../services/cloudConfig';
 import { onSyncStatus, type SyncStatus } from '../services/ledgerSync';
 import AppInterior from './AppInterior';
 import TrialBanner from './TrialBanner';
+import RenewalGraceBanner from './RenewalGraceBanner';
 import SubscriptionBanner from './SubscriptionBanner';
 import { TEA_GALLERY } from '../data/teaGallery';
 import { Label } from '../i18n/useLabel';
@@ -193,6 +194,7 @@ function LayoutShell() {
         <main className="main-content">
           <TrialBanner />
           <SubscriptionBanner />
+          <RenewalGraceBanner />
           <AppInterior />
           <div key={location.pathname} className="page-container page-enter">
             <Outlet />

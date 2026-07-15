@@ -5,6 +5,7 @@ import { isSubscriptionExpired, subscriptionInfo, subscriptionRenewalFields } fr
 import { isSupabaseEnabled } from './supabase.js';
 import { generatePaymentRefId } from './paymentConfig.js';
 import { buildPendingTrialFields, isTrialActive, trialFieldsForPublic } from './trialAccess.js';
+import { isSubscriptionAccessBlocked, renewalGraceFieldsForPublic } from './renewalGrace.js';
 import { dataFile, ensureDataDir, getDataDir, isServerlessEnv, readDataJson } from './dataPaths.js';
 import * as sb from './persistence/supabase.js';
 
@@ -74,6 +75,7 @@ async function ensureDataFile() {
  * @property {string} [trialStartedAt]
  * @property {string} [trialEndsAt]
  * @property {string} [lastExpiryReminderDate] YYYY-MM-DD — last daily expiry email sent
+ * @property {string} [renewalGraceEndsAt] ISO — 24h access after renewal submit while pending approval
  */
 
 /**
@@ -99,7 +101,7 @@ export function isPaymentBlocked(user) {
 }
 
 export function isAccessBlocked(user) {
-  return isPaymentBlocked(user) || isSubscriptionExpired(user);
+  return isPaymentBlocked(user) || isSubscriptionAccessBlocked(user);
 }
 
 export function normalizeEmail(email) {
@@ -427,6 +429,7 @@ export function publicUser(user) {
     paymentBlocked: isPaymentBlocked(user),
     accessBlocked: isAccessBlocked(user) && !isTrialActive(user),
     ...trialFieldsForPublic(user),
+    ...renewalGraceFieldsForPublic(user),
     ...sub,
     ...subscriptionRenewalFields(user),
   };

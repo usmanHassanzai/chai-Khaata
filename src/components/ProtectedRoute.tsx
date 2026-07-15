@@ -6,8 +6,10 @@ function isPaymentBlocked(user: NonNullable<ReturnType<typeof useAuth>['user']>)
   return user.role !== 'admin' && (user.paymentBlocked || (user.paymentDue ?? 0) > 0);
 }
 
-function isSubscriptionExpired(user: NonNullable<ReturnType<typeof useAuth>['user']>) {
-  return user.role !== 'admin' && Boolean(user.subscriptionExpired);
+function isSubscriptionBlocked(user: NonNullable<ReturnType<typeof useAuth>['user']>) {
+  return user.role !== 'admin'
+    && Boolean(user.subscriptionExpired)
+    && !user.renewalGraceActive;
 }
 
 export default function ProtectedRoute() {
@@ -25,7 +27,7 @@ export default function ProtectedRoute() {
     return <Navigate to="/payment-due" replace />;
   }
 
-  if (isSubscriptionExpired(user)) {
+  if (isSubscriptionBlocked(user)) {
     return <Navigate to="/subscription-renew" replace />;
   }
 

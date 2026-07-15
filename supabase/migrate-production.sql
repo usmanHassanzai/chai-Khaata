@@ -17,6 +17,7 @@ alter table public.users add column if not exists payment_ref_id text;
 alter table public.users add column if not exists trial_started_at timestamptz;
 alter table public.users add column if not exists trial_ends_at timestamptz;
 alter table public.users add column if not exists last_expiry_reminder_date text;
+alter table public.users add column if not exists renewal_grace_ends_at timestamptz;
 
 create unique index if not exists users_username_lower_idx on public.users (lower(username));
 create unique index if not exists users_email_lower_idx on public.users (lower(email));

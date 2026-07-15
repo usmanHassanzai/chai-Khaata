@@ -108,16 +108,43 @@ function mailFromAddress() {
 }
 
 /**
+ * @param {string} dataUri
+ * @returns {{ mime: string, base64: string, ext: string } | null}
+ */
+export function parseScreenshotDataUri(dataUri) {
+  const match = String(dataUri || '').match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  const mime = match[1];
+  let ext = 'png';
+  if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg';
+  else if (mime.includes('webp')) ext = 'webp';
+  else if (mime.includes('gif')) ext = 'gif';
+  return { mime, base64: match[2], ext };
+}
+
+/**
  * @param {string} to
  * @param {string} subject
  * @param {string} text
  * @param {string} html
+ * @param {{ name: string, content: string }[]} [attachments]
  */
-async function sendViaBrevo(to, subject, text, html) {
+async function sendViaBrevo(to, subject, text, html, attachments = []) {
   if (!isBrevoConfigured()) return null;
 
   const key = getBrevoApiKey();
   const sender = parseFromAddress(mailFromAddress());
+
+  const payload = {
+    sender,
+    to: [{ email: to }],
+    subject,
+    htmlContent: html,
+    textContent: text,
+  };
+  if (attachments.length) {
+    payload.attachment = attachments.map((a) => ({ name: a.name, content: a.content }));
+  }
 
   const response = await fetchWithTimeout('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
@@ -126,13 +153,7 @@ async function sendViaBrevo(to, subject, text, html) {
       'api-key': key,
       'content-type': 'application/json',
     },
-    body: JSON.stringify({
-      sender,
-      to: [{ email: to }],
-      subject,
-      htmlContent: html,
-      textContent: text,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
@@ -235,8 +256,9 @@ async function sendViaSmtp(to, subject, text, html) {
  * @param {string} subject
  * @param {string} text
  * @param {string} html
+ * @param {{ name: string, content: string }[]} [attachments]
  */
-async function sendPlainEmail(to, subject, text, html) {
+async function sendPlainEmail(to, subject, text, html, attachments = []) {
   if (!isAdminNotificationConfigured()) {
     console.log(`[Chai Khata Email → ${to}] ${subject}\n${text}`);
     return { sent: false, reason: 'Email not configured — add SMTP_*, BREVO_API_KEY, or RESEND_API_KEY to server env' };
@@ -245,7 +267,7 @@ async function sendPlainEmail(to, subject, text, html) {
   // Brevo + Resend use HTTPS — work on Vercel. Gmail SMTP ports are blocked on serverless.
   if (isBrevoConfigured()) {
     try {
-      const brevoResult = await sendViaBrevo(to, subject, text, html);
+      const brevoResult = await sendViaBrevo(to, subject, text, html, attachments);
       if (brevoResult?.sent) {
         console.log(`[Chai Khata] Email sent (Brevo): ${subject} → ${to}`);
         return brevoResult;
@@ -303,13 +325,13 @@ async function sendPlainEmail(to, subject, text, html) {
   }
 
   if (isBrevoConfigured()) {
-    try {
-      const brevoResult = await sendViaBrevo(to, subject, text, html);
-      if (brevoResult?.sent) {
-        console.log(`[Chai Khata] Email sent (Brevo fallback): ${subject} → ${to}`);
-        return brevoResult;
-      }
-    } catch (err) {
+  try {
+    const brevoResult = await sendViaBrevo(to, subject, text, html, attachments);
+    if (brevoResult?.sent) {
+      console.log(`[Chai Khata] Email sent (Brevo fallback): ${subject} → ${to}`);
+      return brevoResult;
+    }
+  } catch (err) {
       const reason =
         err instanceof Error && err.name === 'AbortError'
           ? 'Brevo email timed out'
@@ -406,7 +428,7 @@ Approve in Admin → Approvals after verifying payment.`;
 /** @param {string} adminEmail @param {import('./store.js').UserRecord} user */
 export async function sendAdminPendingLoginEmail(adminEmail, user) {
   const subject = `[Patiwala] Pending user login — ${user.paymentRefId || user.username}`;
-  const text = `Pending user logged in (1-day preview)
+  const text = `Pending user logged in (free preview)
 
 Payment ID: ${user.paymentRefId || '—'}
 Username:   ${user.username}
@@ -418,8 +440,65 @@ Approve after payment verification in Admin → Approvals.`;
   return sendAdminPlainEmail(adminEmail, subject, text, `
     <h2>Pending user login</h2>
     <p><strong>Payment ID:</strong> <code>${user.paymentRefId || '—'}</code></p>
-    <p>${user.username} (${user.email}) started a 1-day preview while waiting for approval.</p>
+    <p>${user.username} (${user.email}) started a free preview while waiting for approval.</p>
   `);
+}
+
+/**
+ * Admin email when a user submits subscription renewal payment proof (includes screenshot).
+ * @param {string} adminEmail
+ * @param {import('./store.js').UserRecord} user
+ * @param {import('./paymentSubmissions.js').PaymentSubmission} submission
+ * @param {{ label?: string, price?: number } | null} plan
+ * @param {string} screenshotDataUri
+ */
+export async function sendAdminRenewalPaymentEmail(adminEmail, user, submission, plan, screenshotDataUri) {
+  const planLabel = plan?.label || submission.subscriptionPlan || '—';
+  const amount = submission.paymentDue ?? plan?.price ?? 0;
+  const subject = `[Patiwala] Subscription renewal — ${user.shopName || user.username}`;
+  const parsed = parseScreenshotDataUri(screenshotDataUri);
+  const attachments = parsed
+    ? [{ name: `renewal-${user.username}-${submission.id.slice(0, 8)}.${parsed.ext}`, content: parsed.base64 }]
+    : [];
+
+  const text = `Subscription renewal payment submitted
+
+User:         ${user.username}
+Email:        ${user.email}
+Phone:        ${user.phone || '—'}
+Shop:         ${user.shopName || '—'}
+Payment ID:   ${user.paymentRefId || '—'}
+Plan:         ${planLabel} — Rs ${Number(amount).toLocaleString()}
+Expires:      ${user.subscriptionExpiresAt || '—'}
+Submitted:    ${submission.createdAt}
+
+Payment screenshot is attached to this email.
+User may also send the screenshot on WhatsApp — verify and approve in Admin → Payment Proofs.`;
+
+  const screenshotHtml = parsed
+    ? `<p><strong>Payment screenshot:</strong></p>
+       <p><img src="data:${parsed.mime};base64,${parsed.base64}" alt="Payment screenshot" style="max-width:100%;max-height:480px;border:1px solid #ddd;border-radius:8px" /></p>
+       <p><em>Also attached to this email.</em></p>`
+    : '<p><em>Screenshot could not be embedded — check Admin → Payment Proofs in the app.</em></p>';
+
+  const html = `
+    <h2>Subscription renewal submitted</h2>
+    <p>A shop owner submitted renewal payment proof. Screenshot is attached.</p>
+    <table cellpadding="6" style="border-collapse:collapse">
+      <tr><td>Username</td><td><strong>${user.username}</strong></td></tr>
+      <tr><td>Email</td><td>${user.email}</td></tr>
+      <tr><td>Phone</td><td>${user.phone || '—'}</td></tr>
+      <tr><td>Shop</td><td>${user.shopName || '—'}</td></tr>
+      <tr><td>Payment ID</td><td><code>${user.paymentRefId || '—'}</code></td></tr>
+      <tr><td>Plan</td><td>${planLabel} — Rs ${Number(amount).toLocaleString()}</td></tr>
+      <tr><td>Subscription expires</td><td>${user.subscriptionExpiresAt || '—'}</td></tr>
+      <tr><td>Submitted</td><td>${submission.createdAt}</td></tr>
+    </table>
+    ${screenshotHtml}
+    <p>Approve in <strong>Admin → Payment Proofs</strong> after verifying payment (WhatsApp screenshot may also arrive separately).</p>
+  `;
+
+  return sendPlainEmail(adminEmail, subject, text, html, attachments);
 }
 
 /**
@@ -577,7 +656,8 @@ ${wasGenerated ? 'Note: A new temporary password was generated.' : ''}`;
  * @param {string} subject
  * @param {string} text
  * @param {string} html
+ * @param {{ name: string, content: string }[]} [attachments]
  */
-async function sendAdminPlainEmail(to, subject, text, html) {
-  return sendPlainEmail(to, subject, text, html);
+async function sendAdminPlainEmail(to, subject, text, html, attachments = []) {
+  return sendPlainEmail(to, subject, text, html, attachments);
 }

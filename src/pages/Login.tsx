@@ -44,7 +44,12 @@ export default function Login() {
     void refreshServerStatus();
   }, []);
 
-  if (user?.status === 'approved' || user?.role === 'admin' || (user?.status === 'pending' && user.trialActive)) {
+  if (
+    user?.status === 'approved'
+    || user?.role === 'admin'
+    || (user?.status === 'pending' && user.trialActive)
+    || user?.renewalGraceActive
+  ) {
     return <Navigate to="/dashboard" replace />;
   }
 

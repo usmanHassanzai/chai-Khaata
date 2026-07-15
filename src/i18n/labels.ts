@@ -543,6 +543,31 @@ export const labels = {
       en: 'Renewal pending — subscription restores after admin approval',
       roman: 'Renewal pending — admin manzoori ke baad subscription restore hogi',
     },
+    renewalWhatsappHint: {
+      ur: 'جمع کرانے کے بعد اسکرین شاٹ ایڈمن کے WhatsApp پر بھی بھیجیں',
+      en: 'After submitting, also send the screenshot to admin on WhatsApp',
+      roman: 'Submit ke baad screenshot admin ke WhatsApp par bhi bhejein',
+    },
+    renewalAdminNotified: {
+      ur: 'ایڈمن کو آپ کی اسکرین شاٹ ای میل ہو گئی',
+      en: 'Admin was emailed your payment screenshot',
+      roman: 'Admin ko aapki screenshot email ho gayi',
+    },
+    renewalSendWhatsapp: {
+      ur: 'WhatsApp پر اسکرین شاٹ بھیجیں',
+      en: 'Send screenshot on WhatsApp',
+      roman: 'WhatsApp par screenshot bhejein',
+    },
+    renewalGraceTitle: {
+      ur: 'ری نیو زیرِ جائزہ',
+      en: 'Renewal under review',
+      roman: 'Renewal under review',
+    },
+    renewalGraceSubtitle: {
+      ur: 'ایڈمن منظوری تک ۲۴ گھنٹے مفت استعمال',
+      en: '24 hours free access while admin approves your renewal',
+      roman: 'Admin manzoori tak 24 ghante free access',
+    },
     subscriptionStarts: { ur: 'سبسکرپشن شروع', en: 'Subscription starts', roman: 'Subscription starts' },
     subscriptionExpires: { ur: 'سبسکرپشن ختم', en: 'Subscription expires', roman: 'Subscription expires' },
     approvedDate: { ur: 'منظوری تاریخ', en: 'Approved date', roman: 'Approved date' },

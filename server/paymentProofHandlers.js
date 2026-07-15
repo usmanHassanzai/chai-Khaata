@@ -1,5 +1,9 @@
 import bcrypt from 'bcryptjs';
-import { findUserByLogin, isPaymentBlocked, paymentDueAmount } from './store.js';
+import { ADMIN_EMAIL } from './env.js';
+import { notifyAdminRenewalPayment } from './authHelpers.js';
+import { findUserByLogin, isPaymentBlocked, paymentDueAmount, updateUser } from './store.js';
+import { getPaymentConfig } from './paymentConfig.js';
+import { withTimeout } from './httpUtils.js';
 import {
   getPlan,
   isSubscriptionExpired,
@@ -7,6 +11,7 @@ import {
   subscriptionRenewalFields,
 } from './subscriptions.js';
 import { createSubmission, findPendingByUserId, publicSubmission } from './paymentSubmissions.js';
+import { buildRenewalGraceFields, isRenewalGraceActive, renewalGraceHours } from './renewalGrace.js';
 
 /** User can submit renewal if expired or within reminder window (7 days before). */
 export function canSubmitSubscriptionRenewal(user) {
@@ -78,16 +83,59 @@ export async function submitPaymentProofForUser(user, screenshot, subscriptionPl
     screenshot,
   });
 
+  let activeUser = user;
+  if (kind === 'subscription_renewal') {
+    activeUser = await updateUser(user.id, buildRenewalGraceFields());
+  }
+
+  let adminNotified = false;
+  let adminNotifyError = '';
+  const payment = getPaymentConfig();
+
+  if (kind === 'subscription_renewal') {
+    try {
+      const plan = getPlan(planId || user.subscriptionPlan || '');
+      const notifyResult = await withTimeout(
+        notifyAdminRenewalPayment(ADMIN_EMAIL, activeUser, submission, plan, screenshot),
+        12_000,
+        'Admin renewal email',
+      );
+      adminNotified = notifyResult.sent === true;
+      if (!adminNotified) adminNotifyError = notifyResult.reason || 'Admin email could not be sent';
+    } catch (err) {
+      adminNotifyError = err instanceof Error ? err.message : 'Admin email failed';
+      console.warn('[Chai Khata] Admin renewal email failed:', adminNotifyError);
+    }
+  }
+
+  const graceHours = renewalGraceHours();
+  const graceNote = kind === 'subscription_renewal'
+    ? ` You have ${graceHours} hours of free access while admin reviews.`
+    : '';
+  const whatsappHint = kind === 'subscription_renewal'
+    ? ` Also send the same screenshot on WhatsApp (${payment.whatsappDisplay}) with Payment ID ${activeUser.paymentRefId || '—'}.`
+    : '';
+
   const message = kind === 'subscription_renewal'
     ? (earlyRenewal
-      ? 'Renewal payment submitted early. Admin will review and extend your subscription.'
-      : 'Renewal payment submitted. Admin will review and extend your subscription.')
+      ? `Renewal payment submitted early.${graceNote}${adminNotified ? ' Admin was emailed your screenshot.' : ''}${whatsappHint}`
+      : `Renewal payment submitted.${graceNote}${adminNotified ? ' Admin was emailed your screenshot.' : ''}${whatsappHint}`)
     : 'Payment screenshot submitted. Admin will review and unblock your account after approval.';
 
   return {
     ok: true,
     status: 201,
-    body: { message, submission: publicSubmission(submission) },
+    body: {
+      message,
+      submission: publicSubmission(submission),
+      adminNotified,
+      adminNotifyError: adminNotified ? undefined : adminNotifyError || undefined,
+      paymentRefId: activeUser.paymentRefId ?? '',
+      whatsappLink: payment.whatsappLink,
+      whatsappDisplay: payment.whatsappDisplay,
+      renewalGraceActive: kind === 'subscription_renewal',
+      renewalGraceEndsAt: activeUser.renewalGraceEndsAt ?? '',
+    },
   };
 }
 
@@ -134,11 +182,13 @@ export async function checkPaymentSubmissionByLogin(loginValue, password) {
       paymentDue: paymentDueAmount(user),
       paymentBlocked: isPaymentBlocked(user),
       subscriptionExpired: isSubscriptionExpired(user),
-      accessBlocked: isPaymentBlocked(user) || isSubscriptionExpired(user),
+      accessBlocked: isPaymentBlocked(user) || (isSubscriptionExpired(user) && !isRenewalGraceActive(user)),
       subscriptionExpiresAt: user.subscriptionExpiresAt ?? '',
       subscriptionPlan: user.subscriptionPlan ?? '',
       renewalAvailable,
       daysUntilExpiry: daysLeft,
+      renewalGraceActive: isRenewalGraceActive(user),
+      renewalGraceEndsAt: user.renewalGraceEndsAt ?? '',
       pendingSubmission: Boolean(pending),
       pendingSubmittedAt: pending?.createdAt,
     },

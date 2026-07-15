@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
 import { useAuth } from '../context/AuthContext';
 import ImageUpload from '../components/ImageUpload';
@@ -9,7 +9,8 @@ import PaymentInstructions from '../components/PaymentInstructions';
 import { ApiError, authApi, type PaymentConfig, type SubscriptionPlan, type SubscriptionPlanId } from '../services/authApi';
 
 export default function SubscriptionRenew() {
-  const { user, logout, refreshUser } = useAuth();
+  const { user, logout, refreshUser, login } = useAuth();
+  const navigate = useNavigate();
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [payment, setPayment] = useState<PaymentConfig>(DEFAULT_PAYMENT_CONFIG);
   const [subscriptionPlan, setSubscriptionPlan] = useState<SubscriptionPlanId>('monthly');
@@ -24,6 +25,10 @@ export default function SubscriptionRenew() {
   const [expiresAt, setExpiresAt] = useState(user?.subscriptionExpiresAt ?? '');
   const [renewalAvailable, setRenewalAvailable] = useState(user?.renewalAvailable ?? false);
   const [daysUntilExpiry, setDaysUntilExpiry] = useState<number | null>(user?.daysUntilExpiry ?? null);
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminNotified, setAdminNotified] = useState(false);
+  const [whatsappLink, setWhatsappLink] = useState(DEFAULT_PAYMENT_CONFIG.whatsappLink);
+  const [paymentRefId, setPaymentRefId] = useState(user?.paymentRefId ?? '');
 
   const isEarlyRenewal = Boolean(
     (user?.renewalAvailable && !user?.subscriptionExpired)
@@ -58,7 +63,14 @@ export default function SubscriptionRenew() {
     }
 
     authApi.config()
-      .then((c) => { if (c.payment) setPayment(normalizePaymentConfig(c.payment)); })
+      .then((c) => {
+        setAdminEmail(c.adminEmail);
+        if (c.payment) {
+          const normalized = normalizePaymentConfig(c.payment);
+          setPayment(normalized);
+          setWhatsappLink(normalized.whatsappLink);
+        }
+      })
       .catch(() => {});
 
     loadPlans();
@@ -72,9 +84,25 @@ export default function SubscriptionRenew() {
     if (user?.subscriptionPlan) setSubscriptionPlan(user.subscriptionPlan as SubscriptionPlanId);
     if (user?.renewalAvailable != null) setRenewalAvailable(user.renewalAvailable);
     if (user?.daysUntilExpiry != null) setDaysUntilExpiry(user.daysUntilExpiry);
+    if (user?.paymentRefId) setPaymentRefId(user.paymentRefId);
   }, [user]);
 
   const selectedPlan = plans.find((p) => p.id === subscriptionPlan);
+
+  function whatsappRenewalUrl() {
+    const planLabel = selectedPlan?.label || subscriptionPlan;
+    const amount = selectedPlan?.price?.toLocaleString() || '';
+    const text = [
+      'Patiwala subscription renewal',
+      paymentRefId ? `Payment ID: ${paymentRefId}` : '',
+      `Plan: ${planLabel}${amount ? ` — Rs ${amount}` : ''}`,
+      loginId ? `Email: ${loginId}` : '',
+      'Payment screenshot attached.',
+    ].filter(Boolean).join('\n');
+    const base = whatsappLink || payment.whatsappLink;
+    const sep = base.includes('?') ? '&' : '?';
+    return `${base}${sep}text=${encodeURIComponent(text)}`;
+  }
 
   async function checkStatus() {
     if (!loginId.trim() || !password) {
@@ -93,6 +121,15 @@ export default function SubscriptionRenew() {
       if (!status.accessBlocked && !status.renewalAvailable) {
         setSuccess('Subscription active! You can log in now.');
         await refreshUser();
+        navigate('/dashboard', { replace: true });
+      } else if (status.pendingSubmission && status.renewalGraceActive) {
+        setSuccess('Renewal pending — you have free access while admin reviews.');
+        try {
+          await login(loginId.trim(), password);
+          navigate('/dashboard', { replace: true });
+        } catch {
+          await refreshUser();
+        }
       } else if (status.pendingSubmission) {
         setSuccess('Your renewal payment is waiting for admin approval.');
       } else if (status.renewalAvailable && !status.subscriptionExpired) {
@@ -122,7 +159,17 @@ export default function SubscriptionRenew() {
       const res = await authApi.submitPaymentProof(loginId.trim(), password, screenshot, subscriptionPlan);
       setSuccess(res.message);
       setPendingReview(true);
+      setAdminNotified(Boolean(res.adminNotified));
+      if (res.paymentRefId) setPaymentRefId(res.paymentRefId);
+      if (res.whatsappLink) setWhatsappLink(res.whatsappLink);
       setScreenshot(undefined);
+
+      try {
+        await login(loginId.trim(), password);
+        navigate('/dashboard', { replace: true });
+      } catch {
+        await refreshUser();
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not submit renewal');
     } finally {
@@ -176,6 +223,29 @@ export default function SubscriptionRenew() {
           <div className="auth-banner info"><Label k="auth.renewalPending" variant="compact" /></div>
         )}
 
+        {(pendingReview || success) && (
+          <div className="register-upload-block">
+            {adminNotified && (
+              <div className="auth-banner success">
+                <Label k="auth.renewalAdminNotified" variant="compact" />
+                {adminEmail && <> — <strong>{adminEmail}</strong></>}
+              </div>
+            )}
+            <p className="settings-note">
+              <Label k="auth.renewalWhatsappHint" variant="compact" />
+              {paymentRefId && <> Payment ID: <code>{paymentRefId}</code></>}
+            </p>
+            <a
+              href={whatsappRenewalUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn primary payment-wa-btn"
+            >
+              📱 <Label k="auth.renewalSendWhatsapp" variant="compact" /> — {payment.whatsappDisplay}
+            </a>
+          </div>
+        )}
+
         <fieldset className="subscription-fieldset">
           <legend><Label k="auth.renewSubscription" variant="compact" /></legend>
           <div className="subscription-plans">
@@ -199,8 +269,10 @@ export default function SubscriptionRenew() {
           {selectedPlan && (
             <PaymentInstructions
               payment={payment}
+              paymentRefId={paymentRefId || user?.paymentRefId}
               planPrice={selectedPlan.price}
               planLabel={selectedPlan.label}
+              showDemoNote={false}
               compact
             />
           )}
@@ -229,6 +301,7 @@ export default function SubscriptionRenew() {
 
           <div className="auth-field">
             <span><Label k="auth.uploadPaymentScreenshot" variant="compact" /></span>
+            <p className="settings-note"><Label k="auth.renewalWhatsappHint" variant="compact" /></p>
           <ImageUpload labelKey="auth.paymentScreenshot" value={screenshot} onChange={setScreenshot} />
           </div>
 

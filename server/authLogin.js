@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { ADMIN_EMAIL, JWT_SECRET } from './env.js';
 import { findUserByLogin, isPaymentBlocked, paymentDueAmount, publicUser, updateUser } from './store.js';
-import { isSubscriptionExpired } from './subscriptions.js';
+import { isRenewalGraceActive, isSubscriptionAccessBlocked } from './renewalGrace.js';
 import { isSupabaseEnabled, validateSupabaseConfig } from './supabase.js';
 import { withTimeout, sanitizeAuthErrorMessage } from './httpUtils.js';
 import { ensurePendingTrial, getPendingTrialDays } from './trialAccess.js';
@@ -83,7 +83,7 @@ export async function performLogin(loginValue, password) {
     throw err;
   }
 
-  if (isSubscriptionExpired(user)) {
+  if (isSubscriptionAccessBlocked(user)) {
     const err = new Error('Your subscription expired. Renew to continue.');
     err.code = 'SUBSCRIPTION_EXPIRED';
     err.user = publicUser(user);
