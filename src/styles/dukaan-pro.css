@@ -431,3 +431,362 @@
     grid-column: 1 / -1;
   }
 }
+
+/* ── Easy 3-step sale wizard ── */
+.dukaan-easy .duk-layout-easy {
+  grid-template-columns: minmax(0, 1.7fr) minmax(240px, 0.75fr);
+}
+
+.sale-steps {
+  list-style: none;
+  margin: 0 0 1.15rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.sale-step-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: 12px;
+  border: 2px solid rgba(235, 228, 216, 0.95);
+  background: #f8f6f1;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text-muted);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.sale-step.is-active .sale-step-btn {
+  border-color: var(--tea-primary);
+  background: rgba(45, 106, 79, 0.08);
+  color: var(--tea-deep);
+}
+
+.sale-step.is-done .sale-step-btn {
+  border-color: rgba(45, 106, 79, 0.35);
+  color: var(--tea-deep);
+}
+
+.sale-step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 0.85rem;
+  background: rgba(26, 61, 47, 0.1);
+  flex-shrink: 0;
+}
+
+.sale-step.is-active .sale-step-num {
+  background: var(--tea-primary);
+  color: #fff;
+}
+
+.sale-step-label {
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.sale-step-title {
+  margin: 0 0 0.85rem;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--tea-deep);
+}
+
+.sale-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.tea-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.55rem;
+}
+
+.tea-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 14px;
+  border: 2px solid rgba(235, 228, 216, 0.95);
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+
+.tea-chip strong {
+  font-size: 0.95rem;
+  color: var(--tea-deep);
+}
+
+.tea-chip span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tea-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(26, 61, 47, 0.08);
+}
+
+.tea-chip.is-active {
+  border-color: var(--tea-primary);
+  background: linear-gradient(160deg, rgba(45, 106, 79, 0.1) 0%, #fff 100%);
+  box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.12);
+}
+
+.tea-chip.is-empty {
+  opacity: 0.55;
+}
+
+.sale-stock-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.sale-stock-banner strong {
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sale-stock-banner.is-ok {
+  background: rgba(45, 106, 79, 0.1);
+  color: var(--tea-deep);
+}
+
+.sale-stock-banner.is-low {
+  background: rgba(212, 168, 83, 0.2);
+  color: #8a6418;
+}
+
+.sale-stock-banner.is-out {
+  background: rgba(184, 84, 80, 0.12);
+  color: #9b3b36;
+}
+
+.qty-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.qty-mode-btn {
+  min-height: 48px;
+  border-radius: 12px;
+  border: 2px solid rgba(235, 228, 216, 0.95);
+  background: #f8f6f1;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.qty-mode-btn.is-active {
+  border-color: var(--tea-primary);
+  background: rgba(45, 106, 79, 0.1);
+  color: var(--tea-deep);
+}
+
+.sale-qty-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.sale-total-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.15rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #1a3d2f 0%, #2d6a4f 100%);
+  color: #fff;
+}
+
+.sale-total-hero span {
+  font-size: 0.88rem;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.sale-total-hero strong {
+  font-size: 1.55rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.sale-more-toggle {
+  align-self: flex-start;
+}
+
+.sale-more-panel {
+  padding: 0.85rem;
+  border-radius: 12px;
+  background: rgba(248, 246, 241, 0.9);
+  border: 1px dashed rgba(26, 61, 47, 0.2);
+}
+
+.sale-selected-tea {
+  margin: 0;
+  font-weight: 800;
+  color: var(--tea-primary);
+  font-size: 1.05rem;
+}
+
+.sale-confirm-card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem 1.1rem;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #f8faf8 0%, #f3f0ea 100%);
+  border: 1px solid rgba(235, 228, 216, 0.95);
+}
+
+.sale-confirm-card > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.sale-confirm-card .is-total {
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(235, 228, 216, 0.95);
+  font-size: 1.05rem;
+}
+
+.sale-confirm-card strong {
+  font-variant-numeric: tabular-nums;
+  color: var(--tea-deep);
+}
+
+.sale-due-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  background: rgba(248, 246, 241, 0.9);
+  font-weight: 700;
+}
+
+.sale-due-line.is-due {
+  background: rgba(212, 168, 83, 0.18);
+  color: #8a6418;
+}
+
+.sale-walkin-note {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  background: rgba(45, 106, 79, 0.08);
+  font-weight: 700;
+  color: var(--tea-deep);
+}
+
+.sale-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.35rem;
+}
+
+.sale-step-actions .btn.primary {
+  flex: 1 1 160px;
+}
+
+.duk-history-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.sale-simple-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.sale-simple-card {
+  padding: 1rem 1.1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(235, 228, 216, 0.95);
+  background: #fff;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.sale-simple-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.sale-simple-top strong {
+  display: block;
+  color: var(--tea-deep);
+  font-size: 1.02rem;
+}
+
+.sale-simple-top span {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.sale-simple-amount {
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--tea-deep);
+}
+
+.sale-simple-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.sale-simple-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+@media (max-width: 720px) {
+  .sale-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .sale-qty-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dukaan-easy .duk-layout-easy {
+    grid-template-columns: 1fr;
+  }
+}

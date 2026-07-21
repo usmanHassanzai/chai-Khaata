@@ -261,6 +261,31 @@
   background: rgba(212, 168, 83, 0.08);
 }
 
+.customers-pro .cust-more-details {
+  margin: 0.75rem 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  border: 1px dashed rgba(26, 61, 47, 0.22);
+  background: rgba(248, 246, 241, 0.85);
+}
+
+.customers-pro .cust-more-details summary {
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--tea-deep);
+  font-size: 0.9rem;
+  margin-bottom: 0.35rem;
+}
+
+.customers-pro .cust-more-details[open] summary {
+  margin-bottom: 0.75rem;
+}
+
+.customers-pro .settings-note a {
+  color: var(--tea-primary);
+  font-weight: 800;
+}
+
 @media (max-width: 960px) {
   .cust-forms-grid {
     grid-template-columns: 1fr;

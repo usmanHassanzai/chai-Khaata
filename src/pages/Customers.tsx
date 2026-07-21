@@ -148,10 +148,6 @@ export default function Customers() {
 
   const quickSaleQty = parseFloat(saleQty) || (parseFloat(saleBags) || 0) * (parseFloat(saleBagWeight) || DEFAULT_BAG_WEIGHT_KG);
   const quickSalePrice = parseFloat(salePrice) || 0;
-  const quickCost = resolvePurchasePrice(saleTea, saleExternalTea, saleManualPurchasePrice);
-  const quickProfit = quickSaleQty > 0 && quickSalePrice > 0
-    ? profitPerKg(quickSalePrice, quickCost) * quickSaleQty
-    : 0;
 
   const customerSales = useMemo(
     () => sales.filter((s) => s.customerId).sort((a, b) => b.date.localeCompare(a.date)),
@@ -602,9 +598,12 @@ export default function Customers() {
         <button type="submit" className="btn primary">{l('customers.saveCustomer')}</button>
       </form>
 
-      {/* ── QUICK SALE FOR CUSTOMER ── */}
+      {/* ── QUICK CREDIT SALE (simplified) ── */}
       <form className="cust-panel form-card animate-fade-in-up stagger-2" onSubmit={handleQuickSale}>
         <SectionTitle k="customers.addSaleForCustomer" />
+        <p className="settings-note">
+          <Label k="dashboard.easySaleSub" variant="compact" /> — <a href="/dukaan"><Label k="dashboard.easySale" variant="compact" /></a>
+        </p>
         <div className="form-grid">
           <label className="form-field">
             <FieldLabel labelKey="customers.customerName" />
@@ -615,7 +614,6 @@ export default function Customers() {
               ))}
             </select>
           </label>
-          <FormField labelKey="common.date" value={saleDate} onChange={setSaleDate} type="date" required />
           <label className="form-field">
             <FieldLabel labelKey="dukaan.teaName" />
             <input
@@ -628,55 +626,61 @@ export default function Customers() {
               {teaNames.map((n) => <option key={n} value={n} />)}
             </datalist>
           </label>
-          <label className="form-field checkbox-field">
-            <input
-              type="checkbox"
-              checked={saleExternalTea}
-              onChange={(e) => setSaleExternalTea(e.target.checked)}
-            />
-            <span><Label k="dukaan.otherCompanyTea" variant="compact" /></span>
-          </label>
-          <p className="settings-note">{l('dukaan.otherCompanyTeaHint')}</p>
-          <FormField labelKey="customers.bagsSold" value={saleBags} onChange={(v) => {
+          <FormField labelKey="dukaan.bagsSold" value={saleBags} onChange={(v) => {
             setSaleBags(v);
             const b = Math.round(parseFloat(v) || 0);
             const bw = parseFloat(saleBagWeight) || DEFAULT_BAG_WEIGHT_KG;
             if (b > 0) setSaleQty(String(kgFromBags(b, bw)));
           }} type="number" min={0} step={1} placeholder="0" />
-          <FormField labelKey="customers.bagQuantity" value={saleBagWeight} onChange={(v) => {
-            setSaleBagWeight(v);
-            const b = Math.round(parseFloat(saleBags) || 0);
-            const bw = parseFloat(v) || DEFAULT_BAG_WEIGHT_KG;
-            if (b > 0) setSaleQty(String(kgFromBags(b, bw)));
-          }} type="number" min={0} step={0.01} />
-          <FormField labelKey="dukaan.quantityKg" value={saleQty} onChange={setSaleQty} type="number" min={0} step={0.01} required />
-          {saleExternalTea ? (
-            <FormField
-              labelKey="dukaan.manualPurchasePrice"
-              value={saleManualPurchasePrice}
-              onChange={setSaleManualPurchasePrice}
-              type="number"
-              min={0}
-              step={0.01}
-            />
-          ) : (
-            <ReadOnlyField
-              labelKey="dukaan.purchasePricePerKg"
-              value={saleTea && getGodaamPurchasePrice(saleTea, purchases).hasPurchase
-                ? formatCurrency(getGodaamPurchasePrice(saleTea, purchases).avgCostPerKg)
-                : '—'}
-            />
-          )}
           <FormField labelKey="customers.salePricePerKg" value={salePrice} onChange={setSalePrice} type="number" min={0} step={0.01} required />
           <FormField labelKey="dukaan.amountReceived" value={saleReceived} onChange={setSaleReceived} type="number" min={0} step={0.01} />
-          <TextAreaField labelKey="dukaan.saleNotes" value={saleNotes} onChange={setSaleNotes} />
-          <ImageUpload labelKey="dukaan.billImage" value={saleBillImage} onChange={setSaleBillImage} />
         </div>
+
+        <details className="cust-more-details">
+          <summary><Label k="dukaan.moreOptions" variant="compact" /></summary>
+          <div className="form-grid">
+            <FormField labelKey="common.date" value={saleDate} onChange={setSaleDate} type="date" />
+            <FormField labelKey="customers.bagQuantity" value={saleBagWeight} onChange={(v) => {
+              setSaleBagWeight(v);
+              const b = Math.round(parseFloat(saleBags) || 0);
+              const bw = parseFloat(v) || DEFAULT_BAG_WEIGHT_KG;
+              if (b > 0) setSaleQty(String(kgFromBags(b, bw)));
+            }} type="number" min={0} step={0.01} />
+            <FormField labelKey="dukaan.quantityKg" value={saleQty} onChange={setSaleQty} type="number" min={0} step={0.01} />
+            <label className="form-field checkbox-field">
+              <input
+                type="checkbox"
+                checked={saleExternalTea}
+                onChange={(e) => setSaleExternalTea(e.target.checked)}
+              />
+              <span><Label k="dukaan.otherCompanyTea" variant="compact" /></span>
+            </label>
+            {saleExternalTea ? (
+              <FormField
+                labelKey="dukaan.manualPurchasePrice"
+                value={saleManualPurchasePrice}
+                onChange={setSaleManualPurchasePrice}
+                type="number"
+                min={0}
+                step={0.01}
+              />
+            ) : (
+              <ReadOnlyField
+                labelKey="dukaan.purchasePricePerKg"
+                value={saleTea && getGodaamPurchasePrice(saleTea, purchases).hasPurchase
+                  ? formatCurrency(getGodaamPurchasePrice(saleTea, purchases).avgCostPerKg)
+                  : '—'}
+              />
+            )}
+            <TextAreaField labelKey="dukaan.saleNotes" value={saleNotes} onChange={setSaleNotes} />
+            <ImageUpload labelKey="dukaan.billImage" value={saleBillImage} onChange={setSaleBillImage} />
+          </div>
+        </details>
+
         {quickSaleQty > 0 && quickSalePrice > 0 && (
-          <div className="live-info">
-            <span className="info">{l('dukaan.saleValue')}: {formatCurrency(quickSaleQty * quickSalePrice)}</span>
-            <span className="info profit-positive">{l('dukaan.profit')}: {formatCurrency(quickProfit)}</span>
-            <span className="info">{l('dukaan.profitPerKg')}: {formatCurrency(profitPerKg(quickSalePrice, quickCost))}</span>
+          <div className="sale-total-hero" style={{ marginTop: '0.75rem' }}>
+            <span><Label k="dukaan.saleValue" variant="compact" /></span>
+            <strong>{formatCurrency(quickSaleQty * quickSalePrice)}</strong>
           </div>
         )}
         {saleError && <p className="error-msg">{saleError}</p>}
