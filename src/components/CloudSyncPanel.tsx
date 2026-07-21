@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getCloudApiUrl, isCloudSyncEnabled, isDeployedWebOrigin, setCloudApiUrl, testCloudConnection } from '../services/cloudConfig';
-import { onSyncStatus, pushLedgerToCloud, pullLedgerFromCloud, type SyncStatus } from '../services/ledgerSync';
+import { onSyncStatus, syncLedgerWithCloud, type SyncStatus } from '../services/ledgerSync';
 import { db } from '../db/database';
 import { Label } from '../i18n/useLabel';
 
@@ -48,12 +48,10 @@ export default function CloudSyncPanel() {
     showMessage('');
     try {
       if (!db) throw new Error('Database not ready');
-      const pull = await pullLedgerFromCloud(db, user.id);
-      const push = await pushLedgerToCloud(db, user.id);
-      const errMsg = ('message' in pull && pull.message) || ('message' in push && push.message);
-      if (('error' in pull && pull.error) || ('error' in push && push.error)) {
+      const result = await syncLedgerWithCloud(db, user.id);
+      if (!result.ok) {
         showMessage(
-          errMsg || 'Sync failed. Check internet and that Supabase is configured on the server.',
+          ('error' in result && result.error) || 'Sync failed. Check internet and that Supabase is configured on the server.',
           'error',
         );
       } else {
@@ -67,11 +65,11 @@ export default function CloudSyncPanel() {
   }
 
   const statusLabel =
-    status === 'synced' ? 'Live — auto-saving to cloud'
-    : status === 'syncing' ? 'Syncing…'
-    : status === 'offline' ? 'Offline — changes saved locally until online'
-    : status === 'error' ? 'Sync error — tap Sync now to retry'
-    : isCloudSyncEnabled() ? 'Ready' : 'Not configured';
+    status === 'synced' ? 'Auto sync live — saving to cloud'
+    : status === 'syncing' ? 'Auto syncing…'
+    : status === 'offline' ? 'Offline — will sync automatically when online'
+    : status === 'error' ? 'Sync issue — will retry automatically'
+    : isCloudSyncEnabled() ? 'Auto sync ready' : 'Not configured';
 
   return (
     <section className="card form-card cloud-sync-panel">
@@ -79,8 +77,9 @@ export default function CloudSyncPanel() {
       <p className="settings-note">
         {autoSync ? (
           <>
-            Your data auto-syncs to the cloud when you log in on <strong>patiwala.pk</strong>.
-            Use the same email and password on phone, tablet, or computer — your Godaam, sales, and customers follow you.
+            <Label k="settings.autoSyncOn" variant="compact" />
+            {' '}
+            Use the same email and password on phone, tablet, or computer — Godaam, sales, and customers stay matched.
           </>
         ) : (
           <Label k="settings.cloudSyncHint" variant="compact" />

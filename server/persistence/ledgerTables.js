@@ -763,11 +763,13 @@ export async function sbApplyLedgerChanges(userId, changes) {
     throw err;
   }
 
-  const updatedAt = maxUpdatedAt(
-    applied.map((change) => ({
-      updatedAt: change.updatedAt || change.row?.updatedAt || new Date().toISOString(),
-    })),
-  );
+  const updatedAt = applied.length
+    ? maxUpdatedAt(
+      applied.map((change) => ({
+        updatedAt: change.updatedAt || change.row?.updatedAt || new Date().toISOString(),
+      })),
+    )
+    : (await sbGetLedgerUpdatedAt(userId)) || new Date().toISOString();
 
   return { applied: applied.length, skipped, updatedAt };
 }

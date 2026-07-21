@@ -435,6 +435,11 @@ export const labels = {
     cloudServerUrl: { ur: 'کلاؤڈ سرور URL', en: 'Cloud Server URL', roman: 'Cloud Server URL' },
     saveCloudUrl: { ur: 'محفوظ کریں', en: 'Save', roman: 'Save' },
     syncNow: { ur: 'ابھی سنک کریں', en: 'Sync Now', roman: 'Abhi Sync' },
+    autoSyncOn: {
+      ur: 'خودکار سنک آن ہے — ڈیٹا خود کلاؤڈ میں محفوظ ہوتا ہے',
+      en: 'Auto sync is on — data saves to the cloud by itself',
+      roman: 'Auto sync on hai — data khud cloud mein save hota hai',
+    },
     testConnection: { ur: 'کنکشن ٹیسٹ', en: 'Test Connection', roman: 'Test Connection' },
     cloudStep1: {
       ur: '1) Supabase + Vercel پر deploy کریں (npm run deploy:vercel)',

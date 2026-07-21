@@ -5,6 +5,7 @@ import ImageUpload, { ImageThumb } from '../components/ImageUpload';
 import ExportToolbar from '../components/ExportToolbar';
 import TextAreaField from '../components/TextAreaField';
 import { db } from '../db/database';
+import { flushLedgerPushNow } from '../services/ledgerSync';
 import { Label, useLabel } from '../i18n/useLabel';
 import type { Sale, SaleFilter } from '../models/types';
 import {
@@ -189,11 +190,15 @@ export default function Dukaan() {
           }]
         : undefined,
     });
+    flushLedgerPushNow();
     resetForm();
   }
 
   async function handleDelete(id: number) {
-    if (window.confirm(l('common.confirmDelete'))) await db.sales.delete(id);
+    if (window.confirm(l('common.confirmDelete'))) {
+      await db.sales.delete(id);
+      flushLedgerPushNow();
+    }
   }
 
   function customerLabel(s: Sale) {

@@ -4,10 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { AdminUsersProvider, useAdminPendingCount } from '../context/AdminUsersContext';
 import { isCloudSyncEnabled } from '../services/cloudConfig';
 import {
-  flushLedgerPushNow,
   onSyncStatus,
-  pullLedgerFromCloud,
-  pushLedgerToCloud,
+  syncLedgerWithCloud,
   type SyncStatus,
 } from '../services/ledgerSync';
 import { db } from '../db/database';
@@ -83,7 +81,6 @@ function LayoutShell() {
   const pendingCount = useAdminPendingCount();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [syncBusy, setSyncBusy] = useState(false);
 
   const isAdmin = user?.role === 'admin';
   const mobilePageTitle = pageTitleFromPath(location.pathname, mode);
@@ -106,26 +103,14 @@ function LayoutShell() {
     return () => document.body.classList.remove('scroll-lock');
   }, [mobileMenuOpen]);
 
-  /* Keep local Dexie ledger synced with cloud DB whenever user opens a page */
+  /* Auto sync whenever user opens a page — no manual tap needed */
   useEffect(() => {
     if (!cloudOn || !dbReady || !user || !db) return;
-    void pullLedgerFromCloud(db, user.id, { useSince: true }).then(() => {
-      flushLedgerPushNow();
-    });
+    const timer = window.setTimeout(() => {
+      void syncLedgerWithCloud(db, user.id);
+    }, 200);
+    return () => window.clearTimeout(timer);
   }, [location.pathname, cloudOn, dbReady, user]);
-
-  async function handleSyncTap() {
-    if (!cloudOn || !user || !db || syncBusy) return;
-    setSyncBusy(true);
-    try {
-      await pullLedgerFromCloud(db, user.id);
-      await pushLedgerToCloud(db, user.id);
-    } catch (err) {
-      console.error('[Chai Khata] Mobile sync failed:', err);
-    } finally {
-      setSyncBusy(false);
-    }
-  }
 
   function renderNavLinks(
     links: readonly { readonly to: string; readonly key: string; readonly icon: string; readonly glyph?: string }[],
@@ -150,7 +135,7 @@ function LayoutShell() {
     ));
   }
 
-  const effectiveSync = syncBusy ? 'syncing' : syncStatus;
+  const effectiveSync = syncStatus;
 
   return (
     <div className={`app-shell easy-pos${mobileMenuOpen ? ' mobile-menu-open' : ''}`}>
@@ -224,17 +209,11 @@ function LayoutShell() {
 
         <div className="mobile-drawer-footer">
           {cloudOn && (
-            <button
-              type="button"
-              className={`mobile-drawer-sync is-${effectiveSync}`}
-              onClick={() => {
-                void handleSyncTap();
-              }}
-              disabled={syncBusy}
-            >
+            <div className={`mobile-drawer-sync is-${effectiveSync}`} role="status">
               <span className="mobile-sync-dot" aria-hidden />
               <Label k={syncLabelKey(effectiveSync)} variant="compact" />
-            </button>
+              <span className="mobile-drawer-sync-hint">Auto</span>
+            </div>
           )}
           <button type="button" className="btn mobile-drawer-logout" onClick={logout}>
             <Label k="auth.logout" variant="compact" />
@@ -265,19 +244,17 @@ function LayoutShell() {
             <div className="header-meta">
               {cloudOn && (
                 <>
-                  <button
-                    type="button"
+                  <span
                     className={`mobile-sync-chip is-${effectiveSync}`}
-                    onClick={() => void handleSyncTap()}
-                    disabled={syncBusy}
-                    title={getLabel('common.syncTap').en}
-                    aria-label={getLabel('common.syncTap').en}
+                    title="Auto sync with database"
+                    role="status"
+                    aria-live="polite"
                   >
                     <span className="mobile-sync-dot" aria-hidden />
                     <span className="mobile-sync-label">
                       <Label k={syncLabelKey(effectiveSync)} variant="compact" />
                     </span>
-                  </button>
+                  </span>
                   <span
                     className={`header-sync-dot${effectiveSync === 'offline' || effectiveSync === 'error' ? ' offline' : effectiveSync === 'syncing' ? ' syncing' : ''}`}
                     title={effectiveSync === 'synced' ? 'Cloud sync live' : effectiveSync}

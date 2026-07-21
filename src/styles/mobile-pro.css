@@ -125,12 +125,9 @@
     font: inherit;
     font-size: 0.72rem;
     font-weight: 800;
-    cursor: pointer;
     flex-shrink: 1;
-  }
-
-  .mobile-sync-chip:disabled {
-    opacity: 0.75;
+    pointer-events: none;
+    user-select: none;
   }
 
   .mobile-sync-chip.is-syncing {
@@ -388,7 +385,17 @@
     color: var(--tea-deep);
     font: inherit;
     font-weight: 800;
-    cursor: pointer;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .mobile-drawer-sync-hint {
+    margin-left: auto;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.55;
   }
 
   .mobile-drawer-logout {

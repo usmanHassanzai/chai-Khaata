@@ -31,8 +31,8 @@ type LedgerChange =
 
 const LEGACY_UPDATED_AT_KEY = 'chai-khata-ledger-updated-at';
 const SYNC_TIMEOUT_MS = 30000;
-const PUSH_DEBOUNCE_MS = 100;
-const POLL_INTERVAL_MS = 20000;
+const PUSH_DEBOUNCE_MS = 50;
+const POLL_INTERVAL_MS = 8000;
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -46,6 +46,8 @@ let lastStatus: SyncStatus = 'idle';
 let syncing = false;
 let pulling = false;
 let pendingPush = false;
+let pendingPull = false;
+let pendingPullFull = false;
 let suppressAutoPush = false;
 let syncDb: ChaiKhataDB | null = null;
 const pendingChanges = new Map<string, LedgerChange>();
@@ -153,6 +155,8 @@ export function resetLedgerSyncState() {
   syncDb = null;
   syncing = false;
   pulling = false;
+  pendingPull = false;
+  pendingPullFull = false;
   clearPendingChanges();
   suppressAutoPush = false;
   setStatus('idle');
@@ -223,20 +227,15 @@ export async function exportLocalLedger(db: ChaiKhataDB, userId?: string): Promi
 async function mergeRows<T extends { id?: number; updatedAt?: string }>(
   table: {
     bulkPut: (rows: T[]) => Promise<unknown>;
-    bulkDelete: (keys: number[]) => Promise<void>;
     toArray: () => Promise<T[]>;
   },
   rows: T[],
 ) {
-  const serverIds = new Set(rows.map((row) => row.id).filter((id): id is number => id != null));
+  // Soft merge only upserts newer server rows.
+  // Never delete local-only rows here — they may still be waiting to upload.
   const localRows = await table.toArray();
   const localMap = new Map(localRows.map((row) => [row.id, row]));
-  const deleteIds: number[] = [];
   const toPut: T[] = [];
-
-  for (const local of localRows) {
-    if (local.id != null && !serverIds.has(local.id)) deleteIds.push(local.id);
-  }
 
   for (const row of rows) {
     if (row.id == null) continue;
@@ -244,7 +243,6 @@ async function mergeRows<T extends { id?: number; updatedAt?: string }>(
     if (!local || isNewer(rowUpdatedAt(row), rowUpdatedAt(local))) toPut.push(row);
   }
 
-  if (deleteIds.length) await table.bulkDelete(deleteIds);
   if (toPut.length) await table.bulkPut(toPut);
 }
 
@@ -303,13 +301,14 @@ export async function importLedgerSnapshotFull(db: ChaiKhataDB, snapshot: Ledger
 }
 
 async function localEntityCounts(db: ChaiKhataDB) {
-  const [dealers, customers, purchases, sales] = await Promise.all([
+  const [dealers, customers, purchases, sales, payments] = await Promise.all([
     db.dealers.count(),
     db.customers.count(),
     db.purchases.count(),
     db.sales.count(),
+    db.payments.count(),
   ]);
-  return { dealers, customers, purchases, sales };
+  return { dealers, customers, purchases, sales, payments };
 }
 
 function serverEntityCounts(ledger: LedgerSnapshot) {
@@ -318,6 +317,7 @@ function serverEntityCounts(ledger: LedgerSnapshot) {
     customers: ledger.customers?.length ?? 0,
     purchases: ledger.purchases?.length ?? 0,
     sales: ledger.sales?.length ?? 0,
+    payments: ledger.payments?.length ?? 0,
   };
 }
 
@@ -326,7 +326,17 @@ function serverHasMoreData(local: Awaited<ReturnType<typeof localEntityCounts>>,
   return remote.dealers > local.dealers
     || remote.customers > local.customers
     || remote.purchases > local.purchases
-    || remote.sales > local.sales;
+    || remote.sales > local.sales
+    || remote.payments > local.payments;
+}
+
+function localHasMoreData(local: Awaited<ReturnType<typeof localEntityCounts>>, server: LedgerSnapshot) {
+  const remote = serverEntityCounts(server);
+  return local.dealers > remote.dealers
+    || local.customers > remote.customers
+    || local.purchases > remote.purchases
+    || local.sales > remote.sales
+    || local.payments > remote.payments;
 }
 
 function buildSyncPath(userId?: string, useSince = true) {
@@ -342,7 +352,11 @@ export async function pullLedgerFromCloud(
   options: { useSince?: boolean } = {},
 ) {
   if (!isCloudSyncEnabled() || !getStoredToken()) return { pulled: false as const };
-  if (pulling) return { pulled: false as const, queued: true as const };
+  if (pulling) {
+    pendingPull = true;
+    if (options.useSince === false) pendingPullFull = true;
+    return { pulled: false as const, queued: true as const };
+  }
 
   const uid = userId || activeUserId || undefined;
   const useSince = options.useSince !== false;
@@ -370,44 +384,51 @@ export async function pullLedgerFromCloud(
       return { pulled: false as const, empty: true as const };
     }
 
-    const serverUpdated = res.data.ledger.updatedAt || '';
-    const localUpdated = getLocalLedgerUpdatedAt(uid);
     const localCounts = await localEntityCounts(db);
     const localHasData = localCounts.dealers > 0
       || localCounts.customers > 0
       || localCounts.purchases > 0
-      || localCounts.sales > 0;
+      || localCounts.sales > 0
+      || localCounts.payments > 0;
     const remoteHasMore = serverHasMoreData(localCounts, res.data.ledger);
+    const hasPendingLocal = pendingChanges.size > 0;
 
-    if (!localHasData || remoteHasMore) {
+    // Full replace when doing a forced full pull / empty local / remote has more.
+    // Soft-merge when local still has unpushed rows so we never erase them.
+    if (!hasPendingLocal && (!useSince || !localHasData || remoteHasMore)) {
       await importLedgerSnapshotFull(db, res.data.ledger, uid);
-      setStatus('synced');
-      return { pulled: true as const, ledger: res.data.ledger };
-    }
-
-    if (!localUpdated || new Date(serverUpdated).getTime() > new Date(localUpdated).getTime()) {
+    } else {
       await importLedgerSnapshot(db, res.data.ledger, uid);
-      setStatus('synced');
-      return { pulled: true as const, ledger: res.data.ledger };
     }
 
     setStatus('synced');
-    return { pulled: false as const };
+    return { pulled: true as const, ledger: res.data.ledger };
   } catch (err) {
     setStatus('offline');
     return { pulled: false as const, error: true as const, message: err instanceof Error ? err.message : 'Pull failed' };
   } finally {
     pulling = false;
+    if (pendingPull && syncDb) {
+      const forceFull = pendingPullFull;
+      pendingPull = false;
+      pendingPullFull = false;
+      void pullLedgerFromCloud(syncDb, activeUserId || undefined, { useSince: !forceFull });
+    }
   }
 }
 
-export async function pushLedgerChangesToCloud(userId?: string) {
-  if (!isCloudSyncEnabled() || !getStoredToken()) return { pushed: false as const };
-  if (!pendingChanges.size) return { pushed: false as const, empty: true as const };
+type PushResult =
+  | { pushed: false; empty?: true; queued?: true; error?: true; message?: string }
+  | { pushed: true; applied?: number; fallback?: true; recovered?: true }
+  | { pushed: false; merged: true };
+
+export async function pushLedgerChangesToCloud(userId?: string): Promise<PushResult> {
+  if (!isCloudSyncEnabled() || !getStoredToken()) return { pushed: false };
+  if (!pendingChanges.size) return { pushed: false, empty: true };
 
   if (syncing) {
     pendingPush = true;
-    return { pushed: false as const, queued: true as const };
+    return { pushed: false, queued: true };
   }
 
   const uid = userId || activeUserId || undefined;
@@ -419,6 +440,7 @@ export async function pushLedgerChangesToCloud(userId?: string) {
     const res = await syncRequest<{
       accepted: boolean;
       applied?: number;
+      skipped?: unknown[];
       updatedAt?: string;
       ledger?: LedgerSnapshot;
     }>('/api/sync/ledger', {
@@ -426,26 +448,41 @@ export async function pushLedgerChangesToCloud(userId?: string) {
       body: JSON.stringify({ changes }),
     });
 
+    const applied = Number(res.data.applied ?? 0);
+    const skipped = Array.isArray(res.data.skipped) ? res.data.skipped : [];
     const serverUpdated = res.data.updatedAt || res.data.ledger?.updatedAt;
-    if (serverUpdated && uid) {
-      localStorage.setItem(ledgerUpdatedAtKey(uid), serverUpdated);
+
+    // Only clear the queue when something actually landed (or nothing left to retry)
+    if (applied > 0 || skipped.length >= changes.length) {
+      if (serverUpdated && uid) {
+        localStorage.setItem(ledgerUpdatedAtKey(uid), serverUpdated);
+      }
+      clearPendingChanges();
+      setStatus('synced');
+      return { pushed: true, applied };
     }
 
-    clearPendingChanges();
-    setStatus('synced');
-    return { pushed: true as const, applied: res.data.applied ?? changes.length };
+    // Server accepted HTTP but applied nothing — fall through to full snapshot upload
+    throw new Error('No row changes applied — uploading full ledger');
   } catch (err) {
+    // Full PUT must ignore the pending queue (otherwise we re-enter PATCH forever)
     if (syncDb) {
-      const fallback = await pushLedgerToCloud(syncDb, uid);
+      syncing = false;
+      const fallback: PushResult = await pushLedgerToCloud(syncDb, uid, { forceFull: true });
       if (fallback.pushed || ('merged' in fallback && fallback.merged)) {
         clearPendingChanges();
         setStatus('synced');
-        return { pushed: true as const, applied: changes.length, fallback: true as const };
+        return { pushed: true, applied: changes.length, fallback: true };
+      }
+      if ('error' in fallback && fallback.error) {
+        setStatus('error');
+        pendingPush = true;
+        return { pushed: false, error: true, message: fallback.message || 'Push failed' };
       }
     }
     setStatus('error');
     pendingPush = true;
-    return { pushed: false as const, error: true as const, message: err instanceof Error ? err.message : 'Push failed' };
+    return { pushed: false, error: true, message: err instanceof Error ? err.message : 'Push failed' };
   } finally {
     syncing = false;
     if (pendingPush && syncDb && pendingChanges.size) {
@@ -455,24 +492,30 @@ export async function pushLedgerChangesToCloud(userId?: string) {
   }
 }
 
-export async function pushLedgerToCloud(db: ChaiKhataDB, userId?: string) {
-  if (!isCloudSyncEnabled() || !getStoredToken()) return { pushed: false as const };
+export async function pushLedgerToCloud(
+  db: ChaiKhataDB,
+  userId?: string,
+  options: { forceFull?: boolean } = {},
+): Promise<PushResult> {
+  if (!isCloudSyncEnabled() || !getStoredToken()) return { pushed: false };
 
-  if (pendingChanges.size) {
+  // Prefer incremental PATCH unless caller forces a full snapshot upload
+  if (!options.forceFull && pendingChanges.size) {
     return pushLedgerChangesToCloud(userId);
   }
 
   if (syncing) {
     pendingPush = true;
-    return { pushed: false as const, queued: true as const };
+    return { pushed: false, queued: true };
   }
 
   const uid = userId || activeUserId || undefined;
   syncing = true;
   setStatus('syncing');
   try {
+    // Snapshot upload must carry a fresh timestamp so the server accepts it
     const snapshot = await exportLocalLedger(db, uid);
-    snapshot.updatedAt = touchLocalLedgerUpdatedAt(uid);
+    snapshot.updatedAt = new Date().toISOString();
 
     const res = await syncRequest<{ accepted: boolean; ledger?: LedgerSnapshot }>('/api/sync/ledger', {
       method: 'PUT',
@@ -481,23 +524,42 @@ export async function pushLedgerToCloud(db: ChaiKhataDB, userId?: string) {
 
     if (res.status === 409 && (res.data as { ledger?: LedgerSnapshot }).ledger) {
       await importLedgerSnapshot(db, (res.data as { ledger: LedgerSnapshot }).ledger, uid);
+      // After merging newer cloud data, retry full upload once with a newer stamp
+      const retrySnap = await exportLocalLedger(db, uid);
+      retrySnap.updatedAt = new Date().toISOString();
+      const retry = await syncRequest<{ accepted: boolean; ledger?: LedgerSnapshot }>('/api/sync/ledger', {
+        method: 'PUT',
+        body: JSON.stringify(retrySnap),
+      });
+      if (retry.status === 409 && retry.data.ledger) {
+        await importLedgerSnapshotFull(db, retry.data.ledger, uid);
+        setStatus('synced');
+        return { pushed: false, merged: true };
+      }
+      if (retry.data.ledger?.updatedAt && uid) {
+        localStorage.setItem(ledgerUpdatedAtKey(uid), retry.data.ledger.updatedAt);
+      }
+      clearPendingChanges();
       setStatus('synced');
-      return { pushed: false as const, merged: true as const };
+      return { pushed: true, recovered: true };
     }
 
     if (res.data.ledger?.updatedAt && uid) {
       localStorage.setItem(ledgerUpdatedAtKey(uid), res.data.ledger.updatedAt);
+    } else if (uid) {
+      localStorage.setItem(ledgerUpdatedAtKey(uid), snapshot.updatedAt);
     }
 
+    clearPendingChanges();
     setStatus('synced');
-    return { pushed: true as const };
+    return { pushed: true };
   } catch (err) {
     setStatus('error');
     pendingPush = true;
-    return { pushed: false as const, error: true as const, message: err instanceof Error ? err.message : 'Push failed' };
+    return { pushed: false, error: true, message: err instanceof Error ? err.message : 'Push failed' };
   } finally {
     syncing = false;
-    if (pendingPush && syncDb) {
+    if (pendingPush && syncDb && pendingChanges.size) {
       pendingPush = false;
       void pushLedgerChangesToCloud(activeUserId || undefined);
     }
@@ -508,8 +570,14 @@ export function scheduleLedgerPush(_db: ChaiKhataDB) {
   if (suppressAutoPush || !isCloudSyncEnabled() || !getStoredToken()) return;
 
   if (pushTimer) clearTimeout(pushTimer);
+  // Auto-upload every local change to the cloud database (no manual tap)
   pushTimer = setTimeout(() => {
-    void pushLedgerChangesToCloud(activeUserId || undefined);
+    void pushLedgerChangesToCloud(activeUserId || undefined).then((result: PushResult) => {
+      // If row patch failed, force a full auto upload so other devices still get data
+      if (result && 'error' in result && result.error && syncDb) {
+        void pushLedgerToCloud(syncDb, activeUserId || undefined, { forceFull: true });
+      }
+    });
   }, PUSH_DEBOUNCE_MS);
 }
 
@@ -650,23 +718,46 @@ export async function syncLedgerWithCloud(db: ChaiKhataDB, userId: string) {
   migrateLegacyUpdatedAt(userId);
 
   return runWithSuppressedAutoPush(async () => {
+    // 1) Upload any queued local edits first so a full pull cannot erase them
+    if (pendingChanges.size) {
+      const earlyPush = await pushLedgerChangesToCloud(userId);
+      if ('error' in earlyPush && earlyPush.error) {
+        // Last resort: force full snapshot so other devices still get local data
+        const forced = await pushLedgerToCloud(db, userId, { forceFull: true });
+        if ('error' in forced && forced.error) {
+          return { ok: false as const, error: forced.message || earlyPush.message || 'Could not upload data to cloud' };
+        }
+      }
+    }
+
+    // 2) Always download the full cloud ledger (same source of truth for laptop + mobile)
     const pull = await pullLedgerFromCloud(db, userId, { useSince: false });
     if (pull.error) {
       return { ok: false as const, error: pull.message || 'Could not download cloud data' };
     }
 
+    // 3) Cloud empty → upload everything from this device
     if (pull.empty) {
-      const push = await pushLedgerToCloud(db, userId);
+      const push = await pushLedgerToCloud(db, userId, { forceFull: true });
       if ('error' in push && push.error) {
         return { ok: false as const, error: push.message || 'Could not upload data to cloud' };
       }
       return { ok: true as const, uploaded: true as const };
     }
 
+    // 4) Remaining local-only rows (or unfinished queue) → full PUT so both devices match
     if (pendingChanges.size) {
-      const push = await pushLedgerChangesToCloud(userId);
+      const push = await pushLedgerToCloud(db, userId, { forceFull: true });
       if ('error' in push && push.error) {
         return { ok: false as const, error: push.message || 'Could not upload data to cloud' };
+      }
+    } else if (pull.ledger) {
+      const localCounts = await localEntityCounts(db);
+      if (localHasMoreData(localCounts, pull.ledger)) {
+        const push = await pushLedgerToCloud(db, userId, { forceFull: true });
+        if ('error' in push && push.error) {
+          return { ok: false as const, error: push.message || 'Could not upload data to cloud' };
+        }
       }
     }
 
@@ -682,8 +773,7 @@ export function startLedgerSyncLoop(db: ChaiKhataDB, userId: string) {
   if (!isCloudSyncEnabled()) return;
 
   pollTimer = setInterval(() => {
-    void pullLedgerFromCloud(db, userId, { useSince: true });
-    if (pendingChanges.size || pendingPush) void pushLedgerChangesToCloud(userId);
+    void syncLedgerWithCloud(db, userId);
   }, POLL_INTERVAL_MS);
 
   if (visibilityHandler) {
@@ -691,8 +781,7 @@ export function startLedgerSyncLoop(db: ChaiKhataDB, userId: string) {
   }
   visibilityHandler = () => {
     if (document.visibilityState === 'visible') {
-      void pullLedgerFromCloud(db, userId, { useSince: true });
-      if (pendingChanges.size || pendingPush) void pushLedgerChangesToCloud(userId);
+      void syncLedgerWithCloud(db, userId);
     } else {
       flushLedgerPushNow();
     }
@@ -708,8 +797,7 @@ export function startLedgerSyncLoop(db: ChaiKhataDB, userId: string) {
   if (!onlineHandler) {
     onlineHandler = () => {
       if (!syncDb || !activeUserId) return;
-      void pullLedgerFromCloud(syncDb, activeUserId, { useSince: true });
-      flushLedgerPushNow();
+      void syncLedgerWithCloud(syncDb, activeUserId);
     };
     window.addEventListener('online', onlineHandler);
   }

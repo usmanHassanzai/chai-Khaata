@@ -66,7 +66,76 @@ export async function applyLedgerChanges(userId, changes) {
     const { sbApplyLedgerChanges } = await import('./persistence/ledgerTables.js');
     return sbApplyLedgerChanges(userId, changes);
   }
-  throw new Error('Row-level sync requires Supabase');
+
+  // File storage fallback: merge row changes into the JSON snapshot (so PATCH never hard-fails)
+  const existing = await readLedger(userId);
+  const snapshot = {
+    updatedAt: existing?.updatedAt || new Date().toISOString(),
+    dealers: [...(existing?.dealers ?? [])],
+    customers: [...(existing?.customers ?? [])],
+    purchases: [...(existing?.purchases ?? [])],
+    sales: [...(existing?.sales ?? [])],
+    payments: [...(existing?.payments ?? [])],
+    settings: [...(existing?.settings ?? [])],
+  };
+
+  let applied = 0;
+  const skipped = [];
+
+  for (const change of changes) {
+    const table = change.table;
+    if (!Array.isArray(snapshot[table])) {
+      skipped.push({ ...change, reason: 'UNKNOWN_TABLE' });
+      continue;
+    }
+
+    if (change.op === 'delete') {
+      const id = change.id ?? change.row?.id;
+      if (id == null) {
+        skipped.push({ ...change, reason: 'MISSING_ID' });
+        continue;
+      }
+      const before = snapshot[table].length;
+      snapshot[table] = snapshot[table].filter((row) => String(row?.id) !== String(id));
+      if (snapshot[table].length < before) applied += 1;
+      else skipped.push({ ...change, reason: 'NOT_FOUND' });
+      continue;
+    }
+
+    if (change.op !== 'upsert' || !change.row) {
+      skipped.push({ ...change, reason: 'INVALID_OP' });
+      continue;
+    }
+
+    const row = {
+      ...change.row,
+      updatedAt: change.updatedAt || change.row.updatedAt || new Date().toISOString(),
+    };
+    const id = table === 'settings' ? 'settings' : row.id;
+    if (id == null) {
+      skipped.push({ ...change, reason: 'MISSING_ID' });
+      continue;
+    }
+
+    const idx = snapshot[table].findIndex((existingRow) =>
+      table === 'settings' ? true : String(existingRow?.id) === String(id),
+    );
+    if (idx >= 0) {
+      const existingAt = snapshot[table][idx]?.updatedAt || '';
+      if (existingAt && new Date(row.updatedAt).getTime() < new Date(existingAt).getTime()) {
+        skipped.push({ ...change, reason: 'STALE' });
+        continue;
+      }
+      snapshot[table][idx] = table === 'settings' ? { ...snapshot[table][idx], ...row, id: 'settings' } : row;
+    } else {
+      snapshot[table].push(table === 'settings' ? { ...row, id: 'settings' } : row);
+    }
+    applied += 1;
+  }
+
+  snapshot.updatedAt = new Date().toISOString();
+  const saved = await writeLedger(userId, snapshot);
+  return { applied, skipped, updatedAt: saved.updatedAt };
 }
 
 /** @param {string} userId */
