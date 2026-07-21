@@ -1,11 +1,13 @@
 const CLOUD_URL_KEY = 'chai-khata-cloud-url';
+const FORCE_LIVE_CLOUD_KEY = 'chai-khata-force-live-cloud';
+export const PRODUCTION_CLOUD_URL = 'https://patiwala.pk';
 
 function normalizeUrl(url: string): string {
   return url.trim().replace(/\/$/, '');
 }
 
 function isLocalHostUrl(url: string): boolean {
-  return /localhost|127\.0\.0\.1/.test(url);
+  return /localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\./.test(url);
 }
 
 /** True when the app is served from a public deployed origin (not local dev). */
@@ -17,13 +19,83 @@ function isDeployedWebOriginInternal(): boolean {
 function isCapacitorOrAppShellOrigin(): boolean {
   if (typeof window === 'undefined' || !window.location?.origin) return false;
   const o = window.location.origin;
-  return o === 'capacitor://localhost' || o === 'https://localhost' || o === 'http://localhost';
+  return (
+    o === 'capacitor://localhost'
+    || o === 'https://localhost'
+    || o === 'http://localhost'
+    || o.startsWith('capacitor://')
+    || o.startsWith('ionic://')
+  );
 }
 
-const PRODUCTION_CLOUD_URL = 'https://patiwala.pk';
+function isNativeShell(): boolean {
+  try {
+    // Avoid hard dependency if Capacitor is not present on web
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    return Boolean(cap?.isNativePlatform?.());
+  } catch {
+    return false;
+  }
+}
+
+function readSavedCloudUrl(): string {
+  const saved = localStorage.getItem(CLOUD_URL_KEY)?.trim();
+  if (!saved) return '';
+  const normalized = normalizeUrl(saved);
+  // Never keep a dead local/LAN URL for mobile or sync
+  if (isLocalHostUrl(normalized)) {
+    localStorage.removeItem(CLOUD_URL_KEY);
+    return '';
+  }
+  return normalized;
+}
+
+function envCloudUrl(): string {
+  const fromDefault = import.meta.env.VITE_DEFAULT_CLOUD_URL as string | undefined;
+  if (fromDefault?.trim()) return normalizeUrl(fromDefault);
+  const fromApi = import.meta.env.VITE_API_URL as string | undefined;
+  if (fromApi?.trim()) return normalizeUrl(fromApi);
+  return PRODUCTION_CLOUD_URL;
+}
+
+/**
+ * Call once on app boot so mobile/APK always has a working cloud database URL.
+ * Safe on laptop production (same-origin) and local Vite (proxy).
+ */
+export function ensureCloudServerConfigured(): string {
+  if (typeof window === 'undefined') return PRODUCTION_CLOUD_URL;
+
+  // Live website always uses itself
+  if (isDeployedWebOriginInternal() && !isCapacitorOrAppShellOrigin() && !isNativeShell()) {
+    return normalizeUrl(window.location.origin);
+  }
+
+  // Native / Capacitor APK — always pin a public HTTPS API
+  if (isCapacitorOrAppShellOrigin() || isNativeShell()) {
+    const saved = readSavedCloudUrl();
+    const url = saved || envCloudUrl();
+    localStorage.setItem(CLOUD_URL_KEY, url);
+    localStorage.setItem(FORCE_LIVE_CLOUD_KEY, '1');
+    return url;
+  }
+
+  return getCloudApiUrl();
+}
 
 export function getCloudApiUrl(): string {
-  // Dev: always sync/auth via same-origin Vite proxy — ignore saved remote URLs
+  // User/mobile explicitly pinned live cloud (login “Use live server”)
+  if (typeof window !== 'undefined' && localStorage.getItem(FORCE_LIVE_CLOUD_KEY) === '1') {
+    return readSavedCloudUrl() || envCloudUrl();
+  }
+
+  // Native / Capacitor APK — never use capacitor:// as API host
+  if (isCapacitorOrAppShellOrigin() || isNativeShell()) {
+    const saved = readSavedCloudUrl();
+    if (saved) return saved;
+    return envCloudUrl();
+  }
+
+  // Dev web: same-origin Vite proxy (local auth server)
   if (import.meta.env.DEV && typeof window !== 'undefined') {
     return normalizeUrl(window.location.origin);
   }
@@ -33,41 +105,34 @@ export function getCloudApiUrl(): string {
     return normalizeUrl(window.location.origin);
   }
 
-  // Mobile app (Capacitor APK) — never use capacitor:// as API host
-  if (isCapacitorOrAppShellOrigin()) {
-    const saved = localStorage.getItem(CLOUD_URL_KEY)?.trim();
-    if (saved) {
-      const normalized = normalizeUrl(saved);
-      if (!isLocalHostUrl(normalized)) return normalized;
-    }
-    const defaultCloud = import.meta.env.VITE_DEFAULT_CLOUD_URL as string | undefined;
-    if (defaultCloud?.trim()) return normalizeUrl(defaultCloud);
-    return PRODUCTION_CLOUD_URL;
-  }
+  const saved = readSavedCloudUrl();
+  if (saved) return saved;
 
-  const saved = localStorage.getItem(CLOUD_URL_KEY)?.trim();
-  if (saved) {
-    const normalized = normalizeUrl(saved);
-    if (!isLocalHostUrl(normalized)) return normalized;
-  }
-
-  const env = import.meta.env.VITE_API_URL as string | undefined;
-  if (env?.trim()) return normalizeUrl(env);
-
-  const defaultCloud = import.meta.env.VITE_DEFAULT_CLOUD_URL as string | undefined;
-  if (defaultCloud?.trim()) return normalizeUrl(defaultCloud);
-
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return normalizeUrl(window.location.origin);
-  }
-
-  return '';
+  return envCloudUrl();
 }
 
 export function setCloudApiUrl(url: string) {
   const trimmed = normalizeUrl(url);
-  if (trimmed) localStorage.setItem(CLOUD_URL_KEY, trimmed);
-  else localStorage.removeItem(CLOUD_URL_KEY);
+  if (!trimmed) {
+    localStorage.removeItem(CLOUD_URL_KEY);
+    localStorage.removeItem(FORCE_LIVE_CLOUD_KEY);
+    return;
+  }
+  if (isLocalHostUrl(trimmed)) {
+    // Refuse to save LAN/localhost — mobile can't use those off your Wi‑Fi
+    localStorage.setItem(CLOUD_URL_KEY, PRODUCTION_CLOUD_URL);
+    localStorage.setItem(FORCE_LIVE_CLOUD_KEY, '1');
+    return;
+  }
+  localStorage.setItem(CLOUD_URL_KEY, trimmed);
+  localStorage.setItem(FORCE_LIVE_CLOUD_KEY, '1');
+}
+
+/** Force live production API (used by Login when local server is unreachable). */
+export function useProductionCloudServer(): string {
+  localStorage.setItem(CLOUD_URL_KEY, PRODUCTION_CLOUD_URL);
+  localStorage.setItem(FORCE_LIVE_CLOUD_KEY, '1');
+  return PRODUCTION_CLOUD_URL;
 }
 
 export function isCloudSyncEnabled(): boolean {
@@ -76,7 +141,7 @@ export function isCloudSyncEnabled(): boolean {
 
 export function isDeployedWebOrigin(): boolean {
   if (typeof window === 'undefined' || !window.location?.origin) return false;
-  return !/localhost|127\.0\.0\.1/.test(window.location.origin);
+  return !isLocalHostUrl(window.location.origin);
 }
 
 export async function testCloudConnection(testUrl?: string): Promise<{ ok: boolean; message: string }> {
@@ -98,6 +163,6 @@ export async function testCloudConnection(testUrl?: string): Promise<{ ok: boole
     }
     return { ok: false, message: 'URL reachable but not a Chai Khata server.' };
   } catch {
-    return { ok: false, message: 'Cannot reach server. Use an https:// public URL (not a home Wi‑Fi IP).' };
+    return { ok: false, message: 'Cannot reach server. Use https://patiwala.pk (not a home Wi‑Fi IP).' };
   }
 }

@@ -118,12 +118,8 @@ import { ApiError, getStoredToken, notifyAuthSessionInvalid } from './authCommon
 import { getCloudApiUrl } from './cloudConfig';
 import { isLocalDevHost } from '../utils/authErrors';
 
-/** Auth API base — in dev always same-origin (never a broken remote URL from Settings). */
+/** Auth API base — prefers explicit live cloud URL for mobile / offline local server. */
 function apiBase(): string {
-  if (import.meta.env.DEV && typeof window !== 'undefined') {
-    return window.location.origin;
-  }
-
   const cloud = getCloudApiUrl();
   if (cloud) return cloud;
   const env = import.meta.env.VITE_API_URL as string | undefined;
@@ -531,16 +527,22 @@ export async function authHealth(): Promise<boolean> {
   }
 
   const bases: string[] = [];
-  if (typeof window !== 'undefined') {
+  const primary = getApiBase();
+  if (primary) bases.push(primary);
+  if (typeof window !== 'undefined' && !bases.includes(window.location.origin)) {
     bases.push(window.location.origin);
   }
-  const primary = getApiBase();
-  if (primary && !bases.includes(primary)) bases.push(primary);
+  if (!bases.includes('https://patiwala.pk')) {
+    bases.push('https://patiwala.pk');
+  }
 
   for (const base of bases) {
     try {
-      const res = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(6000) });
-      if (res.ok) return true;
+      const res = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) continue;
+      const data = (await res.json().catch(() => null)) as { ok?: boolean } | null;
+      // Prefer a healthy cloud (ok:true). Skip half-broken local servers.
+      if (data?.ok) return true;
     } catch {
       /* try next base */
     }

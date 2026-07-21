@@ -87,16 +87,21 @@ export default function CloudSyncPanel() {
       </p>
 
       {!autoSync && (
-        <label className="form-field">
-          <span className="field-label"><Label k="settings.cloudServerUrl" variant="compact" /></span>
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder={(import.meta.env.VITE_DEFAULT_CLOUD_URL as string) || 'https://patiwala.pk'}
-            inputMode="url"
-          />
-        </label>
+        <>
+          <label className="form-field">
+            <span className="field-label"><Label k="settings.cloudServerUrl" variant="compact" /></span>
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://patiwala.pk"
+              inputMode="url"
+            />
+          </label>
+          <p className="settings-note">
+            Mobile + laptop must use the same live URL: <code>https://patiwala.pk</code>
+          </p>
+        </>
       )}
 
       <div className="cloud-sync-actions">
@@ -104,6 +109,17 @@ export default function CloudSyncPanel() {
           <>
             <button type="button" className="btn primary" onClick={saveUrl}>
               <Label k="settings.saveCloudUrl" variant="compact" />
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                setUrl('https://patiwala.pk');
+                setCloudApiUrl('https://patiwala.pk');
+                showMessage('Live server saved: https://patiwala.pk — log out and log in again on every device.');
+              }}
+            >
+              Use patiwala.pk
             </button>
             <button type="button" className="btn" onClick={testConnection} disabled={testing || !url.trim()}>
               {testing ? '…' : <Label k="settings.testConnection" variant="compact" />}

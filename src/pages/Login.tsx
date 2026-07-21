@@ -6,6 +6,12 @@ import AuthPageHeader from '../components/AuthPageHeader';
 import { useAuth } from '../context/AuthContext';
 import { Label } from '../i18n/useLabel';
 import { ApiError, authApi, authHealth, getApiBase, isNativeAuthMode } from '../services/authApi';
+import {
+  ensureCloudServerConfigured,
+  PRODUCTION_CLOUD_URL,
+  testCloudConnection,
+  useProductionCloudServer,
+} from '../services/cloudConfig';
 import { friendlyAuthError, isLocalDevHost } from '../utils/authErrors';
 
 export default function Login() {
@@ -22,15 +28,26 @@ export default function Login() {
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
   const [checkingServer, setCheckingServer] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
+  const [usingLiveServer, setUsingLiveServer] = useState(false);
 
   useEffect(() => {
+    ensureCloudServerConfigured();
     authApi.config().then((c) => setAdminEmail(c.adminEmail)).catch(() => {});
   }, []);
 
   async function refreshServerStatus() {
     setCheckingServer(true);
     try {
-      const ok = await authHealth();
+      let ok = await authHealth();
+      if (!ok) {
+        const live = await testCloudConnection(PRODUCTION_CLOUD_URL);
+        if (live.ok) {
+          useProductionCloudServer();
+          setUsingLiveServer(true);
+          setInfo(`Connected to live cloud ${PRODUCTION_CLOUD_URL}. Log in with your account.`);
+          ok = true;
+        }
+      }
       setServerOnline(ok);
       if (ok) setError('');
       return ok;
@@ -62,6 +79,13 @@ export default function Login() {
     setSubmitting(true);
 
     try {
+      if (serverOnline === false) {
+        const live = await testCloudConnection(PRODUCTION_CLOUD_URL);
+        if (live.ok) {
+          useProductionCloudServer();
+          setUsingLiveServer(true);
+        }
+      }
       await login(loginId.trim(), password);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -88,10 +112,10 @@ export default function Login() {
       } else {
         setServerOnline(false);
         const base = getApiBase();
-        if (isLocalDevHost()) {
-          setError('Cannot reach auth server. Run: cd ~/chai-khaata && npm run dev');
+        if (isLocalDevHost() && !usingLiveServer) {
+          setError('Cannot reach local server. Tap “Use live server”, or run: npm run dev');
         } else if (base && !base.includes(window.location.hostname)) {
-          setError(`Cannot reach server at ${base}. Check Cloud Sync URL in Settings, or use the live site.`);
+          setError(`Cannot reach server at ${base}. Tap “Use live server” (${PRODUCTION_CLOUD_URL}).`);
         } else {
           setError(
             isNativeAuthMode()
@@ -103,6 +127,13 @@ export default function Login() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function switchToLiveServer() {
+    useProductionCloudServer();
+    setUsingLiveServer(true);
+    setInfo(`Cloud server set to ${PRODUCTION_CLOUD_URL}. Checking…`);
+    void refreshServerStatus();
   }
 
   return (
@@ -121,21 +152,21 @@ export default function Login() {
 
       {serverOnline === false && !isNativeAuthMode() && (
         <div className="auth-banner error">
-          <strong>Server not running.</strong>{' '}
-          {isLocalDevHost() ? (
+          <strong>Server not reachable.</strong>{' '}
+          {isLocalDevHost() && !usingLiveServer ? (
             <>
-              Open a terminal and run: <code>cd ~/chai-khaata && npm run dev</code>
-              {' '}— then open <code>http://localhost:5173/login</code>
+              Local server is off. Run <code>npm run dev</code>, or use the live cloud database.
             </>
           ) : (
             <>
-              Cannot reach the auth server.
-              {getApiBase() && !/localhost|127\.0\.0\.1/.test(window.location.hostname) && (
-                <span> Check Cloud Sync URL in Settings.</span>
-              )}
+              Cannot reach the auth server. Use live cloud <code>{PRODUCTION_CLOUD_URL}</code>.
             </>
           )}
           {' '}
+          <button type="button" className="auth-inline-link" onClick={switchToLiveServer}>
+            Use live server
+          </button>
+          {' · '}
           <button
             type="button"
             className="auth-inline-link"
@@ -144,6 +175,12 @@ export default function Login() {
           >
             {checkingServer ? 'Checking…' : 'Check again'}
           </button>
+        </div>
+      )}
+
+      {usingLiveServer && serverOnline && (
+        <div className="auth-banner info">
+          Live cloud: <code>{PRODUCTION_CLOUD_URL}</code> — same data on phone and laptop.
         </div>
       )}
 
