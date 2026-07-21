@@ -49,7 +49,11 @@ export function withTimeout(promise, ms, label = 'Operation') {
   return Promise.race([
     promise,
     new Promise((_, reject) => {
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+      setTimeout(() => {
+        const err = new Error(`${label} timed out after ${ms}ms`);
+        err.code = 'TIMEOUT';
+        reject(err);
+      }, ms);
     }),
   ]);
 }
