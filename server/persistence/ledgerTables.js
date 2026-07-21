@@ -325,13 +325,48 @@ const UPSERT_CONFLICT = {
   settings: 'user_id',
 };
 
+function isMissingColumnError(error) {
+  const text = [error?.message, error?.details, error?.hint].filter(Boolean).join(' ');
+  return /column .* does not exist|Could not find the .* column/i.test(text);
+}
+
+function missingColumnName(error) {
+  const text = [error?.message, error?.details, error?.hint].filter(Boolean).join(' ');
+  const m = text.match(/column\s+([a-z0-9_]+)\.([a-z0-9_]+)\s+does not exist/i)
+    || text.match(/Could not find the '([a-z0-9_]+)' column/i);
+  if (m?.[2]) return m[2];
+  if (m?.[1] && !m[2]) return m[1];
+  return null;
+}
+
+/** Payments select without newer optional columns (older Supabase schemas). */
+const PAYMENTS_SELECT_LEGACY = 'id, date, customer_id, dealer_id, amount, note, updated_at';
+
 async function readTableRows(userId, entity, { lite = false } = {}) {
   const table = ENTITY_TABLES[entity];
-  const select = lite ? (LITE_SELECT[entity] || '*') : '*';
-  const { data, error } = await getSupabase()
+  let select = lite ? (LITE_SELECT[entity] || '*') : '*';
+  let { data, error } = await getSupabase()
     .from(table)
     .select(select)
     .eq('user_id', userId);
+
+  // Older DBs may lack sale_id / purchase_id — retry with legacy columns
+  if (error && isMissingColumnError(error) && entity === 'payments') {
+    const retry = await getSupabase()
+      .from(table)
+      .select(PAYMENTS_SELECT_LEGACY)
+      .eq('user_id', userId);
+    data = retry.data;
+    error = retry.error;
+  } else if (error && isMissingColumnError(error) && lite) {
+    // Column listed in LITE_SELECT missing — fall back to *
+    const retry = await getSupabase()
+      .from(table)
+      .select('*')
+      .eq('user_id', userId);
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     if (isMissingTableError(error)) return [];
@@ -603,10 +638,26 @@ export async function sbWriteLedgerTables(userId, snapshot) {
 
       if (!rows.length) return;
 
-      const dbRows = rows.map((row) => toRow(userId, row));
-      const { error } = await getSupabase()
+      let dbRows = rows.map((row) => toRow(userId, row));
+      let { error } = await getSupabase()
         .from(table)
         .upsert(dbRows, { onConflict: UPSERT_CONFLICT[entity] });
+
+      // Older schemas may lack sale_id / purchase_id / history — strip and retry
+      let guard = 0;
+      while (error && isMissingColumnError(error) && guard < 6) {
+        guard += 1;
+        const col = missingColumnName(error);
+        if (!col) break;
+        dbRows = dbRows.map((row) => {
+          const next = { ...row };
+          delete next[col];
+          return next;
+        });
+        ({ error } = await getSupabase()
+          .from(table)
+          .upsert(dbRows, { onConflict: UPSERT_CONFLICT[entity] }));
+      }
 
       if (error) throwSupabaseError(error);
     }));

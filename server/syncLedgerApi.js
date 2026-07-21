@@ -34,6 +34,9 @@ function formatSyncError(err) {
   if (/invalid api key|jwt|unregistered api key/i.test(msg)) {
     return 'Supabase credentials invalid on server. Check SUPABASE_SERVICE_ROLE_KEY in Vercel.';
   }
+  if (/ledger_payments\.sale_id|column.*sale_id.*does not exist/i.test(msg)) {
+    return 'Cloud database needs an update. In Supabase → SQL Editor, run supabase/migrate-ledger-payments.sql, then Sync now again.';
+  }
   return msg || 'Sync failed';
 }
 
