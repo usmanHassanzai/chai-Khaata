@@ -36,12 +36,11 @@
   .export-toolbar {
     width: 100%;
     margin-left: 0;
-    justify-content: flex-start;
+    display: block;
   }
 
-  .export-toolbar .btn {
-    min-height: 44px;
-    flex: 1 1 auto;
+  .export-toolbar-mobile .btn {
+    min-height: 46px;
   }
 
   .export-toolbar.compact {

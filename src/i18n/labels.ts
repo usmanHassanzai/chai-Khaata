@@ -59,6 +59,8 @@ export const labels = {
     romanUrdu: { ur: 'رومن اردو', en: 'Roman Urdu', roman: 'Roman Urdu' },
     urdu: { ur: 'اردو', en: 'Urdu', roman: 'Urdu' },
     bilingual: { ur: 'اردو + انگریزی', en: 'Urdu + English', roman: 'Urdu + English' },
+    openMenu: { ur: 'مینو', en: 'Menu', roman: 'Menu' },
+    closeMenu: { ur: 'بند کریں', en: 'Close', roman: 'Band karein' },
   },
 
   export: {
@@ -67,6 +69,7 @@ export const labels = {
     print: { ur: 'پرنٹ', en: 'Print', roman: 'Print' },
     json: { ur: 'ڈیٹا', en: 'Data', roman: 'Data' },
     download: { ur: 'ڈاؤن لوڈ', en: 'Download', roman: 'Download' },
+    downloadMenu: { ur: 'ڈاؤن لوڈ کریں', en: 'Download', roman: 'Download karein' },
     fullHistory: { ur: 'مکمل تاریخ', en: 'Full History', roman: 'Full History' },
     historyPdf: { ur: 'مکمل تاریخ PDF', en: 'Full History PDF', roman: 'Full History PDF' },
     historyCsv: { ur: 'مکمل تاریخ CSV', en: 'Full History CSV', roman: 'Full History CSV' },

@@ -1458,13 +1458,14 @@ tfoot td {
 
 /* ─── Responsive ─── */
 @media (max-width: 900px) {
-  .sidebar { display: none; }
+  .sidebar.desktop-only-nav { display: none; }
   .app-main {
     margin-left: 0;
     width: 100%;
     min-width: 0;
   }
-  .bottom-nav { display: block; }
+  /* Bottom nav replaced by hamburger drawer — keep hidden */
+  .bottom-nav { display: none; }
   .header-title-mobile {
     display: flex;
     flex: 1;
@@ -1494,7 +1495,7 @@ tfoot td {
     border-bottom-color: rgba(235, 228, 216, 0.7);
   }
   .main-content {
-    padding: 1rem 1rem calc(var(--bottom-nav-h) + var(--safe-bottom) + 1rem);
+    padding: 1rem 1rem calc(1rem + var(--safe-bottom));
     max-width: 100%;
   }
   .stat-grid {

@@ -1,0 +1,410 @@
+/* ═══════════════════════════════════════════
+   Mobile Pro — phone / small tablet only
+   Desktop / laptop styles are NOT changed
+   ═══════════════════════════════════════════ */
+
+/* Desktop defaults: hide mobile-only chrome */
+.mobile-hamburger,
+.mobile-drawer,
+.mobile-drawer-backdrop,
+.export-toolbar-mobile {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  /* Desktop sidebar stays off on phones */
+  .sidebar.desktop-only-nav {
+    display: none !important;
+  }
+
+  /* ── Hamburger ── */
+  .mobile-hamburger {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+    border: none;
+    border-radius: 12px;
+    background: rgba(26, 61, 47, 0.06);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .mobile-hamburger span {
+    display: block;
+    height: 2.5px;
+    width: 100%;
+    border-radius: 2px;
+    background: var(--tea-deep);
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+
+  .mobile-hamburger.is-open span:nth-child(1) {
+    transform: translateY(7.5px) rotate(45deg);
+  }
+
+  .mobile-hamburger.is-open span:nth-child(2) {
+    opacity: 0;
+  }
+
+  .mobile-hamburger.is-open span:nth-child(3) {
+    transform: translateY(-7.5px) rotate(-45deg);
+  }
+
+  .header-title-mobile {
+    gap: 0.65rem;
+  }
+
+  .desktop-logout {
+    display: none !important;
+  }
+
+  /* Hide old bottom nav — hamburger drawer replaces it */
+  .bottom-nav {
+    display: none !important;
+  }
+
+  .main-content {
+    padding: 0.85rem 0.85rem calc(1rem + var(--safe-bottom)) !important;
+  }
+
+  /* ── Drawer backdrop ── */
+  .mobile-drawer-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(26, 61, 47, 0.45);
+    backdrop-filter: blur(3px);
+    z-index: 1100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
+  }
+
+  .mobile-drawer-backdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* ── Drawer panel ── */
+  .mobile-drawer {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(86vw, 300px);
+    z-index: 1200;
+    transform: translateX(-105%);
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    padding: calc(0.85rem + var(--safe-top)) 0.85rem calc(0.85rem + var(--safe-bottom));
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    color: #fff;
+  }
+
+  .mobile-drawer .sidebar-brand-name,
+  .mobile-drawer .sidebar-brand-tag,
+  .mobile-drawer .nav-text {
+    color: #fff;
+  }
+
+  .mobile-drawer .nav-link {
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .mobile-drawer.is-open {
+    transform: translateX(0);
+  }
+
+  .mobile-drawer-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .mobile-drawer-close {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 1.1rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .mobile-drawer-nav {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .mobile-drawer-nav .nav-link {
+    min-height: 52px;
+    border-radius: 14px;
+    padding: 0.7rem 0.85rem;
+  }
+
+  .mobile-drawer-nav .nav-text {
+    font-size: 1.05rem;
+    font-weight: 700;
+  }
+
+  .mobile-drawer-footer {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .mobile-drawer-logout {
+    width: 100%;
+    min-height: 48px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    font-weight: 800;
+  }
+
+  body.scroll-lock {
+    overflow: hidden;
+  }
+
+  /* ── Export: mobile download menu ── */
+  .export-toolbar-desktop {
+    display: none;
+  }
+
+  .export-toolbar-mobile {
+    display: block;
+    position: relative;
+    width: 100%;
+  }
+
+  .export-mobile-trigger {
+    width: 100%;
+    min-height: 46px;
+    justify-content: center;
+    gap: 0.4rem;
+    font-weight: 800;
+  }
+
+  .export-caret {
+    margin-left: 0.15rem;
+    opacity: 0.7;
+  }
+
+  .export-mobile-sheet {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 50;
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.45rem;
+    border-radius: 14px;
+    background: #fff;
+    border: 1px solid rgba(235, 228, 216, 0.95);
+    box-shadow: 0 12px 28px rgba(26, 61, 47, 0.14);
+  }
+
+  .export-sheet-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 48px;
+    padding: 0.65rem 0.85rem;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    font: inherit;
+    font-weight: 700;
+    color: var(--tea-deep);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .export-sheet-item:active,
+  .export-sheet-item:hover {
+    background: rgba(45, 106, 79, 0.08);
+  }
+
+  .export-toolbar {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  /* ── Page layout polish ── */
+  .page {
+    max-width: 100%;
+    gap: 0.85rem;
+  }
+
+  .god-topbar,
+  .duk-topbar,
+  .cust-topbar,
+  .stock-topbar,
+  .dash-topbar {
+    padding: 1rem !important;
+    border-radius: 14px !important;
+  }
+
+  .god-forms-grid,
+  .cust-forms-grid,
+  .duk-layout,
+  .duk-layout-easy {
+    grid-template-columns: 1fr !important;
+  }
+
+  .section-header-row {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .table-wrap {
+    margin: 0 -0.15rem;
+    border-radius: 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-wrap table {
+    min-width: 640px;
+  }
+
+  .action-cell {
+    min-width: 0 !important;
+  }
+
+  .easy-home-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .easy-home-tile {
+    min-height: 118px;
+    padding: 1rem !important;
+  }
+
+  .dash-kpi-row {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .modal-overlay {
+    padding: 0 !important;
+    padding-left: 0 !important;
+    align-items: flex-end !important;
+  }
+
+  .modal,
+  .modal.modal-wide {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 92dvh !important;
+    border-radius: 18px 18px 0 0 !important;
+    margin: 0 !important;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+  }
+
+  .modal-actions .btn {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .sale-steps {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sale-qty-grid,
+  .qty-mode-toggle {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .tea-chip-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .duk-history-toggles {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .duk-history-toggles .duk-chip {
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* Action buttons: stack cleanly on narrow screens */
+  .action-cell,
+  td.actions,
+  .row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .action-cell .btn,
+  td.actions .btn,
+  .row-actions .btn {
+    min-height: 40px;
+    flex: 1 1 auto;
+  }
+
+  .page-header,
+  .god-topbar,
+  .cust-topbar,
+  .duk-topbar {
+    gap: 0.75rem;
+  }
+
+  .tabs,
+  .chip-row {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar,
+  .chip-row::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Laptop+ keeps desktop export buttons */
+@media (min-width: 901px) {
+  .export-toolbar-desktop {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+  }
+
+  .export-toolbar-mobile {
+    display: none !important;
+  }
+
+  .mobile-hamburger,
+  .mobile-drawer,
+  .mobile-drawer-backdrop {
+    display: none !important;
+  }
+}

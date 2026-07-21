@@ -18,6 +18,7 @@ import './styles/godaam-pro.css';
 import './styles/customers-pro.css';
 import './styles/stock-pro.css';
 import './styles/easy-ui.css';
+import './styles/mobile-pro.css';
 import './styles/export.css';
 import './styles/landing.css';
 
