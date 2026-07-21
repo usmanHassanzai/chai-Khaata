@@ -103,12 +103,12 @@ function LayoutShell() {
     return () => document.body.classList.remove('scroll-lock');
   }, [mobileMenuOpen]);
 
-  /* Auto sync whenever user opens a page — quick incremental (no heavy full download) */
+  /* After login, pages use quick sync — full download already happened at login */
   useEffect(() => {
     if (!cloudOn || !dbReady || !user || !db) return;
     const timer = window.setTimeout(() => {
       void syncLedgerWithCloud(db, user.id, { mode: 'quick' });
-    }, 100);
+    }, 150);
     return () => window.clearTimeout(timer);
   }, [location.pathname, cloudOn, dbReady, user]);
 

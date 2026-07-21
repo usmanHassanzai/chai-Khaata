@@ -30,11 +30,11 @@ type LedgerChange =
   | { table: SyncableEntity; op: 'delete'; id: number | string; updatedAt: string };
 
 const LEGACY_UPDATED_AT_KEY = 'chai-khata-ledger-updated-at';
-const SYNC_TIMEOUT_MS = 20000;
-const PUSH_DEBOUNCE_MS = 30;
-/** Lightweight poll — full sync only on login / focus */
-const POLL_INTERVAL_MS = 4000;
-const FULL_SYNC_EVERY_N_POLLS = 8;
+/** Full login download can be large (receipts) — give mobile enough time */
+const SYNC_TIMEOUT_MS = 60000;
+const PUSH_DEBOUNCE_MS = 40;
+const POLL_INTERVAL_MS = 10000;
+const FULL_SYNC_EVERY_N_POLLS = 3;
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -54,6 +54,7 @@ let suppressAutoPush = false;
 let syncDb: ChaiKhataDB | null = null;
 let pollTick = 0;
 let cloudSyncInFlight: Promise<unknown> | null = null;
+let pendingFullSync: { db: ChaiKhataDB; userId: string } | null = null;
 const pendingChanges = new Map<string, LedgerChange>();
 
 function ledgerUpdatedAtKey(userId: string) {
@@ -116,6 +117,13 @@ export function getLocalLedgerUpdatedAt(userId?: string): string {
   return localStorage.getItem(ledgerUpdatedAtKey(id)) || '';
 }
 
+/** Clear sync cursor so the next pull downloads the full cloud ledger. */
+export function clearLocalSyncCursor(userId?: string) {
+  const id = userId || activeUserId;
+  if (id) localStorage.removeItem(ledgerUpdatedAtKey(id));
+  localStorage.removeItem(LEGACY_UPDATED_AT_KEY);
+}
+
 export function touchLocalLedgerUpdatedAt(userId?: string) {
   const id = userId || activeUserId;
   const ts = new Date().toISOString();
@@ -163,6 +171,7 @@ export function resetLedgerSyncState() {
   pendingPullFull = false;
   pollTick = 0;
   cloudSyncInFlight = null;
+  pendingFullSync = null;
   clearPendingChanges();
   suppressAutoPush = false;
   setStatus('idle');
@@ -365,10 +374,22 @@ export async function pullLedgerFromCloud(
   }
 
   const uid = userId || activeUserId || undefined;
-  const useSince = options.useSince !== false;
+  let useSince = options.useSince !== false;
   pulling = true;
   setStatus('syncing');
   try {
+    // Empty local DB must always download full cloud ledger (never trust a stale ?since=)
+    const preCounts = await localEntityCounts(db);
+    const localEmpty = preCounts.dealers === 0
+      && preCounts.customers === 0
+      && preCounts.purchases === 0
+      && preCounts.sales === 0
+      && preCounts.payments === 0;
+    if (localEmpty) {
+      useSince = false;
+      if (uid) clearLocalSyncCursor(uid);
+    }
+
     const res = await syncRequest<{
       empty?: boolean;
       unchanged?: boolean;
@@ -378,6 +399,22 @@ export async function pullLedgerFromCloud(
     }>(buildSyncPath(uid, useSince));
 
     if (res.data.unchanged) {
+      // Stale cursor on empty device — force a real download once
+      if (localEmpty) {
+        const full = await syncRequest<{
+          empty?: boolean;
+          unchanged?: boolean;
+          updatedAt?: string;
+          ledger?: LedgerSnapshot;
+        }>('/api/sync/ledger');
+        if (full.data.empty || !full.data.ledger) {
+          setStatus('synced');
+          return { pulled: false as const, empty: true as const };
+        }
+        await importLedgerSnapshotFull(db, full.data.ledger, uid);
+        setStatus('synced');
+        return { pulled: true as const, ledger: full.data.ledger };
+      }
       if (res.data.updatedAt && uid) {
         localStorage.setItem(ledgerUpdatedAtKey(uid), res.data.updatedAt);
       }
@@ -399,9 +436,8 @@ export async function pullLedgerFromCloud(
     const remoteHasMore = serverHasMoreData(localCounts, res.data.ledger);
     const hasPendingLocal = pendingChanges.size > 0;
 
-    // Full replace when doing a forced full pull / empty local / remote has more.
-    // Soft-merge when local still has unpushed rows so we never erase them.
-    if (!hasPendingLocal && (!useSince || !localHasData || remoteHasMore)) {
+    // Empty local (mobile login) always full-replaces — never soft-merge
+    if (!localHasData || (!hasPendingLocal && (!useSince || remoteHasMore))) {
       await importLedgerSnapshotFull(db, res.data.ledger, uid);
     } else {
       await importLedgerSnapshot(db, res.data.ledger, uid);
@@ -728,16 +764,48 @@ export async function syncLedgerWithCloud(
 ): Promise<SyncLedgerResult> {
   if (!isCloudSyncEnabled() || !getStoredToken()) return { ok: true, skipped: true };
 
-  // Avoid stacking slow full syncs on top of each other
-  if (cloudSyncInFlight) return cloudSyncInFlight as Promise<SyncLedgerResult>;
+  const mode = options.mode ?? 'full';
+
+  // Never let a quick sync steal a requested full sync (mobile login)
+  if (cloudSyncInFlight) {
+    if (mode === 'full') pendingFullSync = { db, userId };
+    return cloudSyncInFlight as Promise<SyncLedgerResult>;
+  }
 
   activeUserId = userId;
   syncDb = db;
   migrateLegacyUpdatedAt(userId);
-  const mode = options.mode ?? 'full';
 
   const run = runWithSuppressedAutoPush(async (): Promise<SyncLedgerResult> => {
-    // 1) Upload queued local edits first
+    const counts = await localEntityCounts(db);
+    const localEmpty = counts.dealers === 0
+      && counts.customers === 0
+      && counts.purchases === 0
+      && counts.sales === 0
+      && counts.payments === 0;
+
+    // Empty device (typical mobile login): always download full cloud ledger first
+    if (localEmpty) {
+      clearPendingChanges();
+      clearLocalSyncCursor(userId);
+
+      let pull = await pullLedgerFromCloud(db, userId, { useSince: false });
+      if (pull.error) {
+        await new Promise((r) => setTimeout(r, 800));
+        clearLocalSyncCursor(userId);
+        pull = await pullLedgerFromCloud(db, userId, { useSince: false });
+      }
+      if (pull.error) {
+        return { ok: false, error: pull.message || 'Could not download cloud data' };
+      }
+
+      if (pull.empty) {
+        return { ok: true, uploaded: true };
+      }
+      return { ok: true, pulled: pull.pulled };
+    }
+
+    // Device already has data — push local edits, then pull (full or incremental)
     if (pendingChanges.size) {
       const earlyPush = await pushLedgerChangesToCloud(userId);
       if ('error' in earlyPush && earlyPush.error) {
@@ -748,7 +816,6 @@ export async function syncLedgerWithCloud(
       }
     }
 
-    // 2) Quick mode: only fetch if cloud changed (fast). Full mode: download everything.
     const pull = await pullLedgerFromCloud(db, userId, { useSince: mode === 'quick' });
     if (pull.error) {
       return { ok: false, error: pull.message || 'Could not download cloud data' };
@@ -763,13 +830,10 @@ export async function syncLedgerWithCloud(
     }
 
     if (pendingChanges.size) {
-      const push = await pushLedgerToCloud(db, userId, { forceFull: mode === 'full' });
-      if ('error' in push && push.error) {
-        return { ok: false, error: push.message || 'Could not upload data to cloud' };
-      }
+      await pushLedgerChangesToCloud(userId);
     } else if (mode === 'full' && pull.ledger) {
-      const localCounts = await localEntityCounts(db);
-      if (localHasMoreData(localCounts, pull.ledger)) {
+      const afterCounts = await localEntityCounts(db);
+      if (localHasMoreData(afterCounts, pull.ledger)) {
         const push = await pushLedgerToCloud(db, userId, { forceFull: true });
         if ('error' in push && push.error) {
           return { ok: false, error: push.message || 'Could not upload data to cloud' };
@@ -782,6 +846,11 @@ export async function syncLedgerWithCloud(
 
   cloudSyncInFlight = run.finally(() => {
     cloudSyncInFlight = null;
+    if (pendingFullSync) {
+      const next = pendingFullSync;
+      pendingFullSync = null;
+      void syncLedgerWithCloud(next.db, next.userId, { mode: 'full' });
+    }
   });
   return cloudSyncInFlight as Promise<SyncLedgerResult>;
 }
@@ -805,7 +874,7 @@ export function startLedgerSyncLoop(db: ChaiKhataDB, userId: string) {
   }
   visibilityHandler = () => {
     if (document.visibilityState === 'visible') {
-      void syncLedgerWithCloud(db, userId, { mode: 'quick' });
+      void syncLedgerWithCloud(db, userId, { mode: 'full' });
     } else {
       flushLedgerPushNow();
     }
@@ -821,7 +890,7 @@ export function startLedgerSyncLoop(db: ChaiKhataDB, userId: string) {
   if (!onlineHandler) {
     onlineHandler = () => {
       if (!syncDb || !activeUserId) return;
-      void syncLedgerWithCloud(syncDb, activeUserId, { mode: 'quick' });
+      void syncLedgerWithCloud(syncDb, activeUserId, { mode: 'full' });
     };
     window.addEventListener('online', onlineHandler);
   }

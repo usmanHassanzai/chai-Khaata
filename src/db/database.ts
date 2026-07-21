@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie';
 import {
   attachLedgerSyncHooks,
+  clearLocalSyncCursor,
   runWithSuppressedAutoPush,
   startLedgerSyncLoop,
   stopLedgerSyncLoop,
@@ -62,6 +63,17 @@ export function isDbInitialized(): boolean {
   return Boolean(db);
 }
 
+async function localHasBusinessData(database: ChaiKhataDB): Promise<boolean> {
+  const [dealers, customers, purchases, sales, payments] = await Promise.all([
+    database.dealers.count(),
+    database.customers.count(),
+    database.purchases.count(),
+    database.sales.count(),
+    database.payments.count(),
+  ]);
+  return dealers > 0 || customers > 0 || purchases > 0 || sales > 0 || payments > 0;
+}
+
 export async function initUserDatabase(userId: string): Promise<{ syncOk: boolean; syncError?: string }> {
   stopLedgerSyncLoop();
 
@@ -71,28 +83,37 @@ export async function initUserDatabase(userId: string): Promise<{ syncOk: boolea
 
   db = new ChaiKhataDB(`ChaiKhataDB_${userId}`);
 
-  // Attach auto-save hooks before any writes so every change pushes to Supabase
-  if (isCloudSyncEnabled()) {
-    attachLedgerSyncHooks(db, userId);
-  }
-
-  await runWithSuppressedAutoPush(async () => {
-    await ensureSettings();
-  });
-
   if (!isCloudSyncEnabled()) {
+    await ensureSettings();
     if (!getLocalLedgerUpdatedAt(userId)) {
       touchLocalLedgerUpdatedAt(userId);
     }
     return { syncOk: true };
   }
 
+  // Empty mobile/fresh device: drop stale sync cursor so we always download full user ledger
+  if (!(await localHasBusinessData(db))) {
+    clearLocalSyncCursor(userId);
+  }
+
+  // 1) Download cloud ledger FIRST (before hooks / local settings write)
+  const result = await syncLedgerWithCloud(db, userId, { mode: 'full' });
+
+  // 2) Ensure settings exist after cloud import (won't overwrite cloud settings)
+  await runWithSuppressedAutoPush(async () => {
+    await ensureSettings();
+  });
+
+  // 3) Attach auto-save hooks only after the full pull so login can't push empty stubs
+  attachLedgerSyncHooks(db, userId);
+
+  // 4) Start background sync only after login pull finished
   startLedgerSyncLoop(db, userId);
 
-  // Wait for cloud pull/push so laptop and mobile open with the same database data
-  const result = await syncLedgerWithCloud(db, userId);
   if (!result.ok) {
     console.warn('[Chai Khata] Initial cloud sync failed:', result.error);
+    // Retry once more in background — mobile networks often need a second try
+    void syncLedgerWithCloud(db, userId, { mode: 'full' });
     return { syncOk: false, syncError: result.error };
   }
 

@@ -364,7 +364,7 @@ async function ledgerTablesAvailable() {
   return tablesAvailableCache;
 }
 
-/** Bump the sync cursor without rewriting the full snapshot payload. */
+/** Bump the sync cursor without rewriting / wiping the snapshot payload. */
 async function touchLedgerCursor(userId, updatedAt) {
   const ts = toIso(updatedAt || new Date().toISOString());
   const { data, error } = await getSupabase()
@@ -377,17 +377,18 @@ async function touchLedgerCursor(userId, updatedAt) {
   if (error && !isMissingTableError(error)) throwSupabaseError(error);
   if (data) return ts;
 
-  const { error: upsertError } = await getSupabase()
+  // No snapshot row yet — create cursor only (empty payload is fine when tables hold data)
+  const { error: insertError } = await getSupabase()
     .from('ledger_snapshots')
-    .upsert(
-      {
-        user_id: userId,
-        updated_at: ts,
-        payload: {},
-      },
-      { onConflict: 'user_id' },
-    );
-  if (upsertError && !isMissingTableError(upsertError)) throwSupabaseError(upsertError);
+    .insert({
+      user_id: userId,
+      updated_at: ts,
+      payload: {},
+    });
+  // Ignore duplicate race; never upsert empty payload over an existing snapshot
+  if (insertError && !isMissingTableError(insertError) && insertError.code !== '23505') {
+    throwSupabaseError(insertError);
+  }
   return ts;
 }
 
