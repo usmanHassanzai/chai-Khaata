@@ -24,6 +24,7 @@ import {
 } from './subscriptions.js';
 import { clearExpiryReminderFields } from './subscriptionReminders.js';
 import { clearRenewalGraceFields } from './renewalGrace.js';
+import { buildUserApprovalPatch, approvalSuccessMessage } from './userActivation.js';
 
 export async function approveUserById(id) {
   const user = await findUserById(id);
@@ -34,26 +35,14 @@ export async function approveUserById(id) {
     return { status: 400, body: { error: 'VALIDATION', message: 'Cannot change admin account status' } };
   }
 
-  const now = new Date().toISOString();
   const planId = user.subscriptionPlan;
-  const approvePatch = { status: 'approved', approvedAt: now };
-
-  if (planId && isValidPlanId(planId)) {
-    approvePatch.subscriptionStartsAt = now;
-    approvePatch.subscriptionExpiresAt = computeExpiryFrom(now, planId);
-    Object.assign(approvePatch, clearExpiryReminderFields());
-  }
-
-  const updated = await updateUser(user.id, approvePatch);
-  const plan = planId ? getPlan(planId) : null;
+  const updated = await updateUser(user.id, buildUserApprovalPatch(user, planId));
 
   return {
     status: 200,
     body: {
       user: adminUser(updated),
-      message: plan
-        ? `User approved with ${plan.label} subscription until ${new Date(updated.subscriptionExpiresAt).toLocaleDateString()}.`
-        : 'User approved — they can now log in.',
+      message: approvalSuccessMessage(user, planId),
     },
   };
 }
@@ -234,7 +223,15 @@ export async function approvePaymentSubmissionById(id) {
   const renewalPlan = submission.subscriptionPlan || user.subscriptionPlan;
   let renewalMessage = `Payment approved for ${user.username}. Account unblocked.`;
 
-  if (submission.kind === 'subscription_renewal' && renewalPlan && isValidPlanId(renewalPlan)) {
+  if (submission.kind === 'signup_payment' && user.status === 'pending') {
+    Object.assign(patch, buildUserApprovalPatch(user, renewalPlan));
+    if (renewalPlan && isValidPlanId(renewalPlan)) {
+      const plan = getPlan(renewalPlan);
+      renewalMessage = `${user.username} registered & subscribed (${plan.label}). Payment verified — they can log in now.`;
+    } else {
+      renewalMessage = `${user.username} registered and approved. They can log in now.`;
+    }
+  } else if (submission.kind === 'subscription_renewal' && renewalPlan && isValidPlanId(renewalPlan)) {
     Object.assign(patch, extendSubscription(user, renewalPlan));
     Object.assign(patch, clearExpiryReminderFields());
     patch.registrationFee = getPlan(renewalPlan).price;

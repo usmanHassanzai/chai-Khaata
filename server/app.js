@@ -4,7 +4,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import { sendOtpEmail } from './email.js';
 import { sendOtpSms } from './twilio.js';
-import { readLedger, writeLedger, shouldAcceptIncoming, deleteLedger } from './ledgerStore.js';
+import { readLedger, writeLedger, shouldAcceptIncoming, deleteLedger, getLedgerUpdatedAt } from './ledgerStore.js';
 import { isServerlessEnv } from './dataPaths.js';
 import { deliverOtp, otpDeliveryStatus } from './otpDelivery.js';
 import { clearOtp, createOtp, getOtpForUser, verifyOtp } from './otpStore.js';
@@ -416,44 +416,9 @@ app.get('/api/admin/payment-submissions/:id', authMiddleware, adminMiddleware, a
 
 app.patch('/api/admin/payment-submissions/:id/approve', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const submission = await findSubmissionById(req.params.id);
-    if (!submission || submission.status !== 'pending') {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'Submission not found or already reviewed' });
-    }
-
-    const user = await findUserById(submission.userId);
-    if (!user) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'User no longer exists' });
-    }
-
-    const patch = {
-      paymentDue: 0,
-      paymentDueNote: '',
-      lastPaidAt: new Date().toISOString(),
-    };
-
-    const renewalPlan = submission.subscriptionPlan || user.subscriptionPlan;
-    if (submission.kind === 'subscription_renewal' && renewalPlan && isValidPlanId(renewalPlan)) {
-      Object.assign(patch, extendSubscription(user, renewalPlan));
-      Object.assign(patch, clearExpiryReminderFields());
-      patch.registrationFee = getPlan(renewalPlan).price;
-    } else if (user.status === 'approved' && renewalPlan && isValidPlanId(renewalPlan) && isSubscriptionExpired(user)) {
-      Object.assign(patch, extendSubscription(user, renewalPlan));
-      Object.assign(patch, clearExpiryReminderFields());
-    }
-
-    await updateUser(user.id, patch);
-
-    const updated = await updateSubmission(submission.id, {
-      status: 'approved',
-      reviewedAt: new Date().toISOString(),
-    });
-
-    res.json({
-      message: `Payment approved for ${user.username}. Account unblocked.`,
-      submission: publicSubmission(updated),
-      user: adminUser(await findUserById(user.id)),
-    });
+    const { approvePaymentSubmissionById } = await import('./adminUserActions.js');
+    const result = await approvePaymentSubmissionById(req.params.id);
+    res.status(result.status).json(result.body);
   } catch (err) {
     console.error('Approve payment submission error:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not approve payment' });
@@ -462,22 +427,9 @@ app.patch('/api/admin/payment-submissions/:id/approve', authMiddleware, adminMid
 
 app.patch('/api/admin/payment-submissions/:id/reject', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const submission = await findSubmissionById(req.params.id);
-    if (!submission || submission.status !== 'pending') {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'Submission not found' });
-    }
-
-    const note = String(req.body?.note ?? 'Payment proof rejected. Please submit again.').trim();
-    const updated = await updateSubmission(submission.id, {
-      status: 'rejected',
-      reviewedAt: new Date().toISOString(),
-      rejectNote: note,
-    });
-
-    res.json({
-      message: `Payment proof rejected for ${submission.username}.`,
-      submission: publicSubmission(updated),
-    });
+    const { rejectPaymentSubmissionById } = await import('./adminUserActions.js');
+    const result = await rejectPaymentSubmissionById(req.params.id, req.body?.note);
+    res.status(result.status).json(result.body);
   } catch (err) {
     console.error('Reject payment submission error:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not reject payment' });
@@ -975,6 +927,14 @@ app.get('/api/sync/ledger', authMiddleware, async (req, res) => {
       });
     }
 
+    const since = typeof req.query.since === 'string' ? req.query.since.trim() : '';
+    if (since) {
+      const serverUpdated = await getLedgerUpdatedAt(req.userId);
+      if (!serverUpdated || new Date(serverUpdated).getTime() <= new Date(since).getTime()) {
+        return res.json({ unchanged: true, updatedAt: serverUpdated });
+      }
+    }
+
     const ledger = await readLedger(req.userId);
     if (!ledger) {
       return res.json({ empty: true, ledger: null });
@@ -1043,7 +1003,7 @@ app.patch('/api/sync/ledger', authMiddleware, async (req, res) => {
       accepted: true,
       applied: result.applied,
       skipped: result.skipped,
-      ledger: result.ledger,
+      updatedAt: result.updatedAt,
     });
   } catch (err) {
     console.error('Sync patch error:', err);

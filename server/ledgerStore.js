@@ -15,6 +15,17 @@ import { ledgerFile } from './dataPaths.js';
  */
 
 /** @param {string} userId */
+export async function getLedgerUpdatedAt(userId) {
+  if (isSupabaseEnabled()) {
+    const { sbGetLedgerUpdatedAt } = await import('./persistence/ledgerTables.js');
+    return sbGetLedgerUpdatedAt(userId);
+  }
+
+  const ledger = await readLedger(userId);
+  return ledger?.updatedAt ?? null;
+}
+
+/** @param {string} userId */
 export async function readLedger(userId) {
   if (isSupabaseEnabled()) return sb.sbReadLedger(userId);
 

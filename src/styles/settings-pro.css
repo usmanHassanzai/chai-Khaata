@@ -699,6 +699,295 @@
   }
 }
 
+/* ═══════════════════════════════════════════
+   Admin approvals page
+   ═══════════════════════════════════════════ */
+
+.admin-approvals-page .admin-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.admin-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem 1.15rem;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-stat-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  background: var(--tea-soft);
+  border-radius: 12px;
+}
+
+.admin-stat-card strong {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--tea-deep);
+  line-height: 1.1;
+}
+
+.admin-stat-card small {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.admin-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  margin-bottom: 1.25rem;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--cream-dark);
+  border-radius: 16px;
+  width: 100%;
+}
+
+.admin-tabs-equal {
+  display: grid;
+  grid-template-columns: repeat(var(--admin-tab-count, 3), minmax(0, 1fr));
+}
+
+.admin-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.75rem 0.5rem;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  text-align: center;
+}
+
+.admin-tab-label {
+  line-height: 1.25;
+}
+
+.admin-tab-weight {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-light);
+  opacity: 0.85;
+}
+
+.admin-tab.active .admin-tab-weight {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.admin-tab:hover {
+  background: rgba(45, 106, 79, 0.08);
+  color: var(--tea-deep);
+}
+
+.admin-tab.active {
+  background: linear-gradient(135deg, var(--tea-primary), var(--tea-light));
+  color: white;
+  box-shadow: 0 4px 14px rgba(45, 106, 79, 0.3);
+}
+
+.admin-tab-badge {
+  min-width: 1.35rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.admin-tab:not(.active) .admin-tab-badge {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.admin-tab-panels {
+  min-width: 0;
+}
+
+.admin-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.admin-empty-state {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--text-muted);
+}
+
+.admin-empty-icon {
+  display: inline-flex;
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background: var(--tea-soft);
+  border-radius: 50%;
+  margin-bottom: 0.75rem;
+}
+
+.admin-payment-cards {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.admin-payment-card {
+  padding: 1.15rem;
+  border-radius: 16px;
+  border: 1px solid var(--cream-dark);
+  background: var(--surface-2);
+}
+
+.admin-payment-card.tone-signup {
+  border-color: rgba(45, 106, 79, 0.35);
+  background: linear-gradient(180deg, var(--tea-soft) 0%, var(--surface) 100%);
+}
+
+.admin-payment-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.admin-kind-badge {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+}
+
+.admin-kind-badge.tone-signup {
+  background: var(--tea-soft);
+  color: var(--tea-deep);
+}
+
+.admin-kind-badge.tone-renewal {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.admin-kind-badge.tone-due {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.admin-payment-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 1rem;
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+}
+
+.admin-payment-meta dt {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-light);
+}
+
+.admin-payment-meta dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.admin-payment-screenshot {
+  margin-bottom: 0.85rem;
+}
+
+.admin-payment-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.admin-payment-table-wrap {
+  display: none;
+}
+
+@media (min-width: 960px) {
+  .admin-payment-cards {
+    display: none;
+  }
+
+  .admin-payment-table-wrap {
+    display: block;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-approvals-page .admin-stats-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-tabs-equal {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-tab {
+    flex-direction: row;
+    justify-content: flex-start;
+    text-align: left;
+    min-height: 48px;
+    padding: 0.65rem 0.85rem;
+  }
+
+  .admin-tab-weight {
+    margin-left: auto;
+  }
+
+  .admin-payment-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+[data-theme='dark'] .admin-stat-card,
+[data-theme='dark'] .admin-tabs {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+[data-theme='dark'] .admin-payment-card {
+  background: var(--surface-elevated);
+  border-color: var(--border);
+}
+
 /* ─── Reduce motion override ─── */
 .reduce-motion-ui *,
 .reduce-motion-ui *::before,

@@ -5,12 +5,10 @@ import { Label, PageTitle, SectionTitle, useLabel, useLabelMode } from '../i18n/
 import { setLabelMode, type LabelMode } from '../i18n/labels';
 import { useAuth } from '../context/AuthContext';
 import ChangePasswordForm from '../components/ChangePasswordForm';
-import AdminAllUsersPanel from '../components/AdminAllUsersPanel';
-import AdminUsersPanel from '../components/AdminUsersPanel';
+import AdminOrgTabs from '../components/AdminOrgTabs';
 import CloudSyncPanel from '../components/CloudSyncPanel';
 import PageBanner from '../components/PageBanner';
 import ConfirmDialog from '../components/ConfirmDialog';
-import AdminPaymentProofsPanel from '../components/AdminPaymentProofsPanel';
 import FormField from '../components/FormField';
 import ImageUpload from '../components/ImageUpload';
 import { useAppDb } from '../hooks/useAppDb';
@@ -489,10 +487,8 @@ export default function Settings() {
           )}
 
           {tab === 'admin' && user?.role === 'admin' && (
-            <div className="settings-panel animate-fade-in-up">
-              <AdminPaymentProofsPanel />
-              <AdminUsersPanel />
-              <AdminAllUsersPanel />
+            <div className="settings-panel animate-fade-in-up admin-approvals-page">
+              <AdminOrgTabs showStats={false} />
             </div>
           )}
 

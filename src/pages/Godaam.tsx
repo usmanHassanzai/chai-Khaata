@@ -7,23 +7,35 @@ import PhoneLink from '../components/PhoneLink';
 import ExportToolbar from '../components/ExportToolbar';
 import TextAreaField from '../components/TextAreaField';
 import { db } from '../db/database';
+import { flushLedgerPushNow } from '../services/ledgerSync';
 import { Label, PageTitle, SectionTitle, useLabel } from '../i18n/useLabel';
 import type { Dealer, Purchase } from '../models/types';
 import {
   computeDealerSummary,
   formatBags,
   formatCurrency,
+  formatDateTime,
   formatKg,
+  getTeaNames,
+  nowISO,
   purchaseDue,
   purchaseNetWeight,
+  purchaseOrderedKg,
+  purchaseOrderedTotalPrice,
+  purchasePendingAmount,
   purchasePendingBags,
+  purchasePreviousPaid,
+  purchaseCurrentPayment,
   purchaseTotalPrice,
   todayISO,
 } from '../services/calculations';
+import { useShopPrintProfile } from '../hooks/useShopPrintProfile';
 import {
   buildDealerExportRows,
   buildPurchaseExportRows,
   DEALER_EXPORT_COLUMNS,
+  downloadDealerFullHistoryPdf,
+  printDealerFullHistory,
   PURCHASE_EXPORT_COLUMNS,
 } from '../services/export';
 
@@ -73,12 +85,51 @@ function PurchaseShipmentCells({ p }: { p: Purchase }) {
   );
 }
 
+function PurchaseAmountHeaders() {
+  return (
+    <>
+      <th><Label k="godaam.orderedMaal" variant="compact" /></th>
+      <th><Label k="godaam.orderedAmount" variant="compact" /></th>
+      <th><Label k="godaam.previousPaid" variant="compact" /></th>
+      <th><Label k="godaam.currentPayment" variant="compact" /></th>
+      <th><Label k="godaam.totalPaid" variant="compact" /></th>
+      <th><Label k="godaam.pendingAmount" variant="compact" /></th>
+      <th><Label k="godaam.lastPayment" variant="compact" /></th>
+      <th><Label k="godaam.previousReceived" variant="compact" /></th>
+      <th><Label k="godaam.currentReceived" variant="compact" /></th>
+      <th><Label k="godaam.previousDate" variant="compact" /></th>
+      <th><Label k="godaam.currentDate" variant="compact" /></th>
+    </>
+  );
+}
+
+function PurchaseAmountCells({ p }: { p: Purchase }) {
+  return (
+    <>
+      <td>{formatKg(purchaseOrderedKg(p))}</td>
+      <td>{formatCurrency(purchaseOrderedTotalPrice(p))}</td>
+      <td>{formatCurrency(purchasePreviousPaid(p))}</td>
+      <td>{purchaseCurrentPayment(p) > 0 ? formatCurrency(purchaseCurrentPayment(p)) : '—'}</td>
+      <td>{formatCurrency(p.depositPaid)}</td>
+      <td className={purchasePendingAmount(p) > 0 ? 'warn-text' : ''}>{formatCurrency(purchasePendingAmount(p))}</td>
+      <td>{formatDateTime(p.lastPaymentAt)}</td>
+      <td>{p.previousBagsReceived != null ? p.previousBagsReceived : '—'}</td>
+      <td>{p.lastReceivedBags != null ? p.lastReceivedBags : '—'}</td>
+      <td>{p.previousReceiveDate ?? '—'}</td>
+      <td>{formatDateTime(p.lastReceivedAt)}</td>
+    </>
+  );
+}
+
 export default function Godaam() {
   const l = useLabel();
+  const shopProfile = useShopPrintProfile();
   const dealers = useLiveQuery(() => db.dealers.toArray(), []) ?? [];
   const purchases = useLiveQuery(() => db.purchases.toArray(), []) ?? [];
   const payments = useLiveQuery(() => db.payments.toArray(), []) ?? [];
   const activeDealers = dealers.filter((d) => !d.removed);
+
+  const teaNames = useMemo(() => getTeaNames(purchases), [purchases]);
 
   const [dealerName, setDealerName] = useState('');
   const [dealerPhone, setDealerPhone] = useState('');
@@ -124,6 +175,16 @@ export default function Godaam() {
   const [editGrade, setEditGrade] = useState('');
   const [editInvoiceNumber, setEditInvoiceNumber] = useState('');
   const [editPurchaseError, setEditPurchaseError] = useState('');
+
+  const [receivePurchaseId, setReceivePurchaseId] = useState<number | null>(null);
+  const [receiveBags, setReceiveBags] = useState('');
+  const [receiveReceipt, setReceiveReceipt] = useState<string | undefined>();
+  const [receiveError, setReceiveError] = useState('');
+
+  const [payPurchaseId, setPayPurchaseId] = useState<number | null>(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [payReceipt, setPayReceipt] = useState<string | undefined>();
+  const [payError, setPayError] = useState('');
 
   const previewPurchase: Purchase = useMemo(
     () => ({
@@ -190,6 +251,9 @@ export default function Godaam() {
   const detailSummary = detailDealer ? computeDealerSummary(detailDealer, purchases, payments) : null;
   const detailPurchases = detailDealer
     ? purchases.filter((p) => p.dealerId === detailDealer.id).sort((a, b) => b.date.localeCompare(a.date))
+    : [];
+  const detailPayments = detailDealer
+    ? payments.filter((p) => p.dealerId === detailDealer.id).sort((a, b) => b.date.localeCompare(a.date))
     : [];
 
   const dealerExportRows = useMemo(
@@ -299,10 +363,132 @@ export default function Godaam() {
       notes: editPurchaseNotes.trim() || undefined,
     });
     setEditPurchaseId(null);
+    flushLedgerPushNow();
   }
 
-  async function handleRemoveDealer(id: number) {
-    await db.dealers.update(id, { removed: true });
+  const receivePurchase = receivePurchaseId ? purchases.find((p) => p.id === receivePurchaseId) : null;
+  const receivePendingBags = receivePurchase ? purchasePendingBags(receivePurchase) : 0;
+
+  function openReceiveMaal(p: Purchase) {
+    if (!p.id) return;
+    const pending = purchasePendingBags(p);
+    if (pending <= 0) return;
+    setReceivePurchaseId(p.id);
+    setReceiveBags(String(pending));
+    setReceiveReceipt(undefined);
+    setReceiveError('');
+  }
+
+  async function handleReceiveMaal(e: React.FormEvent) {
+    e.preventDefault();
+    setReceiveError('');
+    if (!receivePurchaseId || !receivePurchase) return;
+
+    const bagsNow = Math.round(parseFloat(receiveBags) || 0);
+    const pending = purchasePendingBags(receivePurchase);
+    if (bagsNow <= 0) {
+      setReceiveError(l('godaam.receiveBagsRequired'));
+      return;
+    }
+    if (bagsNow > pending) {
+      setReceiveError(l('godaam.receiveBagsExceedsPending'));
+      return;
+    }
+
+    const receivedAt = nowISO();
+    const prevBags = receivePurchase.bagsReceived;
+    const newBags = prevBags + bagsNow;
+    const prevDateLabel = receivePurchase.lastReceivedAt
+      ? formatDateTime(receivePurchase.lastReceivedAt)
+      : receivePurchase.date;
+    const kgNow = bagsNow * receivePurchase.bagWeightKg;
+    const log = `Received ${bagsNow} bags (${formatKg(kgNow)}) on ${formatDateTime(receivedAt)}. Previous: ${prevBags} bags on ${prevDateLabel}`;
+    const existingNotes = receivePurchase.notes?.trim() ?? '';
+    const notes = existingNotes ? `${existingNotes}\n${log}` : log;
+
+    await db.purchases.update(receivePurchaseId, {
+      previousBagsReceived: prevBags,
+      previousReceiveDate: receivePurchase.lastReceivedAt ?? receivePurchase.date,
+      bagsReceived: newBags,
+      lastReceivedAt: receivedAt,
+      lastReceivedBags: bagsNow,
+      lastReceivedKg: kgNow,
+      receiveReceiptImage: receiveReceipt ?? receivePurchase.receiveReceiptImage,
+      notes,
+    });
+
+    setReceivePurchaseId(null);
+    flushLedgerPushNow();
+  }
+
+  const payPurchase = payPurchaseId ? purchases.find((p) => p.id === payPurchaseId) : null;
+  const payPendingAmount = payPurchase ? purchasePendingAmount(payPurchase) : 0;
+
+  function openPayPending(p: Purchase) {
+    if (!p.id) return;
+    const pending = purchasePendingAmount(p);
+    if (pending <= 0) return;
+    setPayPurchaseId(p.id);
+    setPayAmount(String(pending));
+    setPayReceipt(undefined);
+    setPayError('');
+  }
+
+  async function handlePayPending(e: React.FormEvent) {
+    e.preventDefault();
+    setPayError('');
+    if (!payPurchaseId || !payPurchase) return;
+
+    const amountNow = parseFloat(payAmount) || 0;
+    const pending = purchasePendingAmount(payPurchase);
+    if (amountNow <= 0) {
+      setPayError(l('godaam.payAmountRequired'));
+      return;
+    }
+    if (amountNow > pending) {
+      setPayError(l('godaam.payExceedsPending'));
+      return;
+    }
+
+    const paymentAt = nowISO();
+    const prevPaid = payPurchase.depositPaid;
+    const newPaid = Math.min(prevPaid + amountNow, purchaseOrderedTotalPrice(payPurchase));
+    const paymentLog = `Payment ${formatCurrency(amountNow)} on ${formatDateTime(paymentAt)}`;
+    const existingNotes = payPurchase.notes?.trim() ?? '';
+    const notes = existingNotes ? `${existingNotes}\n${paymentLog}` : paymentLog;
+
+    await db.purchases.update(payPurchaseId, {
+      previousDepositPaid: prevPaid,
+      lastPaymentAmount: amountNow,
+      depositPaid: newPaid,
+      lastPaymentAt: paymentAt,
+      paymentReceiptImage: payReceipt ?? payPurchase.paymentReceiptImage,
+      notes,
+    });
+
+    setPayPurchaseId(null);
+    flushLedgerPushNow();
+  }
+
+  async function handleDeleteDealer(id: number) {
+    if (!window.confirm(l('godaam.confirmDeleteDealer'))) return;
+
+    const dealerPurchases = await db.purchases.where('dealerId').equals(id).toArray();
+    const dealerPayments = await db.payments.where('dealerId').equals(id).toArray();
+
+    await db.transaction('rw', [db.dealers, db.purchases, db.payments], async () => {
+      for (const p of dealerPurchases) {
+        if (p.id != null) await db.purchases.delete(p.id);
+      }
+      for (const p of dealerPayments) {
+        if (p.id != null) await db.payments.delete(p.id);
+      }
+      await db.dealers.delete(id);
+    });
+
+    if (detailDealerId === id) setDetailDealerId(null);
+    if (dealerFilterId === String(id)) setDealerFilterId('');
+    flushLedgerPushNow();
   }
 
   async function handleDealerPayment(dealerId: number) {
@@ -343,7 +529,19 @@ export default function Godaam() {
               ))}
             </select>
           </label>
-          <FormField labelKey="godaam.teaName" value={pTeaName} onChange={setPTeaName} required />
+          <label className="form-field">
+            <FieldLabel labelKey="godaam.teaName" />
+            <input
+              list="godaam-tea-names"
+              value={pTeaName}
+              onChange={(e) => setPTeaName(e.target.value)}
+              required
+            />
+            <datalist id="godaam-tea-names">
+              {teaNames.map((n) => <option key={n} value={n} />)}
+            </datalist>
+          </label>
+          <p className="settings-note">{l('godaam.otherCompanyTeaHintDealer')}</p>
           <FormField labelKey="godaam.contNo" value={contNo} onChange={setContNo} />
           <FormField labelKey="godaam.lotNo" value={lotNo} onChange={setLotNo} />
           <FormField labelKey="godaam.country" value={country} onChange={setCountry} />
@@ -415,7 +613,7 @@ export default function Godaam() {
                         <button type="button" className="btn sm" onClick={() => setDetailDealerId(d.id!)}>{l('godaam.viewHistory')}</button>
                         <button type="button" className="btn sm" onClick={() => { setDealerFilterId(String(d.id)); setPurchaseSearch(''); }}>{l('godaam.dealerHistory')}</button>
                         <button type="button" className="btn sm" onClick={() => handleDealerPayment(d.id!)}>{l('common.addPayment')}</button>
-                        <button type="button" className="btn danger sm" onClick={() => handleRemoveDealer(d.id!)}>{l('godaam.removeDealer')}</button>
+                        <button type="button" className="btn danger sm" onClick={() => handleDeleteDealer(d.id!)}>{l('godaam.deleteDealer')}</button>
                       </td>
                     </tr>
                   );
@@ -460,19 +658,23 @@ export default function Godaam() {
                 <th><Label k="godaam.pendingBags" variant="compact" /></th>
                 <th><Label k="godaam.receivedMaal" variant="compact" /></th>
                 <th><Label k="godaam.pendingMaal" variant="compact" /></th>
+                <PurchaseAmountHeaders />
                 <th><Label k="godaam.missWeight" variant="compact" /></th>
                 <th><Label k="godaam.totalPrice" variant="compact" /></th>
                 <th><Label k="godaam.billImage" variant="compact" /></th>
+                <th><Label k="godaam.paymentReceipt" variant="compact" /></th>
+                <th><Label k="godaam.receiveReceipt" variant="compact" /></th>
                 <th><Label k="common.actions" variant="compact" /></th>
               </tr>
             </thead>
             <tbody>
               {filteredPurchases.length === 0 ? (
-                <tr><td colSpan={17} className="empty">{l('common.noData')}</td></tr>
+                <tr><td colSpan={30} className="empty">{l('common.noData')}</td></tr>
               ) : (
                 filteredPurchases.map((p) => {
                   const dealer = dealers.find((d) => d.id === p.dealerId);
                   const pending = purchasePendingBags(p);
+                  const pendingPay = purchasePendingAmount(p);
                   const receivedMaal = purchaseNetWeight(p);
                   const pendingMaal = pending * p.bagWeightKg;
                   return (
@@ -486,10 +688,19 @@ export default function Godaam() {
                       <td className={pending > 0 ? 'warn-text' : ''}>{pending}</td>
                       <td>{formatKg(receivedMaal)}</td>
                       <td className={pendingMaal > 0 ? 'warn-text' : ''}>{formatKg(pendingMaal)}</td>
+                      <PurchaseAmountCells p={p} />
                       <td>{formatKg(p.missWeightKg)}</td>
                       <td>{formatCurrency(purchaseTotalPrice(p))}</td>
                       <td><ImageThumb src={p.billImage} /></td>
+                      <td><ImageThumb src={p.paymentReceiptImage} /></td>
+                      <td><ImageThumb src={p.receiveReceiptImage} /></td>
                       <td className="action-cell">
+                        {pendingPay > 0 && (
+                          <button type="button" className="btn sm primary" onClick={() => openPayPending(p)}>{l('godaam.payPending')}</button>
+                        )}
+                        {pending > 0 && (
+                          <button type="button" className="btn sm" onClick={() => openReceiveMaal(p)}>{l('godaam.receiveMaal')}</button>
+                        )}
                         <button type="button" className="btn sm" onClick={() => openEditPurchase(p)}>{l('godaam.editPurchase')}</button>
                       </td>
                     </tr>
@@ -528,16 +739,20 @@ export default function Godaam() {
                     <th><Label k="godaam.pendingBags" variant="compact" /></th>
                     <th><Label k="godaam.receivedMaal" variant="compact" /></th>
                     <th><Label k="godaam.pendingMaal" variant="compact" /></th>
+                    <PurchaseAmountHeaders />
                     <th><Label k="godaam.totalPrice" variant="compact" /></th>
+                    <th><Label k="godaam.paymentReceipt" variant="compact" /></th>
+                    <th><Label k="godaam.receiveReceipt" variant="compact" /></th>
                     <th><Label k="common.actions" variant="compact" /></th>
                   </tr>
                 </thead>
                 <tbody>
                   {detailPurchases.length === 0 ? (
-                    <tr><td colSpan={14} className="empty">{l('common.noData')}</td></tr>
+                    <tr><td colSpan={27} className="empty">{l('common.noData')}</td></tr>
                   ) : (
                     detailPurchases.map((p) => {
                       const pending = purchasePendingBags(p);
+                      const pendingPay = purchasePendingAmount(p);
                       return (
                         <tr key={p.id}>
                           <td>{p.date}</td>
@@ -548,8 +763,17 @@ export default function Godaam() {
                           <td className={pending > 0 ? 'warn-text' : ''}>{pending}</td>
                           <td>{formatKg(purchaseNetWeight(p))}</td>
                           <td className={pending > 0 ? 'warn-text' : ''}>{formatKg(pending * p.bagWeightKg)}</td>
+                          <PurchaseAmountCells p={p} />
                           <td>{formatCurrency(purchaseTotalPrice(p))}</td>
+                          <td><ImageThumb src={p.paymentReceiptImage} /></td>
+                          <td><ImageThumb src={p.receiveReceiptImage} /></td>
                           <td className="action-cell">
+                            {pendingPay > 0 && (
+                              <button type="button" className="btn sm primary" onClick={() => openPayPending(p)}>{l('godaam.payPending')}</button>
+                            )}
+                            {pending > 0 && (
+                              <button type="button" className="btn sm" onClick={() => openReceiveMaal(p)}>{l('godaam.receiveMaal')}</button>
+                            )}
                             <button type="button" className="btn sm" onClick={() => openEditPurchase(p)}>{l('godaam.editPurchase')}</button>
                           </td>
                         </tr>
@@ -560,7 +784,115 @@ export default function Godaam() {
               </table>
             </div>
 
-            <button type="button" className="btn" onClick={() => setDetailDealerId(null)}>{l('common.cancel')}</button>
+            <h4><Label k="export.paymentHistory" variant="compact" /></h4>
+            {detailPayments.length === 0 ? (
+              <p className="empty">{l('common.noData')}</p>
+            ) : (
+              <ul className="history-list">
+                {detailPayments.map((p) => (
+                  <li key={p.id}>{p.date} — {formatCurrency(p.amount)} {p.note ? `(${p.note})` : ''}</li>
+                ))}
+              </ul>
+            )}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() => printDealerFullHistory({
+                  dealer: detailDealer,
+                  summary: detailSummary,
+                  purchases: detailPurchases,
+                  payments: detailPayments,
+                  shopProfile,
+                })}
+              >
+                🖨 {l('export.historyPrint')}
+              </button>
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() => downloadDealerFullHistoryPdf({
+                  dealer: detailDealer,
+                  summary: detailSummary,
+                  purchases: detailPurchases,
+                  payments: detailPayments,
+                  shopProfile,
+                }).catch(console.error)}
+              >
+                📄 {l('export.historyPdf')}
+              </button>
+              <button type="button" className="btn danger" onClick={() => handleDeleteDealer(detailDealerId!)}>{l('godaam.deleteDealer')}</button>
+              <button type="button" className="btn" onClick={() => setDetailDealerId(null)}>{l('common.cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {payPurchaseId && payPurchase && (
+        <div className="modal-overlay" onClick={() => setPayPurchaseId(null)}>
+          <div className="modal card modal-wide" onClick={(e) => e.stopPropagation()}>
+            <SectionTitle k="godaam.payPendingTitle" />
+            <form onSubmit={handlePayPending}>
+              <div className="form-grid">
+                <ReadOnlyField labelKey="godaam.teaName" value={payPurchase.teaName} />
+                <ReadOnlyField labelKey="godaam.orderedAmount" value={formatCurrency(purchaseOrderedTotalPrice(payPurchase))} />
+                <ReadOnlyField labelKey="godaam.previousPaid" value={formatCurrency(purchasePreviousPaid(payPurchase))} />
+                <ReadOnlyField labelKey="godaam.totalPaid" value={formatCurrency(payPurchase.depositPaid)} />
+                <ReadOnlyField labelKey="godaam.pendingAmount" value={formatCurrency(payPendingAmount)} />
+                <FormField
+                  labelKey="godaam.paymentAmount"
+                  value={payAmount}
+                  onChange={setPayAmount}
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  required
+                />
+                <ImageUpload labelKey="godaam.paymentReceipt" value={payReceipt} onChange={setPayReceipt} />
+              </div>
+              {payError && <p className="error-msg">{payError}</p>}
+              <div className="modal-actions">
+                <button type="submit" className="btn primary">{l('godaam.recordPayment')}</button>
+                <button type="button" className="btn" onClick={() => setPayPurchaseId(null)}>{l('common.cancel')}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {receivePurchaseId && receivePurchase && (
+        <div className="modal-overlay" onClick={() => setReceivePurchaseId(null)}>
+          <div className="modal card modal-wide" onClick={(e) => e.stopPropagation()}>
+            <SectionTitle k="godaam.receiveMaalTitle" />
+            <form onSubmit={handleReceiveMaal}>
+              <div className="form-grid">
+                <ReadOnlyField labelKey="godaam.teaName" value={receivePurchase.teaName} />
+                <ReadOnlyField labelKey="godaam.bagsOrdered" value={String(receivePurchase.bagsOrdered)} />
+                <ReadOnlyField labelKey="godaam.bagsReceivedCol" value={String(receivePurchase.bagsReceived)} />
+                <ReadOnlyField labelKey="godaam.pendingBags" value={String(receivePendingBags)} />
+                <ReadOnlyField labelKey="godaam.previousReceived" value={String(receivePurchase.bagsReceived)} />
+                <ReadOnlyField
+                  labelKey="godaam.previousDate"
+                  value={receivePurchase.lastReceivedAt ? formatDateTime(receivePurchase.lastReceivedAt) : receivePurchase.date}
+                />
+                <FormField
+                  labelKey="godaam.bagsToReceive"
+                  value={receiveBags}
+                  onChange={setReceiveBags}
+                  type="number"
+                  min={0}
+                  step={1}
+                  required
+                />
+                <ImageUpload labelKey="godaam.receiveReceipt" value={receiveReceipt} onChange={setReceiveReceipt} />
+              </div>
+              {receiveError && <p className="error-msg">{receiveError}</p>}
+              <div className="modal-actions">
+                <button type="submit" className="btn primary">{l('godaam.recordReceive')}</button>
+                <button type="button" className="btn" onClick={() => setReceivePurchaseId(null)}>{l('common.cancel')}</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -581,7 +913,18 @@ export default function Godaam() {
                     ))}
                   </select>
                 </label>
-                <FormField labelKey="godaam.teaName" value={editPTeaName} onChange={setEditPTeaName} required />
+                <label className="form-field">
+                  <FieldLabel labelKey="godaam.teaName" />
+                  <input
+                    list="godaam-edit-tea-names"
+                    value={editPTeaName}
+                    onChange={(e) => setEditPTeaName(e.target.value)}
+                    required
+                  />
+                  <datalist id="godaam-edit-tea-names">
+                    {teaNames.map((n) => <option key={n} value={n} />)}
+                  </datalist>
+                </label>
                 <FormField labelKey="godaam.contNo" value={editContNo} onChange={setEditContNo} />
                 <FormField labelKey="godaam.lotNo" value={editLotNo} onChange={setEditLotNo} />
                 <FormField labelKey="godaam.country" value={editCountry} onChange={setEditCountry} />

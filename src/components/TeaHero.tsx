@@ -6,47 +6,78 @@ import TeaImageFrame from './TeaImageFrame';
 
 type TeaHeroProps = {
   todaySale?: string;
+  monthSale?: string;
+  monthProfit?: string;
+  showProfit?: boolean;
 };
 
-export default function TeaHero({ todaySale }: TeaHeroProps) {
+export default function TeaHero({
+  todaySale,
+  monthSale,
+  monthProfit,
+  showProfit = true,
+}: TeaHeroProps) {
   const { user } = useAuth();
   const heroTea = HERO_TEAS[0];
+  const shopName = user?.shopName?.trim();
 
   return (
-    <section className="dashboard-hero animate-fade-in-up dashboard-hero-premium">
-      <div className="dashboard-hero-bg-photo" style={{ backgroundImage: `url(${heroTea.image})` }} aria-hidden />
-      <div className="dashboard-hero-particles" aria-hidden>
-        {['🍃', '☕', '🫖', '🌿'].map((p, i) => (
-          <span key={i} className="hero-particle" style={{ animationDelay: `${i * 0.8}s` }}>{p}</span>
-        ))}
-      </div>
+    <section className="dashboard-hero dashboard-hero-pro animate-fade-in-up">
+      <div
+        className="dashboard-hero-bg-photo"
+        style={{ backgroundImage: `url(${heroTea.image})` }}
+        aria-hidden
+      />
+      <div className="dashboard-hero-veil" aria-hidden />
 
       <div className="dashboard-hero-content">
-        <p className="dashboard-hero-greeting animate-slide-left">
-          Welcome back{user?.shopName ? `, ${user.shopName}` : ''} 👋
+        <p className="dashboard-hero-kicker">Patiwala · Chai Khata</p>
+        <p className="dashboard-hero-greeting">
+          {shopName ? `Welcome back, ${shopName}` : 'Welcome back'}
         </p>
-        <h2 className="dashboard-hero-title animate-slide-left stagger-1">
+        <h2 className="dashboard-hero-title">
           <Label k="dashboard.title" variant="stacked" />
         </h2>
-        <p className="dashboard-hero-sub animate-slide-left stagger-2">
-          Pakistani tea shop khata — sales, stock & dues in one place.
+        <p className="dashboard-hero-sub">
+          Sales, stock, and dues — your shop ledger at a glance.
         </p>
-        {todaySale && (
-          <div className="dashboard-hero-stat animate-scale-in stagger-3 hero-stat-glow">
-            <span className="dashboard-hero-stat-label">Today&apos;s Sale</span>
-            <span className="dashboard-hero-stat-value">{todaySale}</span>
+
+        {(todaySale || monthSale) && (
+          <div className="dashboard-hero-metrics">
+            {todaySale && (
+              <div className="dashboard-hero-metric is-primary">
+                <span className="dashboard-hero-metric-label">Today&apos;s sale</span>
+                <span className="dashboard-hero-metric-value">{todaySale}</span>
+              </div>
+            )}
+            {monthSale && (
+              <div className="dashboard-hero-metric">
+                <span className="dashboard-hero-metric-label">This month</span>
+                <span className="dashboard-hero-metric-value">{monthSale}</span>
+              </div>
+            )}
+            {showProfit && monthProfit && (
+              <div className="dashboard-hero-metric">
+                <span className="dashboard-hero-metric-label">Month profit</span>
+                <span className="dashboard-hero-metric-value">{monthProfit}</span>
+              </div>
+            )}
           </div>
         )}
-        <div className="dashboard-hero-actions animate-fade-in-up stagger-4">
-          <Link to="/dukaan" className="btn primary hero-btn">+ New Sale</Link>
-          <Link to="/godaam" className="btn hero-btn-secondary">+ Purchase</Link>
+
+        <div className="dashboard-hero-actions">
+          <Link to="/dukaan" className="btn primary hero-btn">
+            New sale
+          </Link>
+          <Link to="/godaam" className="btn hero-btn-secondary">
+            Add purchase
+          </Link>
         </div>
       </div>
 
-      <div className="dashboard-hero-visual animate-slide-right stagger-2">
+      <div className="dashboard-hero-visual">
         <TeaImageFrame src={heroTea.image} alt={heroTea.name} size="lg" />
-        <div className="dashboard-hero-badge animate-scale-in stagger-5">
-          <span>🇵🇰</span>
+        <div className="dashboard-hero-badge">
           <div>
             <strong>{heroTea.name}</strong>
             <small>{heroTea.nameUr}</small>

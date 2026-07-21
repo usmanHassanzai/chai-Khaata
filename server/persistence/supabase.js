@@ -568,13 +568,10 @@ export async function sbReadLedger(userId) {
     sbReadLedgerTables,
     sbReadLedgerSnapshotOnly,
     sbMigrateSnapshotToTables,
-    sbCountLedgerRows,
   } = await import('./ledgerTables.js');
 
-  const rowCount = await sbCountLedgerRows(userId);
-  if (rowCount > 0) {
-    return sbReadLedgerTables(userId);
-  }
+  const tableLedger = await sbReadLedgerTables(userId);
+  if (tableLedger) return tableLedger;
 
   const snapshot = await sbReadLedgerSnapshotOnly(userId);
   if (!snapshot) return null;

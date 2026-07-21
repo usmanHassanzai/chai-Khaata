@@ -7,6 +7,7 @@ import PhoneLink from '../components/PhoneLink';
 import ExportToolbar from '../components/ExportToolbar';
 import TextAreaField from '../components/TextAreaField';
 import { db, nextCustomerId } from '../db/database';
+import { flushLedgerPushNow } from '../services/ledgerSync';
 import { Label, PageTitle, SectionTitle, useLabel } from '../i18n/useLabel';
 import type { Customer, Sale } from '../models/types';
 import {
@@ -14,13 +15,17 @@ import {
   DEFAULT_BAG_WEIGHT_KG,
   formatBags,
   formatCurrency,
+  formatDateTime,
   formatKg,
   getGodaamPurchasePrice,
   getStockForTea,
   getTeaNames,
   kgFromBags,
+  nowISO,
   profitPerKg,
   saleBagsSold,
+  saleCurrentPayment,
+  salePreviousPaid,
   saleTotal,
   todayISO,
 } from '../services/calculations';
@@ -29,6 +34,8 @@ import {
   buildCustomerSummaryExportRows,
   CUSTOMER_LEDGER_COLUMNS,
   CUSTOMER_SUMMARY_COLUMNS,
+  downloadCustomerFullHistoryPdf,
+  printCustomerFullHistory,
   printCustomerReceipt,
 } from '../services/export';
 import { useShopPrintProfile } from '../hooks/useShopPrintProfile';
@@ -80,21 +87,54 @@ export default function Customers() {
   const [saleBillImage, setSaleBillImage] = useState<string | undefined>();
   const [saleNotes, setSaleNotes] = useState('');
   const [saleError, setSaleError] = useState('');
+  const [saleExternalTea, setSaleExternalTea] = useState(false);
+  const [saleManualPurchasePrice, setSaleManualPurchasePrice] = useState('');
+
+  const [editSaleId, setEditSaleId] = useState<number | null>(null);
+  const [editSaleDate, setEditSaleDate] = useState(todayISO());
+  const [editSaleTea, setEditSaleTea] = useState('');
+  const [editSaleBags, setEditSaleBags] = useState('');
+  const [editSaleBagWeight, setEditSaleBagWeight] = useState(String(DEFAULT_BAG_WEIGHT_KG));
+  const [editSaleQty, setEditSaleQty] = useState('');
+  const [editSalePrice, setEditSalePrice] = useState('');
+  const [editSaleReceived, setEditSaleReceived] = useState('');
+  const [editSaleBillImage, setEditSaleBillImage] = useState<string | undefined>();
+  const [editSaleNotes, setEditSaleNotes] = useState('');
+  const [editSaleExternalTea, setEditSaleExternalTea] = useState(false);
+  const [editSaleManualPurchasePrice, setEditSaleManualPurchasePrice] = useState('');
+  const [editSaleError, setEditSaleError] = useState('');
+
+  const [payDuesSaleId, setPayDuesSaleId] = useState<number | null>(null);
+  const [payDuesAmount, setPayDuesAmount] = useState('');
+  const [payDuesReceipt, setPayDuesReceipt] = useState<string | undefined>();
+  const [payDuesError, setPayDuesError] = useState('');
 
   const [detailId, setDetailId] = useState<number | null>(null);
   const [ledgerSearch, setLedgerSearch] = useState('');
 
-  const teaNames = useMemo(() => getTeaNames(purchases), [purchases]);
+  const teaNames = useMemo(() => {
+    const names = new Set(getTeaNames(purchases));
+    for (const s of sales) {
+      if (s.teaName.trim()) names.add(s.teaName.trim());
+    }
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [purchases, sales]);
+
+  function stockAllowsSaleQty(tea: string, qty: number, excludeSaleId?: number) {
+    const stockInfo = getStockForTea(tea, purchases, sales);
+    const existing = excludeSaleId ? sales.find((s) => s.id === excludeSaleId) : undefined;
+    const returnedKg = existing && existing.teaName === tea ? existing.quantityKg : 0;
+    return qty <= stockInfo.currentStock + returnedKg;
+  }
+
+  function resolvePurchasePrice(tea: string, external: boolean, manualPrice: string) {
+    if (external) return parseFloat(manualPrice) || 0;
+    return getGodaamPurchasePrice(tea, purchases).avgCostPerKg;
+  }
 
   const quickSaleQty = parseFloat(saleQty) || (parseFloat(saleBags) || 0) * (parseFloat(saleBagWeight) || DEFAULT_BAG_WEIGHT_KG);
   const quickSalePrice = parseFloat(salePrice) || 0;
-  const quickGodaam = saleTea ? getGodaamPurchasePrice(saleTea, purchases) : {
-    avgCostPerKg: 0,
-    latestPricePerKg: null,
-    latestPurchaseDate: null,
-    hasPurchase: false,
-  };
-  const quickCost = quickGodaam.avgCostPerKg;
+  const quickCost = resolvePurchasePrice(saleTea, saleExternalTea, saleManualPurchasePrice);
   const quickProfit = quickSaleQty > 0 && quickSalePrice > 0
     ? profitPerKg(quickSalePrice, quickCost) * quickSaleQty
     : 0;
@@ -169,7 +209,24 @@ export default function Customers() {
   }
 
   async function handleDelete(id: number) {
-    if (window.confirm(l('common.confirmDelete'))) await db.customers.delete(id);
+    if (!window.confirm(l('customers.confirmDeleteCustomer'))) return;
+
+    const customerSales = await db.sales.where('customerId').equals(id).toArray();
+    const customerPayments = await db.payments.where('customerId').equals(id).toArray();
+
+    await db.transaction('rw', [db.customers, db.sales, db.payments], async () => {
+      for (const s of customerSales) {
+        if (s.id != null) await db.sales.delete(s.id);
+      }
+      for (const p of customerPayments) {
+        if (p.id != null) await db.payments.delete(p.id);
+      }
+      await db.customers.delete(id);
+    });
+
+    if (detailId === id) setDetailId(null);
+    if (editId === id) setEditId(null);
+    flushLedgerPushNow();
   }
 
   function openEdit(c: Customer) {
@@ -206,21 +263,20 @@ export default function Customers() {
     const price = parseFloat(salePrice) || 0;
     if (!cid || !saleTea.trim() || qty <= 0 || price <= 0) return;
 
-    const stockInfo = getStockForTea(saleTea, purchases, sales);
-    if (qty > stockInfo.currentStock) {
-      setSaleError(l('dukaan.stockError'));
-      return;
-    }
-
-    const godaamPrice = getGodaamPurchasePrice(saleTea, purchases);
-    if (!godaamPrice.hasPurchase) {
-      setSaleError(l('dukaan.noGodaamPurchase'));
-      return;
+    if (!saleExternalTea) {
+      if (!stockAllowsSaleQty(saleTea.trim(), qty)) {
+        setSaleError(l('dukaan.stockError'));
+        return;
+      }
+      if (!getGodaamPurchasePrice(saleTea, purchases).hasPurchase) {
+        setSaleError(l('dukaan.noGodaamPurchase'));
+        return;
+      }
     }
 
     const total = qty * price;
     const received = parseFloat(saleReceived) || 0;
-    const purchasePrice = godaamPrice.avgCostPerKg;
+    const purchasePrice = resolvePurchasePrice(saleTea.trim(), saleExternalTea, saleManualPurchasePrice);
 
     await db.sales.add({
       date: saleDate,
@@ -244,7 +300,80 @@ export default function Customers() {
     setSaleReceived('');
     setSaleBillImage(undefined);
     setSaleNotes('');
+    setSaleExternalTea(false);
+    setSaleManualPurchasePrice('');
   }
+
+  function openEditSale(s: Sale) {
+    if (!s.id) return;
+    setEditSaleId(s.id);
+    setEditSaleError('');
+    setEditSaleDate(s.date);
+    setEditSaleTea(s.teaName);
+    setEditSaleBags(s.bagsSold != null ? String(s.bagsSold) : '');
+    setEditSaleBagWeight(String(s.bagWeightKg ?? DEFAULT_BAG_WEIGHT_KG));
+    setEditSaleQty(String(s.quantityKg));
+    setEditSalePrice(String(s.salePricePerKg));
+    setEditSaleReceived(String(s.amountReceived));
+    setEditSaleBillImage(s.billImage);
+    setEditSaleNotes(s.notes ?? '');
+    const hasGodaam = getGodaamPurchasePrice(s.teaName, purchases).hasPurchase;
+    setEditSaleExternalTea(!hasGodaam);
+    setEditSaleManualPurchasePrice(
+      !hasGodaam && s.purchasePricePerKg != null ? String(s.purchasePricePerKg) : '',
+    );
+  }
+
+  async function handleUpdateSale(e: React.FormEvent) {
+    e.preventDefault();
+    setEditSaleError('');
+    if (!editSaleId || !editSaleTea.trim()) return;
+
+    const qty = parseFloat(editSaleQty) || kgFromBags(parseFloat(editSaleBags) || 0, parseFloat(editSaleBagWeight) || DEFAULT_BAG_WEIGHT_KG);
+    const bags = Math.round(parseFloat(editSaleBags) || 0);
+    const bagWeight = parseFloat(editSaleBagWeight) || DEFAULT_BAG_WEIGHT_KG;
+    const price = parseFloat(editSalePrice) || 0;
+    const received = parseFloat(editSaleReceived) || 0;
+    if (qty <= 0 || price <= 0) return;
+
+    if (!editSaleExternalTea) {
+      if (!stockAllowsSaleQty(editSaleTea.trim(), qty, editSaleId)) {
+        setEditSaleError(l('dukaan.stockError'));
+        return;
+      }
+      if (!getGodaamPurchasePrice(editSaleTea, purchases).hasPurchase) {
+        setEditSaleError(l('dukaan.noGodaamPurchase'));
+        return;
+      }
+    }
+
+    const total = qty * price;
+    const purchasePrice = resolvePurchasePrice(editSaleTea.trim(), editSaleExternalTea, editSaleManualPurchasePrice);
+    const existing = sales.find((s) => s.id === editSaleId);
+
+    await db.sales.update(editSaleId, {
+      date: editSaleDate,
+      teaName: editSaleTea.trim(),
+      quantityKg: qty,
+      bagsSold: bags > 0 ? bags : undefined,
+      bagWeightKg: bags > 0 ? bagWeight : undefined,
+      salePricePerKg: price,
+      purchasePricePerKg: purchasePrice || undefined,
+      customerId: existing?.customerId,
+      amountReceived: Math.min(received, total),
+      billImage: editSaleBillImage,
+      notes: editSaleNotes.trim() || undefined,
+    });
+    setEditSaleId(null);
+    flushLedgerPushNow();
+  }
+
+  const editSaleQtyNum = parseFloat(editSaleQty) || (parseFloat(editSaleBags) || 0) * (parseFloat(editSaleBagWeight) || DEFAULT_BAG_WEIGHT_KG);
+  const editSalePriceNum = parseFloat(editSalePrice) || 0;
+  const editSaleCost = resolvePurchasePrice(editSaleTea, editSaleExternalTea, editSaleManualPurchasePrice);
+  const editSaleProfit = editSaleQtyNum > 0 && editSalePriceNum > 0
+    ? profitPerKg(editSalePriceNum, editSaleCost) * editSaleQtyNum
+    : 0;
 
   function printCustomerSale(s: Sale) {
     const customer = customerForSale(s);
@@ -257,6 +386,53 @@ export default function Customers() {
 
   function saleDues(s: Sale) {
     return Math.max(0, saleTotal(s) - s.amountReceived);
+  }
+
+  const payDuesSale = payDuesSaleId ? sales.find((s) => s.id === payDuesSaleId) : null;
+  const payDuesRemaining = payDuesSale ? saleDues(payDuesSale) : 0;
+
+  function openPayDues(s: Sale) {
+    if (!s.id) return;
+    const dues = saleDues(s);
+    if (dues <= 0) return;
+    setPayDuesSaleId(s.id);
+    setPayDuesAmount(String(dues));
+    setPayDuesReceipt(undefined);
+    setPayDuesError('');
+  }
+
+  async function handlePayDues(e: React.FormEvent) {
+    e.preventDefault();
+    setPayDuesError('');
+    if (!payDuesSaleId || !payDuesSale) return;
+
+    const payAmount = parseFloat(payDuesAmount) || 0;
+    const dues = saleDues(payDuesSale);
+    if (payAmount <= 0) {
+      setPayDuesError(l('customers.payDuesAmountRequired'));
+      return;
+    }
+    if (payAmount > dues) {
+      setPayDuesError(l('customers.payDuesExceedsDue'));
+      return;
+    }
+
+    const paymentAt = nowISO();
+    const paymentLog = `Payment ${formatCurrency(payAmount)} on ${formatDateTime(paymentAt)}`;
+    const existingNotes = payDuesSale.notes?.trim() ?? '';
+    const notes = existingNotes ? `${existingNotes}\n${paymentLog}` : paymentLog;
+
+    await db.sales.update(payDuesSaleId, {
+      previousAmountReceived: payDuesSale.amountReceived,
+      lastPaymentAmount: payAmount,
+      amountReceived: Math.min(payDuesSale.amountReceived + payAmount, saleTotal(payDuesSale)),
+      lastPaymentAt: paymentAt,
+      paymentReceiptImage: payDuesReceipt ?? payDuesSale.paymentReceiptImage,
+      notes,
+    });
+
+    setPayDuesSaleId(null);
+    flushLedgerPushNow();
   }
 
   function lastSaleDate(c: Customer) {
@@ -320,6 +496,15 @@ export default function Customers() {
               {teaNames.map((n) => <option key={n} value={n} />)}
             </datalist>
           </label>
+          <label className="form-field checkbox-field">
+            <input
+              type="checkbox"
+              checked={saleExternalTea}
+              onChange={(e) => setSaleExternalTea(e.target.checked)}
+            />
+            <span><Label k="dukaan.otherCompanyTea" variant="compact" /></span>
+          </label>
+          <p className="settings-note">{l('dukaan.otherCompanyTeaHint')}</p>
           <FormField labelKey="customers.bagsSold" value={saleBags} onChange={(v) => {
             setSaleBags(v);
             const b = Math.round(parseFloat(v) || 0);
@@ -333,10 +518,23 @@ export default function Customers() {
             if (b > 0) setSaleQty(String(kgFromBags(b, bw)));
           }} type="number" min={0} step={0.01} />
           <FormField labelKey="dukaan.quantityKg" value={saleQty} onChange={setSaleQty} type="number" min={0} step={0.01} required />
-          <ReadOnlyField
-            labelKey="dukaan.purchasePricePerKg"
-            value={quickGodaam.hasPurchase ? formatCurrency(quickGodaam.avgCostPerKg) : '—'}
-          />
+          {saleExternalTea ? (
+            <FormField
+              labelKey="dukaan.manualPurchasePrice"
+              value={saleManualPurchasePrice}
+              onChange={setSaleManualPurchasePrice}
+              type="number"
+              min={0}
+              step={0.01}
+            />
+          ) : (
+            <ReadOnlyField
+              labelKey="dukaan.purchasePricePerKg"
+              value={saleTea && getGodaamPurchasePrice(saleTea, purchases).hasPurchase
+                ? formatCurrency(getGodaamPurchasePrice(saleTea, purchases).avgCostPerKg)
+                : '—'}
+            />
+          )}
           <FormField labelKey="customers.salePricePerKg" value={salePrice} onChange={setSalePrice} type="number" min={0} step={0.01} required />
           <FormField labelKey="dukaan.amountReceived" value={saleReceived} onChange={setSaleReceived} type="number" min={0} step={0.01} />
           <TextAreaField labelKey="dukaan.saleNotes" value={saleNotes} onChange={setSaleNotes} />
@@ -412,7 +610,7 @@ export default function Customers() {
                         <button type="button" className="btn sm" onClick={() => setDetailId(c.id!)}>{l('customers.customerDetails')}</button>
                         <button type="button" className="btn sm" onClick={() => openEdit(c)}>{l('customers.editCustomer')}</button>
                         <button type="button" className="btn sm" onClick={() => handlePayment(c.id!)}>{l('common.addPayment')}</button>
-                        <button type="button" className="btn danger sm" onClick={() => handleDelete(c.id!)}>{l('common.delete')}</button>
+                        <button type="button" className="btn danger sm" onClick={() => handleDelete(c.id!)}>{l('customers.deleteCustomer')}</button>
                       </td>
                     </tr>
                   );
@@ -450,19 +648,24 @@ export default function Customers() {
                 <th><Label k="customers.totalBagsSold" variant="compact" /></th>
                 <th><Label k="customers.salePricePerKg" variant="compact" /></th>
                 <th><Label k="customers.totalAmount" variant="compact" /></th>
-                <th><Label k="customers.receivingAmount" variant="compact" /></th>
+                <th><Label k="customers.previousPaid" variant="compact" /></th>
+                <th><Label k="customers.currentPayment" variant="compact" /></th>
+                <th><Label k="customers.totalPaid" variant="compact" /></th>
                 <th><Label k="customers.saleDues" variant="compact" /></th>
+                <th><Label k="customers.lastPayment" variant="compact" /></th>
                 <th><Label k="dukaan.billImage" variant="compact" /></th>
+                <th><Label k="customers.paymentReceipt" variant="compact" /></th>
                 <th><Label k="common.notes" variant="compact" /></th>
                 <th><Label k="common.actions" variant="compact" /></th>
               </tr>
             </thead>
             <tbody>
               {filteredLedger.length === 0 ? (
-                <tr><td colSpan={14} className="empty">{l('common.noData')}</td></tr>
+                <tr><td colSpan={18} className="empty">{l('common.noData')}</td></tr>
               ) : (
                 filteredLedger.map((s) => {
                   const c = customerForSale(s);
+                  const dues = saleDues(s);
                   return (
                     <tr key={s.id}>
                       <td>{s.date}</td>
@@ -474,11 +677,19 @@ export default function Customers() {
                       <td>{formatBags(saleBagsSold(s))}</td>
                       <td>{formatCurrency(s.salePricePerKg)}</td>
                       <td>{formatCurrency(saleTotal(s))}</td>
+                      <td>{formatCurrency(salePreviousPaid(s))}</td>
+                      <td>{saleCurrentPayment(s) > 0 ? formatCurrency(saleCurrentPayment(s)) : '—'}</td>
                       <td>{formatCurrency(s.amountReceived)}</td>
-                      <td className={saleDues(s) > 0 ? 'warn-text' : ''}>{formatCurrency(saleDues(s))}</td>
+                      <td className={dues > 0 ? 'warn-text' : ''}>{formatCurrency(dues)}</td>
+                      <td>{formatDateTime(s.lastPaymentAt)}</td>
                       <td><ImageThumb src={s.billImage} /></td>
+                      <td><ImageThumb src={s.paymentReceiptImage} /></td>
                       <td className="truncate-cell">{s.notes ?? '—'}</td>
                       <td className="action-cell">
+                        {dues > 0 && (
+                          <button type="button" className="btn sm primary" onClick={() => openPayDues(s)}>{l('customers.payDues')}</button>
+                        )}
+                        <button type="button" className="btn sm" onClick={() => openEditSale(s)}>{l('customers.editSale')}</button>
                         <button type="button" className="btn sm" onClick={() => printCustomerSale(s)} title={l('customers.printReceipt')}>🖨</button>
                       </td>
                     </tr>
@@ -531,15 +742,21 @@ export default function Customers() {
                     <th><Label k="customers.bagsSold" variant="compact" /></th>
                     <th><Label k="customers.salePricePerKg" variant="compact" /></th>
                     <th><Label k="customers.totalAmount" variant="compact" /></th>
-                    <th><Label k="customers.receivingAmount" variant="compact" /></th>
+                    <th><Label k="customers.previousPaid" variant="compact" /></th>
+                    <th><Label k="customers.currentPayment" variant="compact" /></th>
+                    <th><Label k="customers.totalPaid" variant="compact" /></th>
                     <th><Label k="customers.saleDues" variant="compact" /></th>
+                    <th><Label k="customers.lastPayment" variant="compact" /></th>
                     <th><Label k="dukaan.billImage" variant="compact" /></th>
+                    <th><Label k="customers.paymentReceipt" variant="compact" /></th>
                     <th><Label k="common.notes" variant="compact" /></th>
                     <th><Label k="common.actions" variant="compact" /></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {detailSales.map((s) => (
+                  {detailSales.map((s) => {
+                    const dues = saleDues(s);
+                    return (
                       <tr key={s.id}>
                         <td>{s.date}</td>
                         <td>{s.teaName}</td>
@@ -547,15 +764,24 @@ export default function Customers() {
                         <td>{formatBags(saleBagsSold(s))}</td>
                         <td>{formatCurrency(s.salePricePerKg)}</td>
                         <td>{formatCurrency(saleTotal(s))}</td>
+                        <td>{formatCurrency(salePreviousPaid(s))}</td>
+                        <td>{saleCurrentPayment(s) > 0 ? formatCurrency(saleCurrentPayment(s)) : '—'}</td>
                         <td>{formatCurrency(s.amountReceived)}</td>
-                        <td className={saleDues(s) > 0 ? 'warn-text' : ''}>{formatCurrency(saleDues(s))}</td>
+                        <td className={dues > 0 ? 'warn-text' : ''}>{formatCurrency(dues)}</td>
+                        <td>{formatDateTime(s.lastPaymentAt)}</td>
                         <td><ImageThumb src={s.billImage} /></td>
+                        <td><ImageThumb src={s.paymentReceiptImage} /></td>
                         <td>{s.notes ?? '—'}</td>
                         <td className="action-cell">
+                          {dues > 0 && (
+                            <button type="button" className="btn sm primary" onClick={() => openPayDues(s)}>{l('customers.payDues')}</button>
+                          )}
+                          <button type="button" className="btn sm" onClick={() => openEditSale(s)}>{l('customers.editSale')}</button>
                           <button type="button" className="btn sm" onClick={() => printCustomerSale(s)} title={l('customers.printReceipt')}>🖨</button>
                         </td>
                       </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -571,7 +797,145 @@ export default function Customers() {
               </ul>
             )}
 
-            <button type="button" className="btn" onClick={() => setDetailId(null)}>{l('common.cancel')}</button>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() => printCustomerFullHistory({
+                  customer: detailCustomer,
+                  summary: detailSummary,
+                  sales: detailSales,
+                  payments: detailPayments,
+                  shopProfile,
+                })}
+              >
+                🖨 {l('export.historyPrint')}
+              </button>
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() => downloadCustomerFullHistoryPdf({
+                  customer: detailCustomer,
+                  summary: detailSummary,
+                  sales: detailSales,
+                  payments: detailPayments,
+                  shopProfile,
+                }).catch(console.error)}
+              >
+                📄 {l('export.historyPdf')}
+              </button>
+              <button type="button" className="btn danger" onClick={() => handleDelete(detailCustomer.id!)}>{l('customers.deleteCustomer')}</button>
+              <button type="button" className="btn" onClick={() => setDetailId(null)}>{l('common.cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {payDuesSaleId && payDuesSale && (
+        <div className="modal-overlay" onClick={() => setPayDuesSaleId(null)}>
+          <div className="modal card modal-wide" onClick={(e) => e.stopPropagation()}>
+            <SectionTitle k="customers.payDuesTitle" />
+            <form onSubmit={handlePayDues}>
+              <div className="form-grid">
+                <ReadOnlyField labelKey="dukaan.teaName" value={payDuesSale.teaName} />
+                <ReadOnlyField labelKey="customers.totalAmount" value={formatCurrency(saleTotal(payDuesSale))} />
+                <ReadOnlyField labelKey="customers.previousPaid" value={formatCurrency(salePreviousPaid(payDuesSale))} />
+                <ReadOnlyField labelKey="customers.remainingDues" value={formatCurrency(payDuesRemaining)} />
+                <FormField
+                  labelKey="customers.payDuesAmount"
+                  value={payDuesAmount}
+                  onChange={setPayDuesAmount}
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  required
+                />
+                <ImageUpload labelKey="customers.paymentReceipt" value={payDuesReceipt} onChange={setPayDuesReceipt} />
+              </div>
+              {payDuesError && <p className="error-msg">{payDuesError}</p>}
+              <div className="modal-actions">
+                <button type="submit" className="btn primary">{l('customers.recordPayment')}</button>
+                <button type="button" className="btn" onClick={() => setPayDuesSaleId(null)}>{l('common.cancel')}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editSaleId && (
+        <div className="modal-overlay" onClick={() => setEditSaleId(null)}>
+          <div className="modal card modal-wide" onClick={(e) => e.stopPropagation()}>
+            <SectionTitle k="customers.editSale" />
+            <form onSubmit={handleUpdateSale}>
+              <div className="form-grid">
+                <FormField labelKey="common.date" value={editSaleDate} onChange={setEditSaleDate} type="date" required />
+                <label className="form-field">
+                  <FieldLabel labelKey="dukaan.teaName" />
+                  <input
+                    list="edit-cust-tea-names"
+                    value={editSaleTea}
+                    onChange={(e) => setEditSaleTea(e.target.value)}
+                    required
+                  />
+                  <datalist id="edit-cust-tea-names">
+                    {teaNames.map((n) => <option key={n} value={n} />)}
+                  </datalist>
+                </label>
+                <label className="form-field checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={editSaleExternalTea}
+                    onChange={(e) => setEditSaleExternalTea(e.target.checked)}
+                  />
+                  <span><Label k="dukaan.otherCompanyTea" variant="compact" /></span>
+                </label>
+                <FormField labelKey="customers.bagsSold" value={editSaleBags} onChange={(v) => {
+                  setEditSaleBags(v);
+                  const b = Math.round(parseFloat(v) || 0);
+                  const bw = parseFloat(editSaleBagWeight) || DEFAULT_BAG_WEIGHT_KG;
+                  if (b > 0) setEditSaleQty(String(kgFromBags(b, bw)));
+                }} type="number" min={0} step={1} placeholder="0" />
+                <FormField labelKey="customers.bagQuantity" value={editSaleBagWeight} onChange={(v) => {
+                  setEditSaleBagWeight(v);
+                  const b = Math.round(parseFloat(editSaleBags) || 0);
+                  const bw = parseFloat(v) || DEFAULT_BAG_WEIGHT_KG;
+                  if (b > 0) setEditSaleQty(String(kgFromBags(b, bw)));
+                }} type="number" min={0} step={0.01} />
+                <FormField labelKey="dukaan.quantityKg" value={editSaleQty} onChange={setEditSaleQty} type="number" min={0} step={0.01} required />
+                {editSaleExternalTea ? (
+                  <FormField
+                    labelKey="dukaan.manualPurchasePrice"
+                    value={editSaleManualPurchasePrice}
+                    onChange={setEditSaleManualPurchasePrice}
+                    type="number"
+                    min={0}
+                    step={0.01}
+                  />
+                ) : (
+                  <ReadOnlyField
+                    labelKey="dukaan.purchasePricePerKg"
+                    value={editSaleTea && getGodaamPurchasePrice(editSaleTea, purchases).hasPurchase
+                      ? formatCurrency(getGodaamPurchasePrice(editSaleTea, purchases).avgCostPerKg)
+                      : '—'}
+                  />
+                )}
+                <FormField labelKey="customers.salePricePerKg" value={editSalePrice} onChange={setEditSalePrice} type="number" min={0} step={0.01} required />
+                <FormField labelKey="dukaan.amountReceived" value={editSaleReceived} onChange={setEditSaleReceived} type="number" min={0} step={0.01} />
+                <TextAreaField labelKey="dukaan.saleNotes" value={editSaleNotes} onChange={setEditSaleNotes} />
+                <ImageUpload labelKey="dukaan.billImage" value={editSaleBillImage} onChange={setEditSaleBillImage} />
+              </div>
+              {editSaleQtyNum > 0 && editSalePriceNum > 0 && (
+                <div className="live-info">
+                  <span className="info">{l('dukaan.saleValue')}: {formatCurrency(editSaleQtyNum * editSalePriceNum)}</span>
+                  <span className="info profit-positive">{l('dukaan.profit')}: {formatCurrency(editSaleProfit)}</span>
+                </div>
+              )}
+              {editSaleError && <p className="error-msg">{editSaleError}</p>}
+              <div className="modal-actions">
+                <button type="submit" className="btn primary">{l('customers.updateSale')}</button>
+                <button type="button" className="btn" onClick={() => setEditSaleId(null)}>{l('common.cancel')}</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

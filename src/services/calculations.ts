@@ -26,6 +26,38 @@ export function purchasePendingBags(p: Purchase): number {
   return Math.max(0, p.bagsOrdered - p.bagsReceived);
 }
 
+export function purchaseOrderedKg(p: Purchase): number {
+  return p.bagsOrdered * p.bagWeightKg;
+}
+
+export function purchaseOrderedTotalPrice(p: Purchase): number {
+  return purchaseOrderedKg(p) * p.pricePerKg;
+}
+
+export function purchasePendingAmount(p: Purchase): number {
+  return Math.max(0, purchaseOrderedTotalPrice(p) - p.depositPaid);
+}
+
+export function purchasePreviousPaid(p: Purchase): number {
+  if (p.previousDepositPaid != null) return p.previousDepositPaid;
+  if (p.lastPaymentAmount != null) return Math.max(0, p.depositPaid - p.lastPaymentAmount);
+  return p.depositPaid;
+}
+
+export function purchaseCurrentPayment(p: Purchase): number {
+  return p.lastPaymentAmount ?? 0;
+}
+
+export function salePreviousPaid(s: Sale): number {
+  if (s.previousAmountReceived != null) return s.previousAmountReceived;
+  if (s.lastPaymentAmount != null) return Math.max(0, s.amountReceived - s.lastPaymentAmount);
+  return s.amountReceived;
+}
+
+export function saleCurrentPayment(s: Sale): number {
+  return s.lastPaymentAmount ?? 0;
+}
+
 export const DEFAULT_BAG_WEIGHT_KG = 62;
 
 export function saleBagWeightKg(s: Sale): number {
@@ -274,6 +306,26 @@ export function todayISO(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+export function nowISO(): string {
+  return new Date().toISOString();
+}
+
+export function formatDateTime(iso?: string): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('en-PK', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export function computeDashboardStats(
   sales: Sale[],
   purchases: Purchase[],
@@ -309,14 +361,17 @@ export function computeDashboardStats(
 
   return {
     todaySale: todaySales.reduce((s, x) => s + saleTotal(x), 0),
+    todaySaleCount: todaySales.length,
     monthSale: monthSales.reduce((s, x) => s + saleTotal(x), 0),
     yearSale: yearSales.reduce((s, x) => s + saleTotal(x), 0),
     monthProfit: profitFor(monthSales),
     stockValue: stocks.reduce((s, t) => s + t.stockValue, 0),
+    stockSkuCount: stocks.length,
     customerDues,
     dealerDues,
     lowStockCount: stocks.filter((t) => t.isLow).length,
-    recentSales: [...sales].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6),
+    recentSales: [...sales].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8),
     lowStockTeas: stocks.filter((t) => t.isLow),
+    stocks,
   };
 }

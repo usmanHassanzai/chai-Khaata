@@ -7,53 +7,36 @@ export default function TeaShowcase() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       setActive((i) => (i + 1) % TEA_GALLERY.length);
-    }, 4500);
+    }, 5000);
     return () => window.clearInterval(timer);
   }, []);
 
   return (
-    <section className="tea-showcase animate-fade-in-up stagger-2" aria-label="Tea varieties">
+    <section className="tea-showcase tea-showcase-pro animate-fade-in-up" aria-label="Tea varieties">
       <div className="tea-showcase-header">
-        <h3 className="tea-showcase-title">Pakistani Tea Collection</h3>
-        <p className="tea-showcase-sub">Kashmiri · Karak · Doodh Patti — premium blends</p>
+        <div>
+          <h3 className="tea-showcase-title">Tea collection</h3>
+          <p className="tea-showcase-sub">Signature blends stocked for your shop</p>
+        </div>
       </div>
 
-      <div className="tea-showcase-grid">
+      <div className="tea-showcase-rail">
         {TEA_GALLERY.map((tea, index) => (
           <article
             key={tea.id}
-            className={`tea-showcase-card${active === index ? ' is-active' : ''}`}
+            className={`tea-showcase-chip${active === index ? ' is-active' : ''}`}
             style={{ '--tea-accent': tea.accent } as CSSProperties}
             onMouseEnter={() => setActive(index)}
             onFocus={() => setActive(index)}
             tabIndex={0}
           >
-            <div className="tea-showcase-img-wrap">
-              <img src={tea.image} alt={tea.name} loading="lazy" />
-              <div className="tea-showcase-steam" aria-hidden>
-                <span className="steam-puff" />
-                <span className="steam-puff delay-1" />
-                <span className="steam-puff delay-2" />
-              </div>
-            </div>
-            <div className="tea-showcase-body">
+            <img src={tea.image} alt="" loading="lazy" />
+            <div className="tea-showcase-chip-body">
               <strong>{tea.name}</strong>
               <span className="tea-showcase-ur">{tea.nameUr}</span>
-              <p>{tea.description}</p>
             </div>
           </article>
         ))}
-      </div>
-
-      <div className="tea-marquee" aria-hidden>
-        <div className="tea-marquee-track">
-          {[...TEA_GALLERY, ...TEA_GALLERY].map((tea, i) => (
-            <span key={`${tea.id}-${i}`} className="tea-marquee-item">
-              <img src={tea.image} alt="" />
-              {tea.name}
-            </span>
-          ))}
-        </div>
       </div>
     </section>
   );

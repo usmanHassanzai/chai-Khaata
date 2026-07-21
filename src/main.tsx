@@ -12,6 +12,7 @@ import './styles/theme-advanced.css';
 import './styles/auth-pro.css';
 import './styles/settings-pro.css';
 import './styles/interior-pro.css';
+import './styles/dashboard-pro.css';
 import './styles/export.css';
 import './styles/landing.css';
 

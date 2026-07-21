@@ -124,6 +124,16 @@ create table if not exists public.ledger_purchases (
   country text,
   grade text,
   invoice_number text,
+  previous_bags_received numeric,
+  previous_receive_date text,
+  last_received_at timestamptz,
+  last_received_bags numeric,
+  last_received_kg numeric,
+  receive_receipt_image text,
+  previous_deposit_paid numeric,
+  last_payment_amount numeric,
+  last_payment_at timestamptz,
+  payment_receipt_image text,
   updated_at timestamptz not null default now(),
   primary key (user_id, id)
 );
@@ -142,6 +152,10 @@ create table if not exists public.ledger_sales (
   amount_received numeric not null default 0,
   bill_image text,
   notes text default '',
+  last_payment_at timestamptz,
+  payment_receipt_image text,
+  previous_amount_received numeric,
+  last_payment_amount numeric,
   updated_at timestamptz not null default now(),
   primary key (user_id, id)
 );
@@ -187,3 +201,21 @@ alter table public.ledger_purchases enable row level security;
 alter table public.ledger_sales enable row level security;
 alter table public.ledger_payments enable row level security;
 alter table public.ledger_settings enable row level security;
+
+-- Dues payment on customer sales (run once if table already exists)
+alter table public.ledger_sales add column if not exists last_payment_at timestamptz;
+alter table public.ledger_sales add column if not exists payment_receipt_image text;
+alter table public.ledger_sales add column if not exists previous_amount_received numeric;
+alter table public.ledger_sales add column if not exists last_payment_amount numeric;
+
+-- Maal receipt history on dealer purchases (run once if table already exists)
+alter table public.ledger_purchases add column if not exists previous_bags_received numeric;
+alter table public.ledger_purchases add column if not exists previous_receive_date text;
+alter table public.ledger_purchases add column if not exists last_received_at timestamptz;
+alter table public.ledger_purchases add column if not exists last_received_bags numeric;
+alter table public.ledger_purchases add column if not exists last_received_kg numeric;
+alter table public.ledger_purchases add column if not exists receive_receipt_image text;
+alter table public.ledger_purchases add column if not exists previous_deposit_paid numeric;
+alter table public.ledger_purchases add column if not exists last_payment_amount numeric;
+alter table public.ledger_purchases add column if not exists last_payment_at timestamptz;
+alter table public.ledger_purchases add column if not exists payment_receipt_image text;

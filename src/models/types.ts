@@ -40,6 +40,26 @@ export interface Purchase {
   country?: string;
   grade?: string;
   invoiceNumber?: string;
+  /** Bags received before the latest maal receipt update */
+  previousBagsReceived?: number;
+  /** Date/time before the latest maal receipt update */
+  previousReceiveDate?: string;
+  /** ISO datetime of latest maal receipt update */
+  lastReceivedAt?: string;
+  /** Bags added in the latest maal receipt update */
+  lastReceivedBags?: number;
+  /** Kg added in the latest maal receipt update */
+  lastReceivedKg?: number;
+  /** Receipt image for the latest maal receipt */
+  receiveReceiptImage?: string;
+  /** Deposit paid before the latest payment on this purchase */
+  previousDepositPaid?: number;
+  /** Amount from the latest payment on this purchase */
+  lastPaymentAmount?: number;
+  /** ISO datetime of latest payment on this purchase */
+  lastPaymentAt?: string;
+  /** Receipt image for the latest payment */
+  paymentReceiptImage?: string;
   updatedAt?: string;
 }
 
@@ -58,6 +78,14 @@ export interface Sale {
   amountReceived: number;
   billImage?: string;
   notes?: string;
+  /** ISO datetime when customer last paid dues on this sale */
+  lastPaymentAt?: string;
+  /** Receipt image for the latest dues payment */
+  paymentReceiptImage?: string;
+  /** Amount received before the latest dues payment */
+  previousAmountReceived?: number;
+  /** Amount from the latest dues payment */
+  lastPaymentAmount?: number;
   updatedAt?: string;
 }
 

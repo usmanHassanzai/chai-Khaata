@@ -113,6 +113,16 @@ function purchaseFromRow(row) {
     country: row.country || undefined,
     grade: row.grade || undefined,
     invoiceNumber: row.invoice_number || undefined,
+    previousBagsReceived: row.previous_bags_received != null ? Number(row.previous_bags_received) : undefined,
+    previousReceiveDate: row.previous_receive_date || undefined,
+    lastReceivedAt: row.last_received_at ? toIso(row.last_received_at) : undefined,
+    lastReceivedBags: row.last_received_bags != null ? Number(row.last_received_bags) : undefined,
+    lastReceivedKg: row.last_received_kg != null ? Number(row.last_received_kg) : undefined,
+    receiveReceiptImage: row.receive_receipt_image || undefined,
+    previousDepositPaid: row.previous_deposit_paid != null ? Number(row.previous_deposit_paid) : undefined,
+    lastPaymentAmount: row.last_payment_amount != null ? Number(row.last_payment_amount) : undefined,
+    lastPaymentAt: row.last_payment_at ? toIso(row.last_payment_at) : undefined,
+    paymentReceiptImage: row.payment_receipt_image || undefined,
     updatedAt: toIso(row.updated_at),
   };
 }
@@ -138,6 +148,16 @@ function purchaseToRow(userId, row) {
     country: row.country ?? null,
     grade: row.grade ?? null,
     invoice_number: row.invoiceNumber ?? null,
+    previous_bags_received: row.previousBagsReceived ?? null,
+    previous_receive_date: row.previousReceiveDate ?? null,
+    last_received_at: row.lastReceivedAt ? toIso(row.lastReceivedAt) : null,
+    last_received_bags: row.lastReceivedBags ?? null,
+    last_received_kg: row.lastReceivedKg ?? null,
+    receive_receipt_image: row.receiveReceiptImage ?? null,
+    previous_deposit_paid: row.previousDepositPaid ?? null,
+    last_payment_amount: row.lastPaymentAmount ?? null,
+    last_payment_at: row.lastPaymentAt ? toIso(row.lastPaymentAt) : null,
+    payment_receipt_image: row.paymentReceiptImage ?? null,
     updated_at: toIso(row.updatedAt),
   };
 }
@@ -157,6 +177,10 @@ function saleFromRow(row) {
     amountReceived: Number(row.amount_received) || 0,
     billImage: row.bill_image || undefined,
     notes: row.notes || undefined,
+    lastPaymentAt: row.last_payment_at ? toIso(row.last_payment_at) : undefined,
+    paymentReceiptImage: row.payment_receipt_image || undefined,
+    previousAmountReceived: row.previous_amount_received != null ? Number(row.previous_amount_received) : undefined,
+    lastPaymentAmount: row.last_payment_amount != null ? Number(row.last_payment_amount) : undefined,
     updatedAt: toIso(row.updated_at),
   };
 }
@@ -177,6 +201,10 @@ function saleToRow(userId, row) {
     amount_received: Number(row.amountReceived) || 0,
     bill_image: row.billImage ?? null,
     notes: row.notes ?? '',
+    last_payment_at: row.lastPaymentAt ? toIso(row.lastPaymentAt) : null,
+    payment_receipt_image: row.paymentReceiptImage ?? null,
+    previous_amount_received: row.previousAmountReceived ?? null,
+    last_payment_amount: row.lastPaymentAmount ?? null,
     updated_at: toIso(row.updatedAt),
   };
 }
@@ -281,6 +309,37 @@ async function readTableRows(userId, entity) {
 }
 
 /** @param {string} userId */
+export async function sbGetLedgerUpdatedAt(userId) {
+  if (!(await ledgerTablesAvailable())) {
+    const snapshot = await sbReadLedgerSnapshotOnly(userId);
+    return snapshot?.updatedAt ? toIso(snapshot.updatedAt) : null;
+  }
+
+  const tables = Object.values(ENTITY_TABLES);
+  const maxQueries = tables.map(async (table) => {
+    const { data, error } = await getSupabase()
+      .from(table)
+      .select('updated_at')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      if (isMissingTableError(error)) return null;
+      throwSupabaseError(error);
+    }
+    return data?.updated_at ? toIso(data.updated_at) : null;
+  });
+
+  const snapshotQuery = sbReadLedgerSnapshotOnly(userId).then((s) => (s?.updatedAt ? toIso(s.updatedAt) : null));
+  const timestamps = await Promise.all([...maxQueries, snapshotQuery]);
+  const valid = timestamps.filter(Boolean);
+  if (!valid.length) return null;
+  return maxUpdatedAt(valid.map((updatedAt) => ({ updatedAt })));
+}
+
+/** @param {string} userId */
 export async function sbCountLedgerRows(userId) {
   let total = 0;
   for (const entity of Object.keys(ENTITY_TABLES)) {
@@ -345,6 +404,46 @@ export async function sbReadLedgerSnapshotOnly(userId) {
   };
 }
 
+function snapshotPayload(snapshot) {
+  return {
+    dealers: snapshot.dealers ?? [],
+    customers: snapshot.customers ?? [],
+    purchases: snapshot.purchases ?? [],
+    sales: snapshot.sales ?? [],
+    payments: snapshot.payments ?? [],
+    settings: snapshot.settings ?? [],
+  };
+}
+
+/** @param {string} userId @param {import('../ledgerStore.js').LedgerSnapshot} snapshot */
+export async function sbWriteLedgerSnapshot(userId, snapshot) {
+  const updatedAt = toIso(snapshot.updatedAt);
+  const { error } = await getSupabase()
+    .from('ledger_snapshots')
+    .upsert(
+      {
+        user_id: userId,
+        updated_at: updatedAt,
+        payload: snapshotPayload(snapshot),
+      },
+      { onConflict: 'user_id' },
+    );
+
+  if (error) throwSupabaseError(error);
+
+  return {
+    ...snapshotPayload(snapshot),
+    userId,
+    updatedAt,
+  };
+}
+
+async function ledgerTablesAvailable() {
+  const { error } = await getSupabase().from('ledger_dealers').select('id').limit(1);
+  if (!error) return true;
+  return !isMissingTableError(error);
+}
+
 /** @param {string} userId @param {import('../ledgerStore.js').LedgerSnapshot} snapshot */
 export async function sbWriteLedgerTables(userId, snapshot) {
   const updatedAt = toIso(snapshot.updatedAt);
@@ -362,25 +461,44 @@ export async function sbWriteLedgerTables(userId, snapshot) {
     settings: stamp(snapshot.settings ?? []),
   };
 
-  for (const entity of Object.keys(batches)) {
-    const rows = batches[entity];
-    const table = ENTITY_TABLES[entity];
-    const toRow = TO_ROW[entity];
+  if (!(await ledgerTablesAvailable())) {
+    return sbWriteLedgerSnapshot(userId, {
+      ...snapshotPayload(snapshot),
+      updatedAt,
+    });
+  }
 
-    await getSupabase().from(table).delete().eq('user_id', userId);
+  const entityKeys = Object.keys(batches);
 
-    if (!rows.length) continue;
+  try {
+    await Promise.all(entityKeys.map(async (entity) => {
+      const rows = batches[entity];
+      const table = ENTITY_TABLES[entity];
+      const toRow = TO_ROW[entity];
 
-    const dbRows = rows.map((row) => toRow(userId, row));
-    const { error } = await getSupabase()
-      .from(table)
-      .upsert(dbRows, { onConflict: UPSERT_CONFLICT[entity] });
+      await getSupabase().from(table).delete().eq('user_id', userId);
 
-    if (error) throwSupabaseError(error);
+      if (!rows.length) return;
+
+      const dbRows = rows.map((row) => toRow(userId, row));
+      const { error } = await getSupabase()
+        .from(table)
+        .upsert(dbRows, { onConflict: UPSERT_CONFLICT[entity] });
+
+      if (error) throwSupabaseError(error);
+    }));
+  } catch (err) {
+    if (isMissingTableError(err)) {
+      return sbWriteLedgerSnapshot(userId, {
+        ...snapshotPayload(snapshot),
+        updatedAt,
+      });
+    }
+    throw err;
   }
 
   return {
-    ...snapshot,
+    ...snapshotPayload(snapshot),
     userId,
     updatedAt: maxUpdatedAt([
       ...(snapshot.dealers ?? []),
@@ -430,41 +548,101 @@ function shouldAcceptRow(existingUpdatedAt, incomingUpdatedAt) {
   return new Date(incomingUpdatedAt).getTime() >= new Date(existingUpdatedAt).getTime();
 }
 
+function applyChangeToSnapshot(snapshot, change) {
+  const entity = change.table;
+  const listKey = entity;
+  if (!Array.isArray(snapshot[listKey]) && entity !== 'settings') return snapshot;
+
+  if (change.op === 'delete') {
+    const rowId = Number(change.id ?? change.row?.id);
+    if (entity === 'settings') return snapshot;
+    snapshot[listKey] = snapshot[listKey].filter((row) => Number(row.id) !== rowId);
+    return snapshot;
+  }
+
+  if (change.op !== 'upsert' || !change.row) return snapshot;
+
+  const row = {
+    ...change.row,
+    updatedAt: change.updatedAt || change.row.updatedAt || new Date().toISOString(),
+  };
+
+  if (entity === 'settings') {
+    snapshot.settings = [row];
+    return snapshot;
+  }
+
+  const rowId = Number(row.id);
+  const idx = snapshot[listKey].findIndex((existing) => Number(existing.id) === rowId);
+  if (idx >= 0) snapshot[listKey][idx] = { ...snapshot[listKey][idx], ...row };
+  else snapshot[listKey].push(row);
+  return snapshot;
+}
+
+async function sbApplyLedgerChangesViaSnapshot(userId, changes) {
+  const existing = await sbReadLedgerSnapshotOnly(userId);
+  const snapshot = {
+    updatedAt: new Date().toISOString(),
+    dealers: existing?.dealers ?? [],
+    customers: existing?.customers ?? [],
+    purchases: existing?.purchases ?? [],
+    sales: existing?.sales ?? [],
+    payments: existing?.payments ?? [],
+    settings: existing?.settings ?? [],
+  };
+
+  for (const change of changes) {
+    applyChangeToSnapshot(snapshot, change);
+  }
+
+  snapshot.updatedAt = maxUpdatedAt([
+    ...snapshot.dealers,
+    ...snapshot.customers,
+    ...snapshot.purchases,
+    ...snapshot.sales,
+    ...snapshot.payments,
+    ...snapshot.settings,
+  ]);
+
+  const saved = await sbWriteLedgerSnapshot(userId, snapshot);
+  return { applied: changes.length, skipped: [], updatedAt: saved.updatedAt };
+}
+
 /**
  * @param {string} userId
  * @param {Array<{ table: string, op: 'upsert'|'delete', row?: Record<string, unknown>, id?: number|string, updatedAt?: string }>} changes
  */
 export async function sbApplyLedgerChanges(userId, changes) {
+  if (!(await ledgerTablesAvailable())) {
+    return sbApplyLedgerChangesViaSnapshot(userId, changes);
+  }
+
   const applied = [];
   const skipped = [];
+  /** @type {Record<string, number[]>} */
+  const deletesByEntity = {};
+  /** @type {Record<string, Array<{ change: typeof changes[0], row: Record<string, unknown> }>>} */
+  const upsertsByEntity = {};
 
   for (const change of changes) {
     const entity = change.table;
-    const table = ENTITY_TABLES[entity];
-    if (!table) {
+    if (!ENTITY_TABLES[entity]) {
       skipped.push({ ...change, reason: 'UNKNOWN_TABLE' });
       continue;
     }
 
     if (change.op === 'delete') {
+      if (entity === 'settings') {
+        skipped.push({ ...change, reason: 'SETTINGS_DELETE_BLOCKED' });
+        continue;
+      }
       const rowId = change.id ?? change.row?.id;
       if (rowId == null) {
         skipped.push({ ...change, reason: 'MISSING_ID' });
         continue;
       }
-
-      if (entity === 'settings') {
-        skipped.push({ ...change, reason: 'SETTINGS_DELETE_BLOCKED' });
-        continue;
-      }
-
-      const { error } = await getSupabase()
-        .from(table)
-        .delete()
-        .eq('user_id', userId)
-        .eq('id', Number(rowId));
-
-      if (error) throwSupabaseError(error);
+      if (!deletesByEntity[entity]) deletesByEntity[entity] = [];
+      deletesByEntity[entity].push(Number(rowId));
       applied.push(change);
       continue;
     }
@@ -478,27 +656,85 @@ export async function sbApplyLedgerChanges(userId, changes) {
       ...change.row,
       updatedAt: change.updatedAt || change.row.updatedAt || new Date().toISOString(),
     };
-    const rowId = row.id;
-    if (rowId == null && entity !== 'settings') {
+    if (row.id == null && entity !== 'settings') {
       skipped.push({ ...change, reason: 'MISSING_ID' });
       continue;
     }
 
-    const existingUpdatedAt = await readExistingUpdatedAt(userId, entity, rowId ?? 'settings');
-    if (!shouldAcceptRow(existingUpdatedAt, row.updatedAt)) {
-      skipped.push({ ...change, reason: 'STALE' });
-      continue;
-    }
-
-    const dbRow = TO_ROW[entity](userId, row);
-    const { error } = await getSupabase()
-      .from(table)
-      .upsert(dbRow, { onConflict: UPSERT_CONFLICT[entity] });
-
-    if (error) throwSupabaseError(error);
-    applied.push(change);
+    if (!upsertsByEntity[entity]) upsertsByEntity[entity] = [];
+    upsertsByEntity[entity].push({ change, row });
   }
 
-  const ledger = await sbReadLedgerTables(userId);
-  return { applied: applied.length, skipped, ledger };
+  try {
+    for (const [entity, ids] of Object.entries(deletesByEntity)) {
+      const table = ENTITY_TABLES[entity];
+      const { error } = await getSupabase()
+        .from(table)
+        .delete()
+        .eq('user_id', userId)
+        .in('id', ids);
+      if (error) throwSupabaseError(error);
+    }
+
+    for (const [entity, entries] of Object.entries(upsertsByEntity)) {
+      const table = ENTITY_TABLES[entity];
+      const toRow = TO_ROW[entity];
+      /** @type {Map<number|string, string>} */
+      const existingMap = new Map();
+
+      if (entity === 'settings') {
+        const { data, error } = await getSupabase()
+          .from(table)
+          .select('updated_at')
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (error && !isMissingTableError(error)) throwSupabaseError(error);
+        if (data?.updated_at) existingMap.set('settings', toIso(data.updated_at));
+      } else {
+        const ids = entries.map(({ row }) => Number(row.id)).filter((id) => !Number.isNaN(id));
+        if (ids.length) {
+          const { data, error } = await getSupabase()
+            .from(table)
+            .select('id, updated_at')
+            .eq('user_id', userId)
+            .in('id', ids);
+          if (error && !isMissingTableError(error)) throwSupabaseError(error);
+          for (const existing of data ?? []) {
+            existingMap.set(Number(existing.id), toIso(existing.updated_at));
+          }
+        }
+      }
+
+      const dbRows = [];
+      for (const { change, row } of entries) {
+        const key = entity === 'settings' ? 'settings' : Number(row.id);
+        if (!shouldAcceptRow(existingMap.get(key), row.updatedAt)) {
+          skipped.push({ ...change, reason: 'STALE' });
+          continue;
+        }
+        dbRows.push(toRow(userId, row));
+        applied.push(change);
+      }
+
+      if (dbRows.length) {
+        const { error } = await getSupabase()
+          .from(table)
+          .upsert(dbRows, { onConflict: UPSERT_CONFLICT[entity] });
+        if (error) throwSupabaseError(error);
+      }
+    }
+  } catch (err) {
+    if (isMissingTableError(err)) {
+      return sbApplyLedgerChangesViaSnapshot(userId, changes);
+    }
+    throw err;
+  }
+
+  const updatedAt = maxUpdatedAt(
+    applied.map((change) => ({
+      updatedAt: change.updatedAt || change.row?.updatedAt || new Date().toISOString(),
+    })),
+  );
+
+  return { applied: applied.length, skipped, updatedAt };
 }

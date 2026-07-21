@@ -123,14 +123,38 @@ export default function Register() {
       <AuthLayout wide>
         <div className="register-success-hero">
           <div className="register-success-icon">✅</div>
-          <h1 className="auth-page-title">Account created</h1>
+          <h1 className="auth-page-title">Registration submitted</h1>
           <p className="auth-tagline auth-page-subtitle">{successMessage}</p>
-          <span className="auth-page-badge">Almost there</span>
+          <span className="auth-page-badge">Awaiting admin verification</span>
         </div>
+
+        <ol className="register-timeline">
+          <li className="register-timeline-step is-done">
+            <span className="register-timeline-dot">1</span>
+            <div>
+              <strong>Account created</strong>
+              <p>Your shop details and plan are saved.</p>
+            </div>
+          </li>
+          <li className="register-timeline-step is-active">
+            <span className="register-timeline-dot">2</span>
+            <div>
+              <strong>Send payment proof</strong>
+              <p>Upload screenshot below or WhatsApp with Payment ID <code>{paymentRefId}</code>.</p>
+            </div>
+          </li>
+          <li className="register-timeline-step">
+            <span className="register-timeline-dot">3</span>
+            <div>
+              <strong>Admin approves & activates</strong>
+              <p>Once verified, your subscription starts and you can log in fully.</p>
+            </div>
+          </li>
+        </ol>
 
         {adminNotified ? (
           <div className="auth-banner success">
-            Admin notification sent to <strong>{adminEmail}</strong>. You will be approved after payment verification.
+            Admin notified at <strong>{adminEmail}</strong>. You will be approved after payment verification.
           </div>
         ) : adminNotificationsConfigured ? (
           <div className="auth-banner info">
@@ -138,7 +162,7 @@ export default function Register() {
           </div>
         ) : (
           <div className="auth-banner info">
-            Registration saved. Admin email alerts are not configured on the server yet — contact <strong>{adminEmail}</strong> with Payment ID <code>{paymentRefId}</code>.
+            Registration saved. Contact <strong>{adminEmail}</strong> with Payment ID <code>{paymentRefId}</code> if needed.
           </div>
         )}
 
@@ -151,11 +175,11 @@ export default function Register() {
 
         <div className="register-upload-block">
           <h3>Upload payment screenshot</h3>
-          <p className="settings-note">Or send on WhatsApp with Payment ID <code>{paymentRefId}</code></p>
+          <p className="settings-note">Include Payment ID <code>{paymentRefId}</code> in the transfer note when possible.</p>
           <ImageUpload labelKey="auth.paymentScreenshot" value={screenshot} onChange={setScreenshot} />
-          {uploadMsg && <div className={`auth-banner ${uploadMsg.includes('received') ? 'success' : 'info'}`}>{uploadMsg}</div>}
+          {uploadMsg && <div className={`auth-banner ${uploadMsg.includes('received') || uploadMsg.includes('verified') ? 'success' : 'info'}`}>{uploadMsg}</div>}
           <button type="button" className="btn primary auth-submit" disabled={uploading || !screenshot} onClick={submitScreenshot}>
-            {uploading ? <span className="auth-spinner" style={{ width: 24, height: 24, borderWidth: 2 }} /> : 'Submit screenshot'}
+            {uploading ? <span className="auth-spinner" style={{ width: 24, height: 24, borderWidth: 2 }} /> : 'Submit payment proof'}
           </button>
           <button type="button" className="btn auth-submit" onClick={() => navigate('/login')}>
             Log in for {trialDays}-day preview

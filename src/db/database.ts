@@ -80,12 +80,13 @@ export async function initUserDatabase(userId: string): Promise<{ syncOk: boolea
   }
 
   startLedgerSyncLoop(db, userId);
-  const result = await syncLedgerWithCloud(db, userId);
 
-  if (!result.ok) {
-    console.warn('[Chai Khata] Initial cloud sync failed:', result.error);
-    return { syncOk: false, syncError: result.error };
-  }
+  // Open app immediately from local cache; sync cloud data in background
+  void syncLedgerWithCloud(db, userId).then((result) => {
+    if (!result.ok) {
+      console.warn('[Chai Khata] Initial cloud sync failed:', result.error);
+    }
+  });
 
   return { syncOk: true };
 }

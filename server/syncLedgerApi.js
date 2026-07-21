@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import { sendJson, readJsonBody, withTimeout } from './httpUtils.js';
 import { JWT_SECRET } from './env.js';
 import { isServerlessEnv } from './dataPaths.js';
-import { readLedger, writeLedger, shouldAcceptIncoming, applyLedgerChanges } from './ledgerStore.js';
+import { readLedger, writeLedger, shouldAcceptIncoming, applyLedgerChanges, getLedgerUpdatedAt } from './ledgerStore.js';
 import { isSupabaseEnabled } from './supabase.js';
 
 function readUserId(req) {
@@ -37,6 +37,15 @@ function formatSyncError(err) {
   return msg || 'Sync failed';
 }
 
+function parseSinceParam(req) {
+  const raw = req.url || '';
+  const qIndex = raw.indexOf('?');
+  if (qIndex < 0) return null;
+  const params = new URLSearchParams(raw.slice(qIndex + 1));
+  const since = params.get('since')?.trim();
+  return since || null;
+}
+
 export async function handleSyncLedgerRequest(req, res) {
   const userId = readUserId(req);
   if (!userId) {
@@ -51,6 +60,15 @@ export async function handleSyncLedgerRequest(req, res) {
 
   if (req.method === 'GET') {
     try {
+      const since = parseSinceParam(req);
+      if (since) {
+        const serverUpdated = await withTimeout(getLedgerUpdatedAt(userId), 8000, 'Sync meta');
+        if (!serverUpdated || new Date(serverUpdated).getTime() <= new Date(since).getTime()) {
+          sendJson(res, 200, { unchanged: true, updatedAt: serverUpdated });
+          return;
+        }
+      }
+
       const ledger = await withTimeout(readLedger(userId), 20000, 'Sync pull');
       if (!ledger) {
         sendJson(res, 200, { empty: true, ledger: null, source: 'tables' });
@@ -82,7 +100,7 @@ export async function handleSyncLedgerRequest(req, res) {
         accepted: true,
         applied: result.applied,
         skipped: result.skipped,
-        ledger: result.ledger,
+        updatedAt: result.updatedAt,
       });
     } catch (err) {
       if (/timed out after/i.test(String(err?.message || ''))) {

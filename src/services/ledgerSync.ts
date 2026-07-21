@@ -30,8 +30,9 @@ type LedgerChange =
   | { table: SyncableEntity; op: 'delete'; id: number | string; updatedAt: string };
 
 const LEGACY_UPDATED_AT_KEY = 'chai-khata-ledger-updated-at';
-const SYNC_TIMEOUT_MS = 45000;
-const PUSH_DEBOUNCE_MS = 500;
+const SYNC_TIMEOUT_MS = 30000;
+const PUSH_DEBOUNCE_MS = 100;
+const POLL_INTERVAL_MS = 20000;
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -43,6 +44,7 @@ let activeUserId: string | null = null;
 let statusListeners = new Set<(s: SyncStatus) => void>();
 let lastStatus: SyncStatus = 'idle';
 let syncing = false;
+let pulling = false;
 let pendingPush = false;
 let suppressAutoPush = false;
 let syncDb: ChaiKhataDB | null = null;
@@ -150,6 +152,7 @@ export function resetLedgerSyncState() {
   activeUserId = null;
   syncDb = null;
   syncing = false;
+  pulling = false;
   clearPendingChanges();
   suppressAutoPush = false;
   setStatus('idle');
@@ -219,28 +222,30 @@ export async function exportLocalLedger(db: ChaiKhataDB, userId?: string): Promi
 
 async function mergeRows<T extends { id?: number; updatedAt?: string }>(
   table: {
-    get: (id: number) => Promise<T | undefined>;
-    put: (row: T) => Promise<unknown>;
+    bulkPut: (rows: T[]) => Promise<unknown>;
+    bulkDelete: (keys: number[]) => Promise<void>;
     toArray: () => Promise<T[]>;
-    delete: (id: number) => Promise<void>;
   },
   rows: T[],
 ) {
   const serverIds = new Set(rows.map((row) => row.id).filter((id): id is number => id != null));
   const localRows = await table.toArray();
+  const localMap = new Map(localRows.map((row) => [row.id, row]));
+  const deleteIds: number[] = [];
+  const toPut: T[] = [];
+
   for (const local of localRows) {
-    if (local.id != null && !serverIds.has(local.id)) {
-      await table.delete(local.id);
-    }
+    if (local.id != null && !serverIds.has(local.id)) deleteIds.push(local.id);
   }
 
   for (const row of rows) {
     if (row.id == null) continue;
-    const local = await table.get(row.id);
-    if (!local || isNewer(rowUpdatedAt(row), rowUpdatedAt(local))) {
-      await table.put(row);
-    }
+    const local = localMap.get(row.id);
+    if (!local || isNewer(rowUpdatedAt(row), rowUpdatedAt(local))) toPut.push(row);
   }
+
+  if (deleteIds.length) await table.bulkDelete(deleteIds);
+  if (toPut.length) await table.bulkPut(toPut);
 }
 
 async function mergeSettings(db: ChaiKhataDB, rows: AppSettings[]) {
@@ -297,13 +302,68 @@ export async function importLedgerSnapshotFull(db: ChaiKhataDB, snapshot: Ledger
   }
 }
 
-export async function pullLedgerFromCloud(db: ChaiKhataDB, userId?: string) {
+async function localEntityCounts(db: ChaiKhataDB) {
+  const [dealers, customers, purchases, sales] = await Promise.all([
+    db.dealers.count(),
+    db.customers.count(),
+    db.purchases.count(),
+    db.sales.count(),
+  ]);
+  return { dealers, customers, purchases, sales };
+}
+
+function serverEntityCounts(ledger: LedgerSnapshot) {
+  return {
+    dealers: ledger.dealers?.length ?? 0,
+    customers: ledger.customers?.length ?? 0,
+    purchases: ledger.purchases?.length ?? 0,
+    sales: ledger.sales?.length ?? 0,
+  };
+}
+
+function serverHasMoreData(local: Awaited<ReturnType<typeof localEntityCounts>>, server: LedgerSnapshot) {
+  const remote = serverEntityCounts(server);
+  return remote.dealers > local.dealers
+    || remote.customers > local.customers
+    || remote.purchases > local.purchases
+    || remote.sales > local.sales;
+}
+
+function buildSyncPath(userId?: string, useSince = true) {
+  if (!useSince) return '/api/sync/ledger';
+  const since = getLocalLedgerUpdatedAt(userId);
+  if (!since) return '/api/sync/ledger';
+  return `/api/sync/ledger?since=${encodeURIComponent(since)}`;
+}
+
+export async function pullLedgerFromCloud(
+  db: ChaiKhataDB,
+  userId?: string,
+  options: { useSince?: boolean } = {},
+) {
   if (!isCloudSyncEnabled() || !getStoredToken()) return { pulled: false as const };
+  if (pulling) return { pulled: false as const, queued: true as const };
 
   const uid = userId || activeUserId || undefined;
+  const useSince = options.useSince !== false;
+  pulling = true;
   setStatus('syncing');
   try {
-    const res = await syncRequest<{ empty?: boolean; ledger?: LedgerSnapshot; source?: string }>('/api/sync/ledger');
+    const res = await syncRequest<{
+      empty?: boolean;
+      unchanged?: boolean;
+      updatedAt?: string;
+      ledger?: LedgerSnapshot;
+      source?: string;
+    }>(buildSyncPath(uid, useSince));
+
+    if (res.data.unchanged) {
+      if (res.data.updatedAt && uid) {
+        localStorage.setItem(ledgerUpdatedAtKey(uid), res.data.updatedAt);
+      }
+      setStatus('synced');
+      return { pulled: false as const, unchanged: true as const };
+    }
 
     if (res.data.empty || !res.data.ledger) {
       setStatus('synced');
@@ -312,12 +372,14 @@ export async function pullLedgerFromCloud(db: ChaiKhataDB, userId?: string) {
 
     const serverUpdated = res.data.ledger.updatedAt || '';
     const localUpdated = getLocalLedgerUpdatedAt(uid);
-    const localHasData = await db.dealers.count().then((n) => n > 0)
-      || await db.customers.count().then((n) => n > 0)
-      || await db.purchases.count().then((n) => n > 0)
-      || await db.sales.count().then((n) => n > 0);
+    const localCounts = await localEntityCounts(db);
+    const localHasData = localCounts.dealers > 0
+      || localCounts.customers > 0
+      || localCounts.purchases > 0
+      || localCounts.sales > 0;
+    const remoteHasMore = serverHasMoreData(localCounts, res.data.ledger);
 
-    if (!localHasData) {
+    if (!localHasData || remoteHasMore) {
       await importLedgerSnapshotFull(db, res.data.ledger, uid);
       setStatus('synced');
       return { pulled: true as const, ledger: res.data.ledger };
@@ -334,6 +396,8 @@ export async function pullLedgerFromCloud(db: ChaiKhataDB, userId?: string) {
   } catch (err) {
     setStatus('offline');
     return { pulled: false as const, error: true as const, message: err instanceof Error ? err.message : 'Pull failed' };
+  } finally {
+    pulling = false;
   }
 }
 
@@ -355,20 +419,30 @@ export async function pushLedgerChangesToCloud(userId?: string) {
     const res = await syncRequest<{
       accepted: boolean;
       applied?: number;
+      updatedAt?: string;
       ledger?: LedgerSnapshot;
     }>('/api/sync/ledger', {
       method: 'PATCH',
       body: JSON.stringify({ changes }),
     });
 
-    if (res.data.ledger?.updatedAt && uid) {
-      localStorage.setItem(ledgerUpdatedAtKey(uid), res.data.ledger.updatedAt);
+    const serverUpdated = res.data.updatedAt || res.data.ledger?.updatedAt;
+    if (serverUpdated && uid) {
+      localStorage.setItem(ledgerUpdatedAtKey(uid), serverUpdated);
     }
 
     clearPendingChanges();
     setStatus('synced');
     return { pushed: true as const, applied: res.data.applied ?? changes.length };
   } catch (err) {
+    if (syncDb) {
+      const fallback = await pushLedgerToCloud(syncDb, uid);
+      if (fallback.pushed || ('merged' in fallback && fallback.merged)) {
+        clearPendingChanges();
+        setStatus('synced');
+        return { pushed: true as const, applied: changes.length, fallback: true as const };
+      }
+    }
     setStatus('error');
     pendingPush = true;
     return { pushed: false as const, error: true as const, message: err instanceof Error ? err.message : 'Push failed' };
@@ -433,7 +507,6 @@ export async function pushLedgerToCloud(db: ChaiKhataDB, userId?: string) {
 export function scheduleLedgerPush(_db: ChaiKhataDB) {
   if (suppressAutoPush || !isCloudSyncEnabled() || !getStoredToken()) return;
 
-  touchLocalLedgerUpdatedAt(activeUserId || undefined);
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
     void pushLedgerChangesToCloud(activeUserId || undefined);
@@ -577,7 +650,7 @@ export async function syncLedgerWithCloud(db: ChaiKhataDB, userId: string) {
   migrateLegacyUpdatedAt(userId);
 
   return runWithSuppressedAutoPush(async () => {
-    const pull = await pullLedgerFromCloud(db, userId);
+    const pull = await pullLedgerFromCloud(db, userId, { useSince: false });
     if (pull.error) {
       return { ok: false as const, error: pull.message || 'Could not download cloud data' };
     }
@@ -609,16 +682,17 @@ export function startLedgerSyncLoop(db: ChaiKhataDB, userId: string) {
   if (!isCloudSyncEnabled()) return;
 
   pollTimer = setInterval(() => {
-    void pullLedgerFromCloud(db, userId);
+    void pullLedgerFromCloud(db, userId, { useSince: true });
     if (pendingChanges.size || pendingPush) void pushLedgerChangesToCloud(userId);
-  }, 12000);
+  }, POLL_INTERVAL_MS);
 
   if (visibilityHandler) {
     document.removeEventListener('visibilitychange', visibilityHandler);
   }
   visibilityHandler = () => {
     if (document.visibilityState === 'visible') {
-      void syncLedgerWithCloud(db, userId);
+      void pullLedgerFromCloud(db, userId, { useSince: true });
+      if (pendingChanges.size || pendingPush) void pushLedgerChangesToCloud(userId);
     } else {
       flushLedgerPushNow();
     }
@@ -634,7 +708,7 @@ export function startLedgerSyncLoop(db: ChaiKhataDB, userId: string) {
   if (!onlineHandler) {
     onlineHandler = () => {
       if (!syncDb || !activeUserId) return;
-      void syncLedgerWithCloud(syncDb, activeUserId);
+      void pullLedgerFromCloud(syncDb, activeUserId, { useSince: true });
       flushLedgerPushNow();
     };
     window.addEventListener('online', onlineHandler);
