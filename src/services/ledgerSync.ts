@@ -753,8 +753,58 @@ export function attachLedgerSyncHooks(db: ChaiKhataDB, userId: string) {
 
 type SyncLedgerResult =
   | { ok: true; skipped: true }
-  | { ok: true; uploaded?: true; pulled?: boolean }
+  | { ok: true; uploaded?: true; pulled?: boolean; rowCount?: number }
   | { ok: false; error: string };
+
+/**
+ * Mobile/laptop login: download THIS user's full cloud ledger (lite = no images, fast).
+ * Bypasses quick/since sync so empty phones never stay empty.
+ */
+export async function downloadUserLedgerOnLogin(
+  db: ChaiKhataDB,
+  userId: string,
+): Promise<SyncLedgerResult> {
+  if (!isCloudSyncEnabled() || !getStoredToken()) {
+    return { ok: false, error: 'Cloud sync not configured. Open https://patiwala.pk or set Cloud URL.' };
+  }
+
+  activeUserId = userId;
+  syncDb = db;
+  clearPendingChanges();
+  clearLocalSyncCursor(userId);
+  setStatus('syncing');
+
+  const attempts = 3;
+  let lastError = '';
+
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      // lite=1 skips heavy receipt images so mobile finishes in seconds
+      const res = await syncRequest<{
+        empty?: boolean;
+        ledger?: LedgerSnapshot;
+        lite?: boolean;
+      }>('/api/sync/ledger?lite=1');
+
+      if (res.data.empty || !res.data.ledger) {
+        setStatus('synced');
+        return { ok: true, pulled: false, rowCount: 0 };
+      }
+
+      await importLedgerSnapshotFull(db, res.data.ledger, userId);
+      const counts = await localEntityCounts(db);
+      const rowCount = counts.dealers + counts.customers + counts.purchases + counts.sales + counts.payments;
+      setStatus('synced');
+      return { ok: true, pulled: true, rowCount };
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : 'Download failed';
+      await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+    }
+  }
+
+  setStatus('error');
+  return { ok: false, error: lastError || 'Could not download your data from the cloud' };
+}
 
 /** Pull cloud data first, then push local changes if needed. Call once after login. */
 export async function syncLedgerWithCloud(

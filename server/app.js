@@ -928,18 +928,19 @@ app.get('/api/sync/ledger', authMiddleware, async (req, res) => {
     }
 
     const since = typeof req.query.since === 'string' ? req.query.since.trim() : '';
-    if (since) {
+    const lite = req.query.lite === '1' || req.query.lite === 'true';
+    if (since && !lite) {
       const serverUpdated = await getLedgerUpdatedAt(req.userId);
       if (!serverUpdated || new Date(serverUpdated).getTime() <= new Date(since).getTime()) {
         return res.json({ unchanged: true, updatedAt: serverUpdated });
       }
     }
 
-    const ledger = await readLedger(req.userId);
+    const ledger = await readLedger(req.userId, { lite });
     if (!ledger) {
-      return res.json({ empty: true, ledger: null });
+      return res.json({ empty: true, ledger: null, lite });
     }
-    res.json({ empty: false, ledger });
+    res.json({ empty: false, ledger, lite });
   } catch (err) {
     console.error('Sync pull error:', err);
     res.status(500).json({ error: 'SERVER_ERROR', message: 'Could not load cloud data' });

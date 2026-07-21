@@ -2,6 +2,7 @@ import Dexie, { type EntityTable } from 'dexie';
 import {
   attachLedgerSyncHooks,
   clearLocalSyncCursor,
+  downloadUserLedgerOnLogin,
   runWithSuppressedAutoPush,
   startLedgerSyncLoop,
   stopLedgerSyncLoop,
@@ -9,7 +10,7 @@ import {
   touchLocalLedgerUpdatedAt,
   getLocalLedgerUpdatedAt,
 } from '../services/ledgerSync';
-import { isCloudSyncEnabled } from '../services/cloudConfig';
+import { ensureCloudServerConfigured, isCloudSyncEnabled, useProductionCloudServer } from '../services/cloudConfig';
 import type {
   AppSettings,
   Customer,
@@ -63,18 +64,7 @@ export function isDbInitialized(): boolean {
   return Boolean(db);
 }
 
-async function localHasBusinessData(database: ChaiKhataDB): Promise<boolean> {
-  const [dealers, customers, purchases, sales, payments] = await Promise.all([
-    database.dealers.count(),
-    database.customers.count(),
-    database.purchases.count(),
-    database.sales.count(),
-    database.payments.count(),
-  ]);
-  return dealers > 0 || customers > 0 || purchases > 0 || sales > 0 || payments > 0;
-}
-
-export async function initUserDatabase(userId: string): Promise<{ syncOk: boolean; syncError?: string }> {
+export async function initUserDatabase(userId: string): Promise<{ syncOk: boolean; syncError?: string; rowCount?: number }> {
   stopLedgerSyncLoop();
 
   if (db) {
@@ -83,41 +73,53 @@ export async function initUserDatabase(userId: string): Promise<{ syncOk: boolea
 
   db = new ChaiKhataDB(`ChaiKhataDB_${userId}`);
 
+  // Always prefer live cloud for phone/laptop shared data
+  ensureCloudServerConfigured();
+  if (!isCloudSyncEnabled()) {
+    useProductionCloudServer();
+  }
+
   if (!isCloudSyncEnabled()) {
     await ensureSettings();
     if (!getLocalLedgerUpdatedAt(userId)) {
       touchLocalLedgerUpdatedAt(userId);
     }
-    return { syncOk: true };
+    return { syncOk: true, rowCount: 0 };
   }
 
-  // Empty mobile/fresh device: drop stale sync cursor so we always download full user ledger
-  if (!(await localHasBusinessData(db))) {
+  clearLocalSyncCursor(userId);
+
+  // 1) Fast login download (no receipt images) — this is what fills empty mobile screens
+  let result = await downloadUserLedgerOnLogin(db, userId);
+
+  // 2) If download failed, force production URL and retry
+  if (!result.ok) {
+    useProductionCloudServer();
     clearLocalSyncCursor(userId);
+    result = await downloadUserLedgerOnLogin(db, userId);
   }
 
-  // 1) Download cloud ledger FIRST (before hooks / local settings write)
-  const result = await syncLedgerWithCloud(db, userId, { mode: 'full' });
-
-  // 2) Ensure settings exist after cloud import (won't overwrite cloud settings)
+  // 3) Settings after import
   await runWithSuppressedAutoPush(async () => {
     await ensureSettings();
   });
 
-  // 3) Attach auto-save hooks only after the full pull so login can't push empty stubs
+  // 4) Hooks + background sync only after login data is loaded
   attachLedgerSyncHooks(db, userId);
-
-  // 4) Start background sync only after login pull finished
   startLedgerSyncLoop(db, userId);
 
+  // 5) Quiet background full sync (includes images when network allows)
+  void syncLedgerWithCloud(db, userId, { mode: 'full' });
+
   if (!result.ok) {
-    console.warn('[Chai Khata] Initial cloud sync failed:', result.error);
-    // Retry once more in background — mobile networks often need a second try
-    void syncLedgerWithCloud(db, userId, { mode: 'full' });
-    return { syncOk: false, syncError: result.error };
+    console.warn('[Chai Khata] Login download failed:', result.error);
+    return { syncOk: false, syncError: result.error, rowCount: 0 };
   }
 
-  return { syncOk: true };
+  return {
+    syncOk: true,
+    rowCount: 'rowCount' in result ? (result.rowCount ?? 0) : 0,
+  };
 }
 
 export async function ensureSettings(): Promise<AppSettings> {

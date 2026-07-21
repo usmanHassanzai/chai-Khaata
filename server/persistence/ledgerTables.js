@@ -325,11 +325,12 @@ const UPSERT_CONFLICT = {
   settings: 'user_id',
 };
 
-async function readTableRows(userId, entity) {
+async function readTableRows(userId, entity, { lite = false } = {}) {
   const table = ENTITY_TABLES[entity];
+  const select = lite ? (LITE_SELECT[entity] || '*') : '*';
   const { data, error } = await getSupabase()
     .from(table)
-    .select('*')
+    .select(select)
     .eq('user_id', userId);
 
   if (error) {
@@ -340,6 +341,16 @@ async function readTableRows(userId, entity) {
   const fromRow = FROM_ROW[entity];
   return (data ?? []).map(fromRow);
 }
+
+/** Columns without heavy base64 images — used for fast mobile login sync */
+const LITE_SELECT = {
+  dealers: 'id, name, phone, address, opening_due, removed, history, updated_at',
+  customers: 'id, customer_id, name, phone, address, notes, register_date, history, updated_at',
+  purchases: 'id, date, dealer_id, tea_name, bags_ordered, bags_received, bag_weight_kg, miss_weight_kg, price_per_kg, deposit_paid, notes, cont_no, lot_no, country, grade, invoice_number, previous_bags_received, previous_receive_date, last_received_at, last_received_bags, last_received_kg, previous_deposit_paid, last_payment_amount, last_payment_at, history, updated_at',
+  sales: 'id, date, tea_name, quantity_kg, bags_sold, bag_weight_kg, sale_price_per_kg, purchase_price_per_kg, customer_id, amount_received, notes, last_payment_at, previous_amount_received, last_payment_amount, history, updated_at',
+  payments: 'id, date, customer_id, dealer_id, sale_id, purchase_id, amount, note, paid_at, previous_paid, balance_after, updated_at',
+  settings: 'id, low_stock_threshold_kg, language, shop_name, shop_phone, shop_address, updated_at',
+};
 
 let tablesAvailableCache = /** @type {boolean | null} */ (null);
 let tablesAvailableCheckedAt = 0;
@@ -454,14 +465,16 @@ export async function sbCountLedgerRows(userId) {
 }
 
 /** @param {string} userId */
-export async function sbReadLedgerTables(userId) {
+/** @param {string} userId @param {{ lite?: boolean }} [options] */
+export async function sbReadLedgerTables(userId, options = {}) {
+  const lite = Boolean(options.lite);
   const [dealers, customers, purchases, sales, payments, settingsRows] = await Promise.all([
-    readTableRows(userId, 'dealers'),
-    readTableRows(userId, 'customers'),
-    readTableRows(userId, 'purchases'),
-    readTableRows(userId, 'sales'),
-    readTableRows(userId, 'payments'),
-    readTableRows(userId, 'settings'),
+    readTableRows(userId, 'dealers', { lite }),
+    readTableRows(userId, 'customers', { lite }),
+    readTableRows(userId, 'purchases', { lite }),
+    readTableRows(userId, 'sales', { lite }),
+    readTableRows(userId, 'payments', { lite }),
+    readTableRows(userId, 'settings', { lite }),
   ]);
 
   const settings = settingsRows.length ? settingsRows : [];

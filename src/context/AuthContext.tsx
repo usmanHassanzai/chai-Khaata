@@ -47,7 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const prepareDatabase = useCallback(async (userId: string) => {
     setDbReady(false);
     try {
-      const result = await initUserDatabase(userId);
+      let result = await initUserDatabase(userId);
+      if (!result.syncOk) {
+        await new Promise((r) => setTimeout(r, 900));
+        result = await initUserDatabase(userId);
+      }
       if (!result.syncOk && result.syncError) {
         console.warn('[Chai Khata] Cloud sync:', result.syncError);
       }

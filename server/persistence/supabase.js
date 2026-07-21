@@ -563,21 +563,46 @@ export async function sbClearSubmissionsForUser(userId) {
   await getSupabase().from('payment_submissions').delete().eq('user_id', userId);
 }
 
-export async function sbReadLedger(userId) {
+export async function sbReadLedger(userId, options = {}) {
   const {
     sbReadLedgerTables,
     sbReadLedgerSnapshotOnly,
     sbMigrateSnapshotToTables,
   } = await import('./ledgerTables.js');
 
-  const tableLedger = await sbReadLedgerTables(userId);
+  const tableLedger = await sbReadLedgerTables(userId, options);
   if (tableLedger) return tableLedger;
 
+  // Lite login should not run a heavy migrate; return slim snapshot if present
   const snapshot = await sbReadLedgerSnapshotOnly(userId);
   if (!snapshot) return null;
+  if (options.lite) return slimSnapshotImages(snapshot);
 
   const migrated = await sbMigrateSnapshotToTables(userId, snapshot);
   return migrated || snapshot;
+}
+
+function slimSnapshotImages(snapshot) {
+  const stripRow = (row) => {
+    if (!row || typeof row !== 'object') return row;
+    const next = { ...row };
+    delete next.billImage;
+    delete next.profilePicture;
+    delete next.receiveReceiptImage;
+    delete next.paymentReceiptImage;
+    delete next.receiptImage;
+    delete next.shopLogo;
+    return next;
+  };
+  return {
+    ...snapshot,
+    dealers: (snapshot.dealers ?? []).map(stripRow),
+    customers: (snapshot.customers ?? []).map(stripRow),
+    purchases: (snapshot.purchases ?? []).map(stripRow),
+    sales: (snapshot.sales ?? []).map(stripRow),
+    payments: (snapshot.payments ?? []).map(stripRow),
+    settings: (snapshot.settings ?? []).map(stripRow),
+  };
 }
 
 export async function sbWriteLedger(userId, snapshot) {

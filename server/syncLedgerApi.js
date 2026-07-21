@@ -46,6 +46,15 @@ function parseSinceParam(req) {
   return since || null;
 }
 
+function parseLiteParam(req) {
+  const raw = req.url || '';
+  const qIndex = raw.indexOf('?');
+  if (qIndex < 0) return false;
+  const params = new URLSearchParams(raw.slice(qIndex + 1));
+  const lite = params.get('lite');
+  return lite === '1' || lite === 'true';
+}
+
 export async function handleSyncLedgerRequest(req, res) {
   const userId = readUserId(req);
   if (!userId) {
@@ -61,7 +70,8 @@ export async function handleSyncLedgerRequest(req, res) {
   if (req.method === 'GET') {
     try {
       const since = parseSinceParam(req);
-      if (since) {
+      const lite = parseLiteParam(req);
+      if (since && !lite) {
         const serverUpdated = await withTimeout(getLedgerUpdatedAt(userId), 8000, 'Sync meta');
         if (!serverUpdated || new Date(serverUpdated).getTime() <= new Date(since).getTime()) {
           sendJson(res, 200, { unchanged: true, updatedAt: serverUpdated });
@@ -69,12 +79,12 @@ export async function handleSyncLedgerRequest(req, res) {
         }
       }
 
-      const ledger = await withTimeout(readLedger(userId), 45000, 'Sync pull');
+      const ledger = await withTimeout(readLedger(userId, { lite }), lite ? 20000 : 45000, 'Sync pull');
       if (!ledger) {
-        sendJson(res, 200, { empty: true, ledger: null, source: 'tables' });
+        sendJson(res, 200, { empty: true, ledger: null, source: 'tables', lite });
         return;
       }
-      sendJson(res, 200, { empty: false, ledger, source: 'tables' });
+      sendJson(res, 200, { empty: false, ledger, source: 'tables', lite });
     } catch (err) {
       if (/timed out after/i.test(String(err?.message || ''))) {
         sendJson(res, 503, { error: 'TIMEOUT', message: 'Cloud download timed out. Please retry.' });

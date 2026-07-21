@@ -25,16 +25,41 @@ export async function getLedgerUpdatedAt(userId) {
   return ledger?.updatedAt ?? null;
 }
 
-/** @param {string} userId */
-export async function readLedger(userId) {
-  if (isSupabaseEnabled()) return sb.sbReadLedger(userId);
+/** @param {string} userId @param {{ lite?: boolean }} [options] */
+export async function readLedger(userId, options = {}) {
+  if (isSupabaseEnabled()) return sb.sbReadLedger(userId, options);
 
   try {
     const raw = await readFile(await ledgerFile(userId), 'utf8');
-    return /** @type {LedgerSnapshot} */ (JSON.parse(raw));
+    const ledger = /** @type {LedgerSnapshot} */ (JSON.parse(raw));
+    if (options.lite) return slimFileLedger(ledger);
+    return ledger;
   } catch {
     return null;
   }
+}
+
+function slimFileLedger(snapshot) {
+  const stripRow = (row) => {
+    if (!row || typeof row !== 'object') return row;
+    const next = { ...row };
+    delete next.billImage;
+    delete next.profilePicture;
+    delete next.receiveReceiptImage;
+    delete next.paymentReceiptImage;
+    delete next.receiptImage;
+    delete next.shopLogo;
+    return next;
+  };
+  return {
+    ...snapshot,
+    dealers: (snapshot.dealers ?? []).map(stripRow),
+    customers: (snapshot.customers ?? []).map(stripRow),
+    purchases: (snapshot.purchases ?? []).map(stripRow),
+    sales: (snapshot.sales ?? []).map(stripRow),
+    payments: (snapshot.payments ?? []).map(stripRow),
+    settings: (snapshot.settings ?? []).map(stripRow),
+  };
 }
 
 /** @param {string} userId @param {LedgerSnapshot} snapshot */
