@@ -249,7 +249,7 @@ export function computeDealerSummary(
   const totalPurchased = dealerPurchases.reduce((sum, p) => sum + purchaseTotalPrice(p), 0);
   const depositFromPurchases = dealerPurchases.reduce((sum, p) => sum + p.depositPaid, 0);
   const standalonePayments = payments
-    .filter((p) => p.dealerId === dealer.id)
+    .filter((p) => p.dealerId === dealer.id && p.purchaseId == null && p.saleId == null)
     .reduce((sum, p) => sum + p.amount, 0);
   const totalPaid = depositFromPurchases + standalonePayments;
   const currentDue = dealer.openingDue + totalPurchased - totalPaid;
@@ -285,7 +285,7 @@ export function computeCustomerSummary(
   const totalBagsSold = customerSales.reduce((sum, s) => sum + saleBagsSold(s), 0);
   const fromSales = customerSales.reduce((sum, s) => sum + s.amountReceived, 0);
   const standalonePayments = payments
-    .filter((p) => p.customerId === customer.id)
+    .filter((p) => p.customerId === customer.id && p.saleId == null && p.purchaseId == null)
     .reduce((sum, p) => sum + p.amount, 0);
   const receivingAmount = fromSales + standalonePayments;
   const pendingAmount = totalSale - receivingAmount;

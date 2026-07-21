@@ -65,6 +65,37 @@ function stamp() {
   return new Date().toISOString().slice(0, 19).replace('T', ' ');
 }
 
+function drawPdfBrandBar(doc: {
+  setFillColor: (...args: number[]) => void;
+  rect: (x: number, y: number, w: number, h: number, style?: string) => void;
+  internal: { pageSize: { getWidth: () => number; getHeight: () => number } };
+}) {
+  const pageW = doc.internal.pageSize.getWidth();
+  doc.setFillColor(26, 61, 47);
+  doc.rect(0, 0, pageW, 8, 'F');
+  doc.setFillColor(212, 168, 83);
+  doc.rect(0, 8, pageW, 1.2, 'F');
+  return { pageW, startY: 16 };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function drawPdfFooter(doc: any, profile: ShopPrintProfile) {
+  const pageCount = doc.getNumberOfPages() as number;
+  const pageW = doc.internal.pageSize.getWidth() as number;
+  const pageH = doc.internal.pageSize.getHeight() as number;
+  for (let i = 1; i <= pageCount; i += 1) {
+    doc.setPage(i);
+    doc.setDrawColor(235, 228, 216);
+    doc.setLineWidth(0.3);
+    doc.line(14, pageH - 12, pageW - 14, pageH - 12);
+    doc.setFontSize(7);
+    doc.setTextColor(120);
+    doc.text(`${profile.shopName} · Confidential ledger`, 14, pageH - 7);
+    doc.text(`Page ${i} of ${pageCount}`, pageW - 14, pageH - 7, { align: 'right' });
+    doc.setTextColor(0);
+  }
+}
+
 export async function downloadPdf(options: {
   filename: string;
   title: string;
@@ -85,57 +116,82 @@ export async function downloadPdf(options: {
     shopName: options.shopName || 'Chai Khata',
   };
   const doc = new jsPDF({ orientation: columns.length > 6 ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+  const { pageW, startY } = drawPdfBrandBar(doc);
 
-  let y = 14;
+  let y = startY;
   let textX = 14;
 
   if (profile.shopLogo) {
     try {
       const fmt = logoImageFormat(profile.shopLogo);
-      doc.addImage(profile.shopLogo, fmt, 14, y - 2, 16, 16);
-      textX = 34;
+      doc.addImage(profile.shopLogo, fmt, 14, y, 18, 18);
+      textX = 36;
     } catch {
       /* skip logo if unsupported */
     }
   }
 
-  doc.setFontSize(16);
-  doc.text(profile.shopName, textX, y);
-  y += 6;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(26, 61, 47);
+  doc.text(profile.shopName, textX, y + 6);
+  y += 10;
 
   const contact = formatShopContact(profile);
   if (contact) {
-    doc.setFontSize(9);
-    doc.setTextColor(80);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(90);
     doc.text(contact, textX, y);
-    doc.setTextColor(0);
     y += 5;
   }
 
-  doc.setFontSize(12);
-  doc.text(title, textX, y + 2);
+  doc.setDrawColor(212, 168, 83);
+  doc.setLineWidth(0.4);
+  doc.line(14, y + 1, pageW - 14, y + 1);
   y += 8;
 
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(26, 61, 47);
+  doc.text(title, 14, y);
+  y += 6;
+
   if (subtitle) {
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(80);
-    doc.text(subtitle, textX, y);
+    doc.text(subtitle, 14, y);
     y += 5;
   }
   doc.setFontSize(8);
   doc.setTextColor(120);
-  doc.text(`Generated: ${stamp()}`, textX, y);
+  doc.text(`Generated: ${stamp()}`, 14, y);
   doc.setTextColor(0);
 
   autoTable(doc, {
-    startY: y + 4,
+    startY: y + 5,
     head: [columns.map((c) => c.header)],
     body: rows.map((row) => columns.map((c) => String(row[c.key] ?? ''))),
-    styles: { fontSize: 8, cellPadding: 2 },
-    headStyles: { fillColor: [26, 61, 47], textColor: 255 },
-    margin: { left: 14, right: 14 },
+    styles: {
+      fontSize: 8,
+      cellPadding: 2.4,
+      lineColor: [230, 224, 214],
+      lineWidth: 0.2,
+      textColor: [28, 43, 36],
+      font: 'helvetica',
+    },
+    headStyles: {
+      fillColor: [26, 61, 47],
+      textColor: 255,
+      fontStyle: 'bold',
+      fontSize: 8,
+    },
+    alternateRowStyles: { fillColor: [248, 245, 240] },
+    margin: { left: 14, right: 14, bottom: 18 },
   });
 
+  drawPdfFooter(doc, profile);
   doc.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
 }
 
@@ -165,28 +221,35 @@ export function printTable(options: {
 
   win.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
 <style>
-body{font-family:system-ui,sans-serif;padding:24px;color:#1a1a1a}
-.print-header{display:flex;align-items:center;gap:16px;margin-bottom:12px}
-.print-logo{width:64px;height:64px;object-fit:contain;border-radius:8px}
-.print-header-text h1{font-size:1.35rem;margin:0 0 4px}
-.print-contact{color:#444;font-size:0.9rem;margin:0}
-h2{font-size:1.05rem;margin:0 0 8px}
-.meta{color:#666;font-size:0.85rem;margin-bottom:16px}
-table{width:100%;border-collapse:collapse;font-size:0.85rem}
-th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}
-th{background:#1a3d2f;color:#fff}
-.receipt-summary{margin-top:20px;padding:14px 16px;border:2px solid #1a3d2f;border-radius:8px;background:#f8faf8;max-width:360px}
-.receipt-summary p{margin:6px 0;font-size:0.95rem}
-.receipt-summary .label{color:#444}
-.receipt-summary .value{font-weight:700}
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap');
+*{box-sizing:border-box}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;padding:28px;color:#1c2b24;background:#fff}
+.brand-bar{height:6px;background:linear-gradient(90deg,#d4a853,#1a3d2f 45%,#40916c);margin:-28px -28px 18px;border-radius:0}
+.print-header{display:flex;align-items:center;gap:16px;margin-bottom:10px;padding-bottom:12px;border-bottom:1px solid #ebe4d8}
+.print-logo{width:64px;height:64px;object-fit:contain;border-radius:10px;border:1px solid #ebe4d8}
+.print-header-text h1{font-size:1.4rem;margin:0 0 4px;color:#1a3d2f;letter-spacing:-0.02em}
+.print-contact{color:#5c6b63;font-size:0.88rem;margin:0}
+h2{font-size:1.08rem;margin:0 0 6px;color:#1a3d2f}
+.meta{color:#8a9690;font-size:0.82rem;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:0.84rem}
+th,td{border:1px solid #ebe4d8;padding:8px 10px;text-align:left}
+th{background:#1a3d2f;color:#fff;font-size:0.72rem;letter-spacing:0.04em;text-transform:uppercase}
+tbody tr:nth-child(even){background:#f8f5f0}
+.receipt-summary{margin-top:20px;padding:16px 18px;border:1px solid #1a3d2f;border-left:5px solid #d4a853;border-radius:10px;background:linear-gradient(135deg,#f8faf8,#fff);max-width:380px}
+.receipt-summary p{margin:6px 0;font-size:0.92rem}
+.receipt-summary .label{color:#5c6b63}
+.receipt-summary .value{font-weight:800;color:#1a3d2f}
 .receipt-summary .remaining{color:#b45309;font-size:1.05rem}
-@media print{body{padding:12px}}
+.print-footer{margin-top:24px;padding-top:10px;border-top:1px solid #ebe4d8;color:#8a9690;font-size:0.75rem;display:flex;justify-content:space-between}
+@media print{body{padding:14px}.brand-bar{margin:-14px -14px 14px}}
 </style></head><body>
+<div class="brand-bar"></div>
 ${headerHtml}
 <h2>${title}</h2>
 <p class="meta">${subtitle ? `${subtitle} · ` : ''}Generated: ${stamp()}</p>
 <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
 ${footerHtml ?? ''}
+<div class="print-footer"><span>${profile.shopName} · Ledger export</span><span>${stamp()}</span></div>
 <script>window.onload=function(){window.print();}</script>
 </body></html>`);
   win.document.close();
@@ -624,8 +687,67 @@ export function buildCustomerMaalHistoryRows(sales: Sale[]) {
 export function buildCustomerPaymentHistoryRows(sales: Sale[], payments: Payment[]) {
   type Row = Record<string, string | number> & { _sort: string };
   const rows: Row[] = [];
+  const saleById = new Map(sales.filter((s) => s.id != null).map((s) => [s.id!, s]));
+  const linkedBySale = new Map<number, Payment[]>();
+
+  for (const p of payments) {
+    if (p.saleId != null) {
+      const list = linkedBySale.get(p.saleId) ?? [];
+      list.push(p);
+      linkedBySale.set(p.saleId, list);
+    }
+  }
+
+  for (const p of payments) {
+    const sortKey = p.paidAt ?? p.date;
+    if (p.saleId != null) {
+      const sale = saleById.get(p.saleId);
+      rows.push({
+        _sort: sortKey,
+        date: p.paidAt ? formatDateTime(p.paidAt) : p.date,
+        source: 'Pay Dues',
+        detail: sale?.teaName ?? 'Sale',
+        amount: formatCurrency(p.amount),
+        previousPaid: p.previousPaid != null ? formatCurrency(p.previousPaid) : '—',
+        totalPaid: p.balanceAfter != null ? formatCurrency(p.balanceAfter) : '—',
+        notes: p.note ?? '',
+      });
+      continue;
+    }
+    if (p.purchaseId != null) continue;
+    rows.push({
+      _sort: sortKey,
+      date: p.paidAt ? formatDateTime(p.paidAt) : p.date,
+      source: 'Direct Payment',
+      detail: '—',
+      amount: formatCurrency(p.amount),
+      previousPaid: '—',
+      totalPaid: '—',
+      notes: p.note ?? '',
+    });
+  }
 
   for (const s of sales) {
+    if (s.id == null) continue;
+    const linked = linkedBySale.get(s.id) ?? [];
+    if (linked.length > 0) {
+      const linkedSum = linked.reduce((sum, p) => sum + p.amount, 0);
+      const initial = Math.round((s.amountReceived - linkedSum) * 100) / 100;
+      if (initial > 0.004) {
+        rows.push({
+          _sort: s.date,
+          date: s.date,
+          source: 'Sale',
+          detail: s.teaName,
+          amount: formatCurrency(initial),
+          previousPaid: formatCurrency(0),
+          totalPaid: formatCurrency(initial),
+          notes: 'Initial payment at sale',
+        });
+      }
+      continue;
+    }
+
     const initialPaid = salePreviousPaid(s);
     if (s.amountReceived > 0 && !s.lastPaymentAt) {
       rows.push({
@@ -664,19 +786,6 @@ export function buildCustomerPaymentHistoryRows(sales: Sale[], payments: Payment
     }
   }
 
-  for (const p of payments) {
-    rows.push({
-      _sort: p.date,
-      date: p.date,
-      source: 'Direct Payment',
-      detail: '—',
-      amount: formatCurrency(p.amount),
-      previousPaid: '—',
-      totalPaid: '—',
-      notes: p.note ?? '',
-    });
-  }
-
   return rows
     .sort((a, b) => b._sort.localeCompare(a._sort))
     .map(({ _sort: _, ...row }) => row);
@@ -706,8 +815,67 @@ export function buildDealerMaalHistoryRows(purchases: Purchase[]) {
 export function buildDealerPaymentHistoryRows(purchases: Purchase[], payments: Payment[]) {
   type Row = Record<string, string | number> & { _sort: string };
   const rows: Row[] = [];
+  const purchaseById = new Map(purchases.filter((p) => p.id != null).map((p) => [p.id!, p]));
+  const linkedByPurchase = new Map<number, Payment[]>();
+
+  for (const p of payments) {
+    if (p.purchaseId != null) {
+      const list = linkedByPurchase.get(p.purchaseId) ?? [];
+      list.push(p);
+      linkedByPurchase.set(p.purchaseId, list);
+    }
+  }
+
+  for (const p of payments) {
+    const sortKey = p.paidAt ?? p.date;
+    if (p.purchaseId != null) {
+      const purchase = purchaseById.get(p.purchaseId);
+      rows.push({
+        _sort: sortKey,
+        date: p.paidAt ? formatDateTime(p.paidAt) : p.date,
+        source: 'Pay Pending',
+        detail: purchase?.teaName ?? 'Purchase',
+        amount: formatCurrency(p.amount),
+        previousPaid: p.previousPaid != null ? formatCurrency(p.previousPaid) : '—',
+        totalPaid: p.balanceAfter != null ? formatCurrency(p.balanceAfter) : '—',
+        notes: p.note ?? '',
+      });
+      continue;
+    }
+    if (p.saleId != null) continue;
+    rows.push({
+      _sort: sortKey,
+      date: p.paidAt ? formatDateTime(p.paidAt) : p.date,
+      source: 'Direct Payment',
+      detail: '—',
+      amount: formatCurrency(p.amount),
+      previousPaid: '—',
+      totalPaid: '—',
+      notes: p.note ?? '',
+    });
+  }
 
   for (const p of purchases) {
+    if (p.id == null) continue;
+    const linked = linkedByPurchase.get(p.id) ?? [];
+    if (linked.length > 0) {
+      const linkedSum = linked.reduce((sum, x) => sum + x.amount, 0);
+      const initial = Math.round((p.depositPaid - linkedSum) * 100) / 100;
+      if (initial > 0.004) {
+        rows.push({
+          _sort: p.date,
+          date: p.date,
+          source: 'Purchase',
+          detail: p.teaName,
+          amount: formatCurrency(initial),
+          previousPaid: formatCurrency(0),
+          totalPaid: formatCurrency(initial),
+          notes: 'Initial deposit',
+        });
+      }
+      continue;
+    }
+
     const prevPaid = purchasePreviousPaid(p);
     if (p.depositPaid > 0 && !p.lastPaymentAt) {
       rows.push({
@@ -746,39 +914,26 @@ export function buildDealerPaymentHistoryRows(purchases: Purchase[], payments: P
     }
   }
 
-  for (const p of payments) {
-    rows.push({
-      _sort: p.date,
-      date: p.date,
-      source: 'Direct Payment',
-      detail: '—',
-      amount: formatCurrency(p.amount),
-      previousPaid: '—',
-      totalPaid: '—',
-      notes: p.note ?? '',
-    });
-  }
-
   return rows
     .sort((a, b) => b._sort.localeCompare(a._sort))
     .map(({ _sort: _, ...row }) => row);
 }
 
 function buildSummaryHtml(lines: { label: string; value: string }[]) {
-  return `<div class="receipt-summary">${lines.map((l) => `<p><span class="label">${l.label}:</span> <span class="value">${l.value}</span></p>`).join('')}</div>`;
+  return `<div class="receipt-summary summary-grid">${lines.map((l) => `<div class="summary-item"><span class="label">${l.label}</span><span class="value">${l.value}</span></div>`).join('')}</div>`;
 }
 
 function buildSectionsHtml(sections: HistorySection[]) {
   return sections
     .map((section) => {
       if (section.rows.length === 0) {
-        return `<h3>${section.title}</h3><p class="meta">No entries</p>`;
+        return `<section class="report-section"><h3>${section.title}</h3><p class="meta">No entries</p></section>`;
       }
       const head = section.columns.map((c) => `<th>${c.header}</th>`).join('');
       const body = section.rows
-        .map((row) => `<tr>${section.columns.map((c) => `<td>${row[c.key] ?? ''}</td>`).join('')}</tr>`)
+        .map((row, i) => `<tr class="${i % 2 ? 'alt' : ''}">${section.columns.map((c) => `<td>${row[c.key] ?? ''}</td>`).join('')}</tr>`)
         .join('');
-      return `<h3>${section.title}</h3><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+      return `<section class="report-section"><h3>${section.title}</h3><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`;
     })
     .join('');
 }
@@ -801,28 +956,38 @@ export function printHistoryReport(options: {
 
   win.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
 <style>
-body{font-family:system-ui,sans-serif;padding:24px;color:#1a1a1a}
-.print-header{display:flex;align-items:center;gap:16px;margin-bottom:12px}
-.print-logo{width:64px;height:64px;object-fit:contain;border-radius:8px}
-.print-header-text h1{font-size:1.35rem;margin:0 0 4px}
-.print-contact{color:#444;font-size:0.9rem;margin:0}
-h2{font-size:1.05rem;margin:0 0 8px}
-h3{font-size:0.95rem;margin:20px 0 8px;color:#1a3d2f}
-.meta{color:#666;font-size:0.85rem;margin-bottom:16px}
-table{width:100%;border-collapse:collapse;font-size:0.8rem;margin-bottom:8px}
-th,td{border:1px solid #ccc;padding:5px 7px;text-align:left;word-break:break-word}
-th{background:#1a3d2f;color:#fff}
-.receipt-summary{margin:12px 0 20px;padding:14px 16px;border:2px solid #1a3d2f;border-radius:8px;background:#f8faf8;max-width:480px}
-.receipt-summary p{margin:6px 0;font-size:0.9rem}
-.receipt-summary .label{color:#444}
-.receipt-summary .value{font-weight:700}
-@media print{body{padding:12px}}
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap');
+*{box-sizing:border-box}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;padding:28px;color:#1c2b24}
+.brand-bar{height:6px;background:linear-gradient(90deg,#d4a853,#1a3d2f 45%,#40916c);margin:-28px -28px 18px}
+.print-header{display:flex;align-items:center;gap:16px;margin-bottom:10px;padding-bottom:12px;border-bottom:1px solid #ebe4d8}
+.print-logo{width:64px;height:64px;object-fit:contain;border-radius:10px;border:1px solid #ebe4d8}
+.print-header-text h1{font-size:1.4rem;margin:0 0 4px;color:#1a3d2f}
+.print-contact{color:#5c6b63;font-size:0.88rem;margin:0}
+h2{font-size:1.1rem;margin:0 0 6px;color:#1a3d2f}
+h3{font-size:0.92rem;margin:0 0 10px;padding:8px 12px;background:#1a3d2f;color:#fff;border-radius:8px 8px 0 0}
+.meta{color:#8a9690;font-size:0.82rem;margin-bottom:14px}
+.report-section{margin-bottom:22px}
+.report-section table{margin-top:0;border-radius:0 0 8px 8px;overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:0.78rem}
+th,td{border:1px solid #ebe4d8;padding:7px 8px;text-align:left;word-break:break-word}
+th{background:#245a42;color:#fff;font-size:0.68rem;letter-spacing:0.04em;text-transform:uppercase}
+tr.alt,tbody tr:nth-child(even){background:#f8f5f0}
+.receipt-summary{margin:8px 0 20px;padding:14px;border:1px solid #d8f3dc;border-left:5px solid #d4a853;border-radius:12px;background:#f8faf8}
+.summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px;max-width:560px}
+.summary-item{display:flex;flex-direction:column;gap:2px}
+.summary-item .label{color:#5c6b63;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em}
+.summary-item .value{font-weight:800;color:#1a3d2f;font-size:1rem}
+.print-footer{margin-top:20px;padding-top:10px;border-top:1px solid #ebe4d8;color:#8a9690;font-size:0.75rem;display:flex;justify-content:space-between}
+@media print{body{padding:12px}.brand-bar{margin:-12px -12px 12px}}
 </style></head><body>
+<div class="brand-bar"></div>
 ${headerHtml}
 <h2>${title}</h2>
 <p class="meta">${subtitle ? `${subtitle} · ` : ''}Generated: ${stamp()}</p>
 ${summaryHtml}
 ${sectionsHtml}
+<div class="print-footer"><span>${profile.shopName} · Full history report</span><span>${stamp()}</span></div>
 <script>window.onload=function(){window.print();}</script>
 </body></html>`);
   win.document.close();
@@ -845,73 +1010,104 @@ export async function downloadHistoryPdf(options: {
   const profile: ShopPrintProfile = options.shopProfile ?? { shopName: 'Chai Khata' };
   const landscape = sections.some((s) => s.columns.length > 7);
   const doc = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+  const { pageW, startY } = drawPdfBrandBar(doc);
 
-  let y = 14;
+  let y = startY;
   let textX = 14;
 
   if (profile.shopLogo) {
     try {
       const fmt = logoImageFormat(profile.shopLogo);
-      doc.addImage(profile.shopLogo, fmt, 14, y - 2, 16, 16);
-      textX = 34;
+      doc.addImage(profile.shopLogo, fmt, 14, y, 18, 18);
+      textX = 36;
     } catch {
       /* skip */
     }
   }
 
-  doc.setFontSize(16);
-  doc.text(profile.shopName, textX, y);
-  y += 6;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(26, 61, 47);
+  doc.text(profile.shopName, textX, y + 6);
+  y += 10;
 
   const contact = formatShopContact(profile);
   if (contact) {
-    doc.setFontSize(9);
-    doc.setTextColor(80);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(90);
     doc.text(contact, textX, y);
-    doc.setTextColor(0);
     y += 5;
   }
 
-  doc.setFontSize(12);
-  doc.text(title, textX, y + 2);
+  doc.setDrawColor(212, 168, 83);
+  doc.setLineWidth(0.4);
+  doc.line(14, y + 1, pageW - 14, y + 1);
   y += 8;
 
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(26, 61, 47);
+  doc.text(title, 14, y);
+  y += 6;
+
   if (subtitle) {
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(80);
-    doc.text(subtitle, textX, y);
+    doc.text(subtitle, 14, y);
     y += 5;
   }
 
   doc.setFontSize(8);
   doc.setTextColor(120);
-  doc.text(`Generated: ${stamp()}`, textX, y);
+  doc.text(`Generated: ${stamp()}`, 14, y);
   doc.setTextColor(0);
-  y += 6;
+  y += 7;
 
   if (summaryLines?.length) {
+    const boxH = 8 + summaryLines.length * 5.5;
+    doc.setFillColor(248, 250, 248);
+    doc.setDrawColor(26, 61, 47);
+    doc.roundedRect(14, y, pageW - 28, boxH, 2, 2, 'FD');
+    doc.setFillColor(212, 168, 83);
+    doc.rect(14, y, 2.2, boxH, 'F');
+    let sy = y + 6;
     doc.setFontSize(9);
     for (const line of summaryLines) {
-      doc.text(`${line.label}: ${line.value}`, textX, y);
-      y += 5;
+      doc.setTextColor(90);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${line.label}:`, 20, sy);
+      doc.setTextColor(26, 61, 47);
+      doc.setFont('helvetica', 'bold');
+      doc.text(line.value, pageW - 20, sy, { align: 'right' });
+      sy += 5.5;
     }
-    y += 2;
+    doc.setTextColor(0);
+    y += boxH + 6;
   }
 
   for (const section of sections) {
-    if (y > 250) {
+    if (y > (landscape ? 180 : 250)) {
       doc.addPage();
-      y = 14;
+      drawPdfBrandBar(doc);
+      y = 16;
     }
-    doc.setFontSize(11);
-    doc.setTextColor(26, 61, 47);
-    doc.text(section.title, 14, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(255);
+    doc.setFillColor(26, 61, 47);
+    doc.roundedRect(14, y, pageW - 28, 7, 1.5, 1.5, 'F');
+    doc.text(section.title, 17, y + 4.8);
     doc.setTextColor(0);
-    y += 4;
+    y += 9;
 
     if (section.rows.length === 0) {
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
-      doc.text('No entries', 14, y + 4);
+      doc.setTextColor(120);
+      doc.text('No entries', 14, y + 3);
+      doc.setTextColor(0);
       y += 10;
       continue;
     }
@@ -920,15 +1116,23 @@ export async function downloadHistoryPdf(options: {
       startY: y,
       head: [section.columns.map((c) => c.header)],
       body: section.rows.map((row) => section.columns.map((c) => String(row[c.key] ?? ''))),
-      styles: { fontSize: 7, cellPadding: 1.5 },
-      headStyles: { fillColor: [26, 61, 47], textColor: 255 },
-      margin: { left: 14, right: 14 },
+      styles: {
+        fontSize: 7,
+        cellPadding: 1.8,
+        lineColor: [230, 224, 214],
+        lineWidth: 0.2,
+        textColor: [28, 43, 36],
+      },
+      headStyles: { fillColor: [36, 90, 66], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+      alternateRowStyles: { fillColor: [248, 245, 240] },
+      margin: { left: 14, right: 14, bottom: 18 },
     });
 
     y = (doc as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y + 20;
     y += 8;
   }
 
+  drawPdfFooter(doc, profile);
   doc.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
 }
 

@@ -44,6 +44,14 @@ class ChaiKhataDB extends Dexie {
       payments: '++id, date, customerId, dealerId',
       settings: 'id',
     });
+    this.version(3).stores({
+      dealers: '++id, name',
+      customers: '++id, customerId, name',
+      purchases: '++id, date, dealerId, teaName',
+      sales: '++id, date, teaName, customerId',
+      payments: '++id, date, customerId, dealerId, saleId, purchaseId',
+      settings: 'id',
+    });
   }
 }
 

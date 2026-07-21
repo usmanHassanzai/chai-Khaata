@@ -997,6 +997,41 @@ tfoot td {
   font-size: 0.86rem;
 }
 
+.payment-ledger-wrap {
+  margin-bottom: 1rem;
+}
+
+.payment-ledger-table th {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.payment-ledger-table tbody tr.is-dues-row {
+  background: rgba(216, 243, 220, 0.35);
+}
+
+.payment-type-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.payment-type-pill.is-dues {
+  background: var(--tea-soft);
+  color: var(--tea-deep);
+}
+
+.payment-type-pill.is-direct {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
 /* ─── Customer detail ─── */
 .customer-detail-header {
   display: flex;

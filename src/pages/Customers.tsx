@@ -418,17 +418,32 @@ export default function Customers() {
     }
 
     const paymentAt = nowISO();
+    const previousPaid = payDuesSale.amountReceived;
+    const newReceived = Math.min(previousPaid + payAmount, saleTotal(payDuesSale));
     const paymentLog = `Payment ${formatCurrency(payAmount)} on ${formatDateTime(paymentAt)}`;
     const existingNotes = payDuesSale.notes?.trim() ?? '';
     const notes = existingNotes ? `${existingNotes}\n${paymentLog}` : paymentLog;
 
-    await db.sales.update(payDuesSaleId, {
-      previousAmountReceived: payDuesSale.amountReceived,
-      lastPaymentAmount: payAmount,
-      amountReceived: Math.min(payDuesSale.amountReceived + payAmount, saleTotal(payDuesSale)),
-      lastPaymentAt: paymentAt,
-      paymentReceiptImage: payDuesReceipt ?? payDuesSale.paymentReceiptImage,
-      notes,
+    await db.transaction('rw', [db.sales, db.payments], async () => {
+      await db.sales.update(payDuesSaleId, {
+        previousAmountReceived: previousPaid,
+        lastPaymentAmount: payAmount,
+        amountReceived: newReceived,
+        lastPaymentAt: paymentAt,
+        paymentReceiptImage: payDuesReceipt ?? payDuesSale.paymentReceiptImage,
+        notes,
+      });
+      await db.payments.add({
+        date: todayISO(),
+        customerId: payDuesSale.customerId,
+        saleId: payDuesSaleId,
+        amount: payAmount,
+        paidAt: paymentAt,
+        previousPaid,
+        balanceAfter: newReceived,
+        receiptImage: payDuesReceipt,
+        note: `Pay dues — ${payDuesSale.teaName}`,
+      });
     });
 
     setPayDuesSaleId(null);
@@ -447,8 +462,18 @@ export default function Customers() {
     ? sales.filter((s) => s.customerId === detailCustomer.id).sort((a, b) => b.date.localeCompare(a.date))
     : [];
   const detailPayments = detailCustomer
-    ? payments.filter((p) => p.customerId === detailCustomer.id).sort((a, b) => b.date.localeCompare(a.date))
+    ? payments
+        .filter((p) => p.customerId === detailCustomer.id)
+        .sort((a, b) => (b.paidAt ?? b.date).localeCompare(a.paidAt ?? a.date))
     : [];
+
+  function paymentRowLabel(p: (typeof detailPayments)[number]) {
+    if (p.saleId != null) {
+      const sale = sales.find((s) => s.id === p.saleId);
+      return sale ? `Pay dues · ${sale.teaName}` : 'Pay dues';
+    }
+    return p.note?.trim() || 'Direct payment';
+  }
 
   return (
     <div className="page">
@@ -790,11 +815,38 @@ export default function Customers() {
             {detailPayments.length === 0 ? (
               <p className="empty">{l('common.noData')}</p>
             ) : (
-              <ul className="history-list">
-                {detailPayments.map((p) => (
-                  <li key={p.id}>{p.date} — {formatCurrency(p.amount)} {p.note ? `(${p.note})` : ''}</li>
-                ))}
-              </ul>
+              <div className="table-wrap payment-ledger-wrap">
+                <table className="payment-ledger-table">
+                  <thead>
+                    <tr>
+                      <th><Label k="common.date" variant="compact" /></th>
+                      <th>Type</th>
+                      <th><Label k="common.amount" variant="compact" /></th>
+                      <th><Label k="customers.previousPaid" variant="compact" /></th>
+                      <th>Balance after</th>
+                      <th><Label k="common.notes" variant="compact" /></th>
+                      <th>Receipt</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailPayments.map((p) => (
+                      <tr key={p.id} className={p.saleId != null ? 'is-dues-row' : undefined}>
+                        <td>{formatDateTime(p.paidAt) !== '—' ? formatDateTime(p.paidAt) : p.date}</td>
+                        <td>
+                          <span className={`payment-type-pill${p.saleId != null ? ' is-dues' : ' is-direct'}`}>
+                            {paymentRowLabel(p)}
+                          </span>
+                        </td>
+                        <td className="dash-num">{formatCurrency(p.amount)}</td>
+                        <td>{p.previousPaid != null ? formatCurrency(p.previousPaid) : '—'}</td>
+                        <td>{p.balanceAfter != null ? formatCurrency(p.balanceAfter) : '—'}</td>
+                        <td>{p.note ?? '—'}</td>
+                        <td><ImageThumb src={p.receiptImage} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
 
             <div className="modal-actions">

@@ -253,8 +253,18 @@ export default function Godaam() {
     ? purchases.filter((p) => p.dealerId === detailDealer.id).sort((a, b) => b.date.localeCompare(a.date))
     : [];
   const detailPayments = detailDealer
-    ? payments.filter((p) => p.dealerId === detailDealer.id).sort((a, b) => b.date.localeCompare(a.date))
+    ? payments
+        .filter((p) => p.dealerId === detailDealer.id)
+        .sort((a, b) => (b.paidAt ?? b.date).localeCompare(a.paidAt ?? a.date))
     : [];
+
+  function dealerPaymentRowLabel(p: (typeof detailPayments)[number]) {
+    if (p.purchaseId != null) {
+      const purchase = purchases.find((x) => x.id === p.purchaseId);
+      return purchase ? `Pay pending · ${purchase.teaName}` : 'Pay pending';
+    }
+    return p.note?.trim() || 'Direct payment';
+  }
 
   const dealerExportRows = useMemo(
     () => buildDealerExportRows(activeDealers, purchases, payments),
@@ -457,13 +467,26 @@ export default function Godaam() {
     const existingNotes = payPurchase.notes?.trim() ?? '';
     const notes = existingNotes ? `${existingNotes}\n${paymentLog}` : paymentLog;
 
-    await db.purchases.update(payPurchaseId, {
-      previousDepositPaid: prevPaid,
-      lastPaymentAmount: amountNow,
-      depositPaid: newPaid,
-      lastPaymentAt: paymentAt,
-      paymentReceiptImage: payReceipt ?? payPurchase.paymentReceiptImage,
-      notes,
+    await db.transaction('rw', [db.purchases, db.payments], async () => {
+      await db.purchases.update(payPurchaseId, {
+        previousDepositPaid: prevPaid,
+        lastPaymentAmount: amountNow,
+        depositPaid: newPaid,
+        lastPaymentAt: paymentAt,
+        paymentReceiptImage: payReceipt ?? payPurchase.paymentReceiptImage,
+        notes,
+      });
+      await db.payments.add({
+        date: todayISO(),
+        dealerId: payPurchase.dealerId,
+        purchaseId: payPurchaseId,
+        amount: amountNow,
+        paidAt: paymentAt,
+        previousPaid: prevPaid,
+        balanceAfter: newPaid,
+        receiptImage: payReceipt,
+        note: `Pay pending — ${payPurchase.teaName}`,
+      });
     });
 
     setPayPurchaseId(null);
@@ -788,11 +811,38 @@ export default function Godaam() {
             {detailPayments.length === 0 ? (
               <p className="empty">{l('common.noData')}</p>
             ) : (
-              <ul className="history-list">
-                {detailPayments.map((p) => (
-                  <li key={p.id}>{p.date} — {formatCurrency(p.amount)} {p.note ? `(${p.note})` : ''}</li>
-                ))}
-              </ul>
+              <div className="table-wrap payment-ledger-wrap">
+                <table className="payment-ledger-table">
+                  <thead>
+                    <tr>
+                      <th><Label k="common.date" variant="compact" /></th>
+                      <th>Type</th>
+                      <th><Label k="common.amount" variant="compact" /></th>
+                      <th>Previous paid</th>
+                      <th>Balance after</th>
+                      <th><Label k="common.notes" variant="compact" /></th>
+                      <th>Receipt</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailPayments.map((p) => (
+                      <tr key={p.id} className={p.purchaseId != null ? 'is-dues-row' : undefined}>
+                        <td>{formatDateTime(p.paidAt) !== '—' ? formatDateTime(p.paidAt) : p.date}</td>
+                        <td>
+                          <span className={`payment-type-pill${p.purchaseId != null ? ' is-dues' : ' is-direct'}`}>
+                            {dealerPaymentRowLabel(p)}
+                          </span>
+                        </td>
+                        <td className="dash-num">{formatCurrency(p.amount)}</td>
+                        <td>{p.previousPaid != null ? formatCurrency(p.previousPaid) : '—'}</td>
+                        <td>{p.balanceAfter != null ? formatCurrency(p.balanceAfter) : '—'}</td>
+                        <td>{p.note ?? '—'}</td>
+                        <td><ImageThumb src={p.receiptImage} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
 
             <div className="modal-actions">

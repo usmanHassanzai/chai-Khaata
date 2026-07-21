@@ -219,3 +219,14 @@ alter table public.ledger_purchases add column if not exists previous_deposit_pa
 alter table public.ledger_purchases add column if not exists last_payment_amount numeric;
 alter table public.ledger_purchases add column if not exists last_payment_at timestamptz;
 alter table public.ledger_purchases add column if not exists payment_receipt_image text;
+
+-- Payment ledger rows linked to sales / purchases (each dues payment = new row)
+alter table public.ledger_payments add column if not exists sale_id bigint;
+alter table public.ledger_payments add column if not exists purchase_id bigint;
+alter table public.ledger_payments add column if not exists paid_at timestamptz;
+alter table public.ledger_payments add column if not exists receipt_image text;
+alter table public.ledger_payments add column if not exists previous_paid numeric;
+alter table public.ledger_payments add column if not exists balance_after numeric;
+
+create index if not exists ledger_payments_sale_idx on public.ledger_payments (user_id, sale_id);
+create index if not exists ledger_payments_purchase_idx on public.ledger_payments (user_id, purchase_id);

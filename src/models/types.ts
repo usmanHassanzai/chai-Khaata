@@ -94,8 +94,19 @@ export interface Payment {
   date: string;
   customerId?: number;
   dealerId?: number;
+  /** When set, this payment is linked to a sale (pay dues) — not counted again in dues math */
+  saleId?: number;
+  /** When set, this payment is linked to a purchase (pay pending) — not counted again in dues math */
+  purchaseId?: number;
   amount: number;
   note?: string;
+  /** ISO datetime when payment was recorded */
+  paidAt?: string;
+  receiptImage?: string;
+  /** Balance paid on the parent sale/purchase before this payment */
+  previousPaid?: number;
+  /** Cumulative paid on the parent after this payment */
+  balanceAfter?: number;
   updatedAt?: string;
 }
 

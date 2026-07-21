@@ -216,8 +216,14 @@ function paymentFromRow(row) {
     date: row.date,
     customerId: row.customer_id != null ? Number(row.customer_id) : undefined,
     dealerId: row.dealer_id != null ? Number(row.dealer_id) : undefined,
+    saleId: row.sale_id != null ? Number(row.sale_id) : undefined,
+    purchaseId: row.purchase_id != null ? Number(row.purchase_id) : undefined,
     amount: Number(row.amount) || 0,
     note: row.note || undefined,
+    paidAt: row.paid_at != null ? toIso(row.paid_at) : undefined,
+    receiptImage: row.receipt_image || undefined,
+    previousPaid: row.previous_paid != null ? Number(row.previous_paid) : undefined,
+    balanceAfter: row.balance_after != null ? Number(row.balance_after) : undefined,
     updatedAt: toIso(row.updated_at),
   };
 }
@@ -230,8 +236,14 @@ function paymentToRow(userId, row) {
     date: row.date,
     customer_id: row.customerId ?? null,
     dealer_id: row.dealerId ?? null,
+    sale_id: row.saleId ?? null,
+    purchase_id: row.purchaseId ?? null,
     amount: Number(row.amount) || 0,
     note: row.note ?? '',
+    paid_at: row.paidAt ? toIso(row.paidAt) : null,
+    receipt_image: row.receiptImage ?? null,
+    previous_paid: row.previousPaid != null ? Number(row.previousPaid) : null,
+    balance_after: row.balanceAfter != null ? Number(row.balanceAfter) : null,
     updated_at: toIso(row.updatedAt),
   };
 }
