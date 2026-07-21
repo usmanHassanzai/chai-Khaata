@@ -30,9 +30,11 @@ type LedgerChange =
   | { table: SyncableEntity; op: 'delete'; id: number | string; updatedAt: string };
 
 const LEGACY_UPDATED_AT_KEY = 'chai-khata-ledger-updated-at';
-const SYNC_TIMEOUT_MS = 30000;
-const PUSH_DEBOUNCE_MS = 50;
-const POLL_INTERVAL_MS = 8000;
+const SYNC_TIMEOUT_MS = 20000;
+const PUSH_DEBOUNCE_MS = 30;
+/** Lightweight poll — full sync only on login / focus */
+const POLL_INTERVAL_MS = 4000;
+const FULL_SYNC_EVERY_N_POLLS = 8;
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -50,6 +52,8 @@ let pendingPull = false;
 let pendingPullFull = false;
 let suppressAutoPush = false;
 let syncDb: ChaiKhataDB | null = null;
+let pollTick = 0;
+let cloudSyncInFlight: Promise<unknown> | null = null;
 const pendingChanges = new Map<string, LedgerChange>();
 
 function ledgerUpdatedAtKey(userId: string) {
@@ -157,6 +161,8 @@ export function resetLedgerSyncState() {
   pulling = false;
   pendingPull = false;
   pendingPullFull = false;
+  pollTick = 0;
+  cloudSyncInFlight = null;
   clearPendingChanges();
   suppressAutoPush = false;
   setStatus('idle');
@@ -709,71 +715,89 @@ export function attachLedgerSyncHooks(db: ChaiKhataDB, userId: string) {
   attachSettingsHooks(db);
 }
 
+type SyncLedgerResult =
+  | { ok: true; skipped: true }
+  | { ok: true; uploaded?: true; pulled?: boolean }
+  | { ok: false; error: string };
+
 /** Pull cloud data first, then push local changes if needed. Call once after login. */
-export async function syncLedgerWithCloud(db: ChaiKhataDB, userId: string) {
-  if (!isCloudSyncEnabled() || !getStoredToken()) return { ok: true as const, skipped: true as const };
+export async function syncLedgerWithCloud(
+  db: ChaiKhataDB,
+  userId: string,
+  options: { mode?: 'full' | 'quick' } = {},
+): Promise<SyncLedgerResult> {
+  if (!isCloudSyncEnabled() || !getStoredToken()) return { ok: true, skipped: true };
+
+  // Avoid stacking slow full syncs on top of each other
+  if (cloudSyncInFlight) return cloudSyncInFlight as Promise<SyncLedgerResult>;
 
   activeUserId = userId;
   syncDb = db;
   migrateLegacyUpdatedAt(userId);
+  const mode = options.mode ?? 'full';
 
-  return runWithSuppressedAutoPush(async () => {
-    // 1) Upload any queued local edits first so a full pull cannot erase them
+  const run = runWithSuppressedAutoPush(async (): Promise<SyncLedgerResult> => {
+    // 1) Upload queued local edits first
     if (pendingChanges.size) {
       const earlyPush = await pushLedgerChangesToCloud(userId);
       if ('error' in earlyPush && earlyPush.error) {
-        // Last resort: force full snapshot so other devices still get local data
         const forced = await pushLedgerToCloud(db, userId, { forceFull: true });
         if ('error' in forced && forced.error) {
-          return { ok: false as const, error: forced.message || earlyPush.message || 'Could not upload data to cloud' };
+          return { ok: false, error: forced.message || earlyPush.message || 'Could not upload data to cloud' };
         }
       }
     }
 
-    // 2) Always download the full cloud ledger (same source of truth for laptop + mobile)
-    const pull = await pullLedgerFromCloud(db, userId, { useSince: false });
+    // 2) Quick mode: only fetch if cloud changed (fast). Full mode: download everything.
+    const pull = await pullLedgerFromCloud(db, userId, { useSince: mode === 'quick' });
     if (pull.error) {
-      return { ok: false as const, error: pull.message || 'Could not download cloud data' };
+      return { ok: false, error: pull.message || 'Could not download cloud data' };
     }
 
-    // 3) Cloud empty → upload everything from this device
     if (pull.empty) {
       const push = await pushLedgerToCloud(db, userId, { forceFull: true });
       if ('error' in push && push.error) {
-        return { ok: false as const, error: push.message || 'Could not upload data to cloud' };
+        return { ok: false, error: push.message || 'Could not upload data to cloud' };
       }
-      return { ok: true as const, uploaded: true as const };
+      return { ok: true, uploaded: true };
     }
 
-    // 4) Remaining local-only rows (or unfinished queue) → full PUT so both devices match
     if (pendingChanges.size) {
-      const push = await pushLedgerToCloud(db, userId, { forceFull: true });
+      const push = await pushLedgerToCloud(db, userId, { forceFull: mode === 'full' });
       if ('error' in push && push.error) {
-        return { ok: false as const, error: push.message || 'Could not upload data to cloud' };
+        return { ok: false, error: push.message || 'Could not upload data to cloud' };
       }
-    } else if (pull.ledger) {
+    } else if (mode === 'full' && pull.ledger) {
       const localCounts = await localEntityCounts(db);
       if (localHasMoreData(localCounts, pull.ledger)) {
         const push = await pushLedgerToCloud(db, userId, { forceFull: true });
         if ('error' in push && push.error) {
-          return { ok: false as const, error: push.message || 'Could not upload data to cloud' };
+          return { ok: false, error: push.message || 'Could not upload data to cloud' };
         }
       }
     }
 
-    return { ok: true as const, pulled: pull.pulled };
+    return { ok: true, pulled: pull.pulled };
   });
+
+  cloudSyncInFlight = run.finally(() => {
+    cloudSyncInFlight = null;
+  });
+  return cloudSyncInFlight as Promise<SyncLedgerResult>;
 }
 
 export function startLedgerSyncLoop(db: ChaiKhataDB, userId: string) {
   syncDb = db;
   activeUserId = userId;
+  pollTick = 0;
 
   if (pollTimer) clearInterval(pollTimer);
   if (!isCloudSyncEnabled()) return;
 
   pollTimer = setInterval(() => {
-    void syncLedgerWithCloud(db, userId);
+    pollTick += 1;
+    const full = pollTick % FULL_SYNC_EVERY_N_POLLS === 0;
+    void syncLedgerWithCloud(db, userId, { mode: full ? 'full' : 'quick' });
   }, POLL_INTERVAL_MS);
 
   if (visibilityHandler) {
@@ -781,7 +805,7 @@ export function startLedgerSyncLoop(db: ChaiKhataDB, userId: string) {
   }
   visibilityHandler = () => {
     if (document.visibilityState === 'visible') {
-      void syncLedgerWithCloud(db, userId);
+      void syncLedgerWithCloud(db, userId, { mode: 'quick' });
     } else {
       flushLedgerPushNow();
     }
@@ -797,7 +821,7 @@ export function startLedgerSyncLoop(db: ChaiKhataDB, userId: string) {
   if (!onlineHandler) {
     onlineHandler = () => {
       if (!syncDb || !activeUserId) return;
-      void syncLedgerWithCloud(syncDb, activeUserId);
+      void syncLedgerWithCloud(syncDb, activeUserId, { mode: 'quick' });
     };
     window.addEventListener('online', onlineHandler);
   }

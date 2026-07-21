@@ -62,14 +62,14 @@ export async function handleSyncLedgerRequest(req, res) {
     try {
       const since = parseSinceParam(req);
       if (since) {
-        const serverUpdated = await withTimeout(getLedgerUpdatedAt(userId), 8000, 'Sync meta');
+        const serverUpdated = await withTimeout(getLedgerUpdatedAt(userId), 4000, 'Sync meta');
         if (!serverUpdated || new Date(serverUpdated).getTime() <= new Date(since).getTime()) {
           sendJson(res, 200, { unchanged: true, updatedAt: serverUpdated });
           return;
         }
       }
 
-      const ledger = await withTimeout(readLedger(userId), 20000, 'Sync pull');
+      const ledger = await withTimeout(readLedger(userId), 15000, 'Sync pull');
       if (!ledger) {
         sendJson(res, 200, { empty: true, ledger: null, source: 'tables' });
         return;
@@ -95,7 +95,7 @@ export async function handleSyncLedgerRequest(req, res) {
         return;
       }
 
-      const result = await withTimeout(applyLedgerChanges(userId, changes), 45000, 'Sync patch');
+      const result = await withTimeout(applyLedgerChanges(userId, changes), 20000, 'Sync patch');
       sendJson(res, 200, {
         accepted: true,
         applied: result.applied,
@@ -116,7 +116,7 @@ export async function handleSyncLedgerRequest(req, res) {
   if (req.method === 'PUT') {
     try {
       const incoming = await readJsonBody(req);
-      const existing = await withTimeout(readLedger(userId), 20000, 'Sync read');
+      const existing = await withTimeout(readLedger(userId), 12000, 'Sync read');
 
       if (!shouldAcceptIncoming(incoming, existing)) {
         sendJson(res, 409, {
@@ -137,7 +137,7 @@ export async function handleSyncLedgerRequest(req, res) {
           payments: incoming.payments ?? [],
           settings: incoming.settings ?? [],
         }),
-        45000,
+        25000,
         'Sync push',
       );
 

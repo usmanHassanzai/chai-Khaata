@@ -341,13 +341,76 @@ async function readTableRows(userId, entity) {
   return (data ?? []).map(fromRow);
 }
 
+let tablesAvailableCache = /** @type {boolean | null} */ (null);
+let tablesAvailableCheckedAt = 0;
+const TABLES_AVAILABLE_TTL_MS = 60_000;
+
+async function ledgerTablesAvailable() {
+  const now = Date.now();
+  if (tablesAvailableCache != null && now - tablesAvailableCheckedAt < TABLES_AVAILABLE_TTL_MS) {
+    return tablesAvailableCache;
+  }
+  const { error } = await getSupabase().from('ledger_dealers').select('id').limit(1);
+  tablesAvailableCache = !error || !isMissingTableError(error);
+  if (error && !isMissingTableError(error)) {
+    // Unexpected error — don't cache a long-lived false
+    tablesAvailableCache = false;
+    tablesAvailableCheckedAt = now;
+    return false;
+  }
+  if (!error) tablesAvailableCache = true;
+  else tablesAvailableCache = false;
+  tablesAvailableCheckedAt = now;
+  return tablesAvailableCache;
+}
+
+/** Bump the sync cursor without rewriting the full snapshot payload. */
+async function touchLedgerCursor(userId, updatedAt) {
+  const ts = toIso(updatedAt || new Date().toISOString());
+  const { data, error } = await getSupabase()
+    .from('ledger_snapshots')
+    .update({ updated_at: ts })
+    .eq('user_id', userId)
+    .select('user_id')
+    .maybeSingle();
+
+  if (error && !isMissingTableError(error)) throwSupabaseError(error);
+  if (data) return ts;
+
+  const { error: upsertError } = await getSupabase()
+    .from('ledger_snapshots')
+    .upsert(
+      {
+        user_id: userId,
+        updated_at: ts,
+        payload: {},
+      },
+      { onConflict: 'user_id' },
+    );
+  if (upsertError && !isMissingTableError(upsertError)) throwSupabaseError(upsertError);
+  return ts;
+}
+
 /** @param {string} userId */
 export async function sbGetLedgerUpdatedAt(userId) {
-  if (!(await ledgerTablesAvailable())) {
-    const snapshot = await sbReadLedgerSnapshotOnly(userId);
-    return snapshot?.updatedAt ? toIso(snapshot.updatedAt) : null;
+  // Fast path: one row from ledger_snapshots (kept in sync on every write/patch)
+  try {
+    const { data, error } = await getSupabase()
+      .from('ledger_snapshots')
+      .select('updated_at')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (!error && data?.updated_at) return toIso(data.updated_at);
+    if (error && !isMissingTableError(error)) throwSupabaseError(error);
+  } catch (err) {
+    if (!isMissingTableError(err)) throw err;
   }
 
+  if (!(await ledgerTablesAvailable())) {
+    return null;
+  }
+
+  // Fallback: max updated_at across entity tables (rare — only when snapshot missing)
   const tables = Object.values(ENTITY_TABLES);
   const maxQueries = tables.map(async (table) => {
     const { data, error } = await getSupabase()
@@ -365,11 +428,9 @@ export async function sbGetLedgerUpdatedAt(userId) {
     return data?.updated_at ? toIso(data.updated_at) : null;
   });
 
-  const snapshotQuery = sbReadLedgerSnapshotOnly(userId).then((s) => (s?.updatedAt ? toIso(s.updatedAt) : null));
-  const timestamps = await Promise.all([...maxQueries, snapshotQuery]);
-  const valid = timestamps.filter(Boolean);
-  if (!valid.length) return null;
-  return maxUpdatedAt(valid.map((updatedAt) => ({ updatedAt })));
+  const timestamps = (await Promise.all(maxQueries)).filter(Boolean);
+  if (!timestamps.length) return null;
+  return maxUpdatedAt(timestamps.map((updatedAt) => ({ updatedAt })));
 }
 
 /** @param {string} userId */
@@ -471,12 +532,6 @@ export async function sbWriteLedgerSnapshot(userId, snapshot) {
   };
 }
 
-async function ledgerTablesAvailable() {
-  const { error } = await getSupabase().from('ledger_dealers').select('id').limit(1);
-  if (!error) return true;
-  return !isMissingTableError(error);
-}
-
 /** @param {string} userId @param {import('../ledgerStore.js').LedgerSnapshot} snapshot */
 export async function sbWriteLedgerTables(userId, snapshot) {
   const updatedAt = toIso(snapshot.updatedAt);
@@ -530,17 +585,22 @@ export async function sbWriteLedgerTables(userId, snapshot) {
     throw err;
   }
 
+  const finalUpdatedAt = maxUpdatedAt([
+    ...(snapshot.dealers ?? []),
+    ...(snapshot.customers ?? []),
+    ...(snapshot.purchases ?? []),
+    ...(snapshot.sales ?? []),
+    ...(snapshot.payments ?? []),
+    ...(snapshot.settings ?? []),
+  ].map((r) => ({ updatedAt: r.updatedAt || updatedAt })));
+
+  // Keep lightweight sync cursor so ?since= checks stay a single fast query
+  await touchLedgerCursor(userId, finalUpdatedAt);
+
   return {
     ...snapshotPayload(snapshot),
     userId,
-    updatedAt: maxUpdatedAt([
-      ...(snapshot.dealers ?? []),
-      ...(snapshot.customers ?? []),
-      ...(snapshot.purchases ?? []),
-      ...(snapshot.sales ?? []),
-      ...(snapshot.payments ?? []),
-      ...(snapshot.settings ?? []),
-    ].map((r) => ({ updatedAt: r.updatedAt || updatedAt }))),
+    updatedAt: finalUpdatedAt,
   };
 }
 
@@ -770,6 +830,10 @@ export async function sbApplyLedgerChanges(userId, changes) {
       })),
     )
     : (await sbGetLedgerUpdatedAt(userId)) || new Date().toISOString();
+
+  if (applied.length) {
+    await touchLedgerCursor(userId, updatedAt);
+  }
 
   return { applied: applied.length, skipped, updatedAt };
 }
