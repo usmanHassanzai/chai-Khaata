@@ -1,9 +1,16 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { AdminUsersProvider, useAdminPendingCount } from '../context/AdminUsersContext';
 import { isCloudSyncEnabled } from '../services/cloudConfig';
-import { onSyncStatus, type SyncStatus } from '../services/ledgerSync';
+import {
+  flushLedgerPushNow,
+  onSyncStatus,
+  pullLedgerFromCloud,
+  pushLedgerToCloud,
+  type SyncStatus,
+} from '../services/ledgerSync';
+import { db } from '../db/database';
 import AppInterior from './AppInterior';
 import AppLoading from './AppLoading';
 import TrialBanner from './TrialBanner';
@@ -14,14 +21,15 @@ import { getLabel } from '../i18n/labels';
 import { useLabelMode } from '../i18n/useLabel';
 
 const mainLinks = [
-  { to: '/dashboard', key: 'dashboard', icon: '🏠' },
-  { to: '/dukaan', key: 'dukaan', icon: '🛒' },
-  { to: '/godaam', key: 'godaam', icon: '📦' },
-  { to: '/customers', key: 'customers', icon: '👤' },
-  { to: '/stock', key: 'stock', icon: '📋' },
+  { to: '/dashboard', key: 'dashboard', icon: '🏠', glyph: 'H' },
+  { to: '/dukaan', key: 'dukaan', icon: '🛒', glyph: 'S' },
+  { to: '/godaam', key: 'godaam', icon: '📦', glyph: 'G' },
+  { to: '/customers', key: 'customers', icon: '👤', glyph: 'C' },
+  { to: '/stock', key: 'stock', icon: '📋', glyph: 'I' },
 ] as const;
 
-const adminLink = { to: '/admin', key: 'approvals', icon: '✅' } as const;
+const adminLink = { to: '/admin', key: 'approvals', icon: '✅', glyph: 'A' } as const;
+const settingsLink = { to: '/settings', key: 'settings', icon: '⚙️', glyph: '⚙' } as const;
 
 function navShortLabel(key: string, mode: ReturnType<typeof useLabelMode>): string {
   const text = getLabel(`nav.${key}`);
@@ -45,6 +53,14 @@ function pageTitleFromPath(pathname: string, mode: ReturnType<typeof useLabelMod
   return navShortLabel('dashboard', mode);
 }
 
+function syncLabelKey(status: SyncStatus): string {
+  if (status === 'synced') return 'common.syncLive';
+  if (status === 'syncing') return 'common.syncing';
+  if (status === 'offline') return 'common.syncOffline';
+  if (status === 'error') return 'common.syncError';
+  return 'common.syncReady';
+}
+
 export default function Layout() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -63,18 +79,22 @@ export default function Layout() {
 function LayoutShell() {
   const mode = useLabelMode();
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, logout, dbReady } = useAuth();
   const pendingCount = useAdminPendingCount();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
 
   const isAdmin = user?.role === 'admin';
+  const isHome = location.pathname === '/dashboard' || location.pathname === '/';
   const mobilePageTitle = pageTitleFromPath(location.pathname, mode);
+  const cloudOn = isCloudSyncEnabled();
 
   const drawerLinks = [
     ...mainLinks,
     ...(isAdmin ? [adminLink] : []),
-    { to: '/settings', key: 'settings', icon: '⚙️' } as const,
+    settingsLink,
   ];
 
   useEffect(() => onSyncStatus(setSyncStatus), []);
@@ -88,11 +108,40 @@ function LayoutShell() {
     return () => document.body.classList.remove('scroll-lock');
   }, [mobileMenuOpen]);
 
+  /* Keep local Dexie ledger synced with cloud DB whenever user opens a page */
+  useEffect(() => {
+    if (!cloudOn || !dbReady || !user || !db) return;
+    void pullLedgerFromCloud(db, user.id, { useSince: true }).then(() => {
+      flushLedgerPushNow();
+    });
+  }, [location.pathname, cloudOn, dbReady, user]);
+
+  function handleBack() {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate('/dashboard');
+  }
+
+  async function handleSyncTap() {
+    if (!cloudOn || !user || !db || syncBusy) return;
+    setSyncBusy(true);
+    try {
+      await pullLedgerFromCloud(db, user.id);
+      await pushLedgerToCloud(db, user.id);
+    } catch (err) {
+      console.error('[Chai Khata] Mobile sync failed:', err);
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
   function renderNavLinks(
-    links: readonly { readonly to: string; readonly key: string; readonly icon: string }[],
-    opts?: { onNavigate?: () => void; className?: string },
+    links: readonly { readonly to: string; readonly key: string; readonly icon: string; readonly glyph?: string }[],
+    opts?: { onNavigate?: () => void; className?: string; mobile?: boolean },
   ) {
-    return links.map(({ to, key, icon }) => (
+    return links.map(({ to, key, icon, glyph }) => (
       <NavLink
         key={to}
         to={to}
@@ -100,7 +149,9 @@ function LayoutShell() {
         className={({ isActive }) => `nav-link${isActive ? ' active' : ''}${opts?.className ? ` ${opts.className}` : ''}`}
         onClick={opts?.onNavigate}
       >
-        <span className="nav-icon-wrap">{icon}</span>
+        <span className={`nav-icon-wrap${opts?.mobile ? ' nav-glyph' : ''}`}>
+          {opts?.mobile ? (glyph ?? icon) : icon}
+        </span>
         <span className="nav-text">
           <Label k={`nav.${key}`} variant="compact" />
           {key === 'approvals' && pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}
@@ -108,6 +159,8 @@ function LayoutShell() {
       </NavLink>
     ));
   }
+
+  const effectiveSync = syncBusy ? 'syncing' : syncStatus;
 
   return (
     <div className={`app-shell easy-pos${mobileMenuOpen ? ' mobile-menu-open' : ''}`}>
@@ -136,7 +189,7 @@ function LayoutShell() {
         </div>
 
         <div className="sidebar-footer">
-          {renderNavLinks([{ to: '/settings', key: 'settings', icon: '⚙️' }])}
+          {renderNavLinks([settingsLink])}
         </div>
       </aside>
 
@@ -147,20 +200,18 @@ function LayoutShell() {
         aria-hidden={!mobileMenuOpen}
       />
       <aside
-        className={`mobile-drawer sidebar-pro${mobileMenuOpen ? ' is-open' : ''}`}
+        className={`mobile-drawer${mobileMenuOpen ? ' is-open' : ''}`}
         aria-hidden={!mobileMenuOpen}
         aria-label="Mobile menu"
       >
         <div className="mobile-drawer-head">
-          <div className="sidebar-brand">
-            <div className="sidebar-logo-ring">
-              <div className="sidebar-logo-wrap">
-                <img src="/images/tea/karak-chai.jpg" alt="" className="sidebar-logo-img" />
-              </div>
+          <div className="mobile-drawer-brand">
+            <div className="mobile-drawer-logo">
+              <img src="/images/tea/karak-chai.jpg" alt="" />
             </div>
-            <div className="sidebar-brand-text">
-              <span className="sidebar-brand-name"><Label k="appName" variant="compact" /></span>
-              <span className="sidebar-brand-tag">{user?.shopName || 'Patiwala'}</span>
+            <div className="mobile-drawer-brand-text">
+              <span className="mobile-drawer-name"><Label k="appName" variant="compact" /></span>
+              <span className="mobile-drawer-shop">{user?.shopName || 'Patiwala'}</span>
             </div>
           </div>
           <button
@@ -172,10 +223,29 @@ function LayoutShell() {
             ✕
           </button>
         </div>
-        <nav className="mobile-drawer-nav sidebar-nav">
-          {renderNavLinks(drawerLinks, { onNavigate: () => setMobileMenuOpen(false) })}
+
+        <p className="mobile-drawer-label">Menu</p>
+        <nav className="mobile-drawer-nav">
+          {renderNavLinks(drawerLinks, {
+            onNavigate: () => setMobileMenuOpen(false),
+            mobile: true,
+          })}
         </nav>
+
         <div className="mobile-drawer-footer">
+          {cloudOn && (
+            <button
+              type="button"
+              className={`mobile-drawer-sync is-${effectiveSync}`}
+              onClick={() => {
+                void handleSyncTap();
+              }}
+              disabled={syncBusy}
+            >
+              <span className="mobile-sync-dot" aria-hidden />
+              <Label k={syncLabelKey(effectiveSync)} variant="compact" />
+            </button>
+          )}
           <button type="button" className="btn mobile-drawer-logout" onClick={logout}>
             <Label k="auth.logout" variant="compact" />
           </button>
@@ -186,29 +256,69 @@ function LayoutShell() {
         <header className="app-header app-header-pro">
           <div className="header-inner">
             <div className="header-title-mobile">
-              <button
-                type="button"
-                className={`mobile-hamburger${mobileMenuOpen ? ' is-open' : ''}`}
-                onClick={() => setMobileMenuOpen((o) => !o)}
-                aria-expanded={mobileMenuOpen}
-                aria-label={mobileMenuOpen ? getLabel('common.closeMenu').en : getLabel('common.openMenu').en}
-              >
-                <span />
-                <span />
-                <span />
-              </button>
+              {!isHome ? (
+                <button
+                  type="button"
+                  className="mobile-back-btn"
+                  onClick={handleBack}
+                  aria-label={getLabel('common.back').en}
+                >
+                  <span className="mobile-back-arrow" aria-hidden>←</span>
+                  <span className="mobile-back-text"><Label k="common.back" variant="compact" /></span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={`mobile-hamburger${mobileMenuOpen ? ' is-open' : ''}`}
+                  onClick={() => setMobileMenuOpen((o) => !o)}
+                  aria-expanded={mobileMenuOpen}
+                  aria-label={mobileMenuOpen ? getLabel('common.closeMenu').en : getLabel('common.openMenu').en}
+                >
+                  <span />
+                  <span />
+                  <span />
+                </button>
+              )}
               <div className="header-title-stack">
                 <span className="header-page-name">{mobilePageTitle}</span>
                 <span className="header-shop-name">{user?.shopName || user?.username || 'Chai Khata'}</span>
               </div>
             </div>
             <div className="header-meta">
-              {isCloudSyncEnabled() && (
-                <span
-                  className={`header-sync-dot${syncStatus === 'offline' || syncStatus === 'error' ? ' offline' : syncStatus === 'syncing' ? ' syncing' : ''}`}
-                  title={syncStatus === 'synced' ? 'Cloud sync live' : syncStatus}
-                  aria-label="Cloud sync status"
-                />
+              {cloudOn && (
+                <>
+                  <button
+                    type="button"
+                    className={`mobile-sync-chip is-${effectiveSync}`}
+                    onClick={() => void handleSyncTap()}
+                    disabled={syncBusy}
+                    title={getLabel('common.syncTap').en}
+                    aria-label={getLabel('common.syncTap').en}
+                  >
+                    <span className="mobile-sync-dot" aria-hidden />
+                    <span className="mobile-sync-label">
+                      <Label k={syncLabelKey(effectiveSync)} variant="compact" />
+                    </span>
+                  </button>
+                  <span
+                    className={`header-sync-dot${effectiveSync === 'offline' || effectiveSync === 'error' ? ' offline' : effectiveSync === 'syncing' ? ' syncing' : ''}`}
+                    title={effectiveSync === 'synced' ? 'Cloud sync live' : effectiveSync}
+                    aria-label="Cloud sync status"
+                  />
+                </>
+              )}
+              {!isHome && (
+                <button
+                  type="button"
+                  className={`mobile-hamburger mobile-hamburger-end${mobileMenuOpen ? ' is-open' : ''}`}
+                  onClick={() => setMobileMenuOpen((o) => !o)}
+                  aria-expanded={mobileMenuOpen}
+                  aria-label={mobileMenuOpen ? getLabel('common.closeMenu').en : getLabel('common.openMenu').en}
+                >
+                  <span />
+                  <span />
+                  <span />
+                </button>
               )}
               <span className="header-badge auth-page-badge">Patiwala</span>
               <span className="header-date">

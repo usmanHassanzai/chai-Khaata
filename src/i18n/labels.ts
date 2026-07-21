@@ -61,6 +61,13 @@ export const labels = {
     bilingual: { ur: 'اردو + انگریزی', en: 'Urdu + English', roman: 'Urdu + English' },
     openMenu: { ur: 'مینو', en: 'Menu', roman: 'Menu' },
     closeMenu: { ur: 'بند کریں', en: 'Close', roman: 'Band karein' },
+    back: { ur: 'واپس', en: 'Back', roman: 'Wapas' },
+    syncLive: { ur: 'سنک', en: 'Synced', roman: 'Synced' },
+    syncing: { ur: 'سنک ہو رہا…', en: 'Syncing…', roman: 'Sync ho raha…' },
+    syncOffline: { ur: 'آف لائن', en: 'Offline', roman: 'Offline' },
+    syncError: { ur: 'سنک مسئلہ', en: 'Sync issue', roman: 'Sync masla' },
+    syncReady: { ur: 'سنک', en: 'Sync', roman: 'Sync' },
+    syncTap: { ur: 'سنک کرنے کے لیے دبائیں', en: 'Tap to sync with database', roman: 'Sync ke liye dabain' },
   },
 
   export: {
