@@ -230,3 +230,7 @@ alter table public.ledger_payments add column if not exists balance_after numeri
 
 create index if not exists ledger_payments_sale_idx on public.ledger_payments (user_id, sale_id);
 create index if not exists ledger_payments_purchase_idx on public.ledger_payments (user_id, purchase_id);
+
+-- Append-only history JSON on dealers / purchases (each edit/receive = new row in UI & PDF)
+alter table public.ledger_dealers add column if not exists history jsonb default '[]'::jsonb;
+alter table public.ledger_purchases add column if not exists history jsonb default '[]'::jsonb;

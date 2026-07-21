@@ -2,16 +2,16 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useState } from 'react';
 import FormField, { FieldLabel, ReadOnlyField } from '../components/FormField';
 import ImageUpload, { ImageThumb } from '../components/ImageUpload';
-import PageBanner from '../components/PageBanner';
 import PhoneLink from '../components/PhoneLink';
 import ExportToolbar from '../components/ExportToolbar';
 import TextAreaField from '../components/TextAreaField';
 import { db } from '../db/database';
 import { flushLedgerPushNow } from '../services/ledgerSync';
-import { Label, PageTitle, SectionTitle, useLabel } from '../i18n/useLabel';
+import { Label, SectionTitle, useLabel } from '../i18n/useLabel';
 import type { Dealer, Purchase } from '../models/types';
 import {
   computeDealerSummary,
+  appendActivity,
   formatBags,
   formatCurrency,
   formatDateTime,
@@ -33,8 +33,11 @@ import { useShopPrintProfile } from '../hooks/useShopPrintProfile';
 import {
   buildDealerExportRows,
   buildPurchaseExportRows,
+  buildDealerActivityHistoryRows,
   DEALER_EXPORT_COLUMNS,
+  DEALER_ACTIVITY_HISTORY_COLUMNS,
   downloadDealerFullHistoryPdf,
+  downloadDealerFullHistoryCsv,
   printDealerFullHistory,
   PURCHASE_EXPORT_COLUMNS,
 } from '../services/export';
@@ -186,6 +189,13 @@ export default function Godaam() {
   const [payReceipt, setPayReceipt] = useState<string | undefined>();
   const [payError, setPayError] = useState('');
 
+  const [editDealerId, setEditDealerId] = useState<number | null>(null);
+  const [editDealerName, setEditDealerName] = useState('');
+  const [editDealerPhone, setEditDealerPhone] = useState('');
+  const [editDealerAddress, setEditDealerAddress] = useState('');
+  const [editDealerOpeningDue, setEditDealerOpeningDue] = useState('');
+  const [editDealerError, setEditDealerError] = useState('');
+
   const previewPurchase: Purchase = useMemo(
     () => ({
       date: pDate,
@@ -266,6 +276,64 @@ export default function Godaam() {
     return p.note?.trim() || 'Direct payment';
   }
 
+  const detailActivityRows = useMemo(() => {
+    if (!detailDealer) return [];
+    return buildDealerActivityHistoryRows(detailDealer, detailPurchases);
+  }, [detailDealer, detailPurchases]);
+
+  function openEditDealer(d: Dealer) {
+    if (!d.id) return;
+    setEditDealerId(d.id);
+    setEditDealerName(d.name);
+    setEditDealerPhone(d.phone ?? '');
+    setEditDealerAddress(d.address ?? '');
+    setEditDealerOpeningDue(String(d.openingDue ?? 0));
+    setEditDealerError('');
+  }
+
+  async function handleUpdateDealer(e: React.FormEvent) {
+    e.preventDefault();
+    setEditDealerError('');
+    if (!editDealerId) return;
+    const name = editDealerName.trim();
+    if (!name) return;
+    const existing = dealers.find((d) => d.id === editDealerId);
+    if (!existing) return;
+    if (
+      activeDealers.some(
+        (d) => d.id !== editDealerId && d.name.toLowerCase() === name.toLowerCase(),
+      )
+    ) {
+      setEditDealerError(l('godaam.dealerExists'));
+      return;
+    }
+    const opening = parseFloat(editDealerOpeningDue) || 0;
+    const summary = [
+      'Dealer edited',
+      existing.name !== name ? `name ${existing.name}→${name}` : null,
+      existing.openingDue !== opening
+        ? `opening due ${formatCurrency(existing.openingDue)}→${formatCurrency(opening)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
+    await db.dealers.update(editDealerId, {
+      name,
+      phone: editDealerPhone.trim() || undefined,
+      address: editDealerAddress.trim() || undefined,
+      openingDue: opening,
+      history: appendActivity(existing, {
+        at: nowISO(),
+        type: 'edit',
+        summary: summary || 'Dealer details updated',
+        detail: summary,
+      }),
+    });
+    setEditDealerId(null);
+    flushLedgerPushNow();
+  }
+
   const dealerExportRows = useMemo(
     () => buildDealerExportRows(activeDealers, purchases, payments),
     [activeDealers, purchases, payments],
@@ -290,6 +358,12 @@ export default function Godaam() {
       phone: dealerPhone.trim() || undefined,
       address: dealerAddress.trim() || undefined,
       openingDue: parseFloat(openingDue) || 0,
+      history: [{
+        id: `create-${Date.now()}`,
+        at: nowISO(),
+        type: 'create',
+        summary: `Dealer created with opening due ${formatCurrency(parseFloat(openingDue) || 0)}`,
+      }],
     };
     await db.dealers.add(dealer);
     setDealerName('');
@@ -311,6 +385,14 @@ export default function Godaam() {
       invoiceNumber: invoiceNumber.trim() || undefined,
       billImage,
       notes: purchaseNotes.trim() || undefined,
+      history: [{
+        id: `create-${Date.now()}`,
+        at: nowISO(),
+        type: 'create',
+        summary: `Purchase created — ordered ${previewPurchase.bagsOrdered} bags, received ${previewPurchase.bagsReceived} bags`,
+        bagsOrdered: previewPurchase.bagsOrdered,
+        bagsReceived: previewPurchase.bagsReceived,
+      }],
     });
     setPTeaName('');
     setBagsOrdered('');
@@ -361,6 +443,16 @@ export default function Godaam() {
       return;
     }
 
+    const existing = purchases.find((p) => p.id === editPurchaseId);
+    if (!existing) return;
+
+    const summary = [
+      `Purchase edited`,
+      `ordered ${existing.bagsOrdered}→${editPreviewPurchase.bagsOrdered} bags`,
+      `received ${existing.bagsReceived}→${editPreviewPurchase.bagsReceived} bags`,
+      `rate ${formatCurrency(existing.pricePerKg)}→${formatCurrency(editPreviewPurchase.pricePerKg)}`,
+    ].join(' · ');
+
     await db.purchases.update(editPurchaseId, {
       ...editPreviewPurchase,
       teaName: editPTeaName.trim(),
@@ -371,6 +463,14 @@ export default function Godaam() {
       invoiceNumber: editInvoiceNumber.trim() || undefined,
       billImage: editBillImage,
       notes: editPurchaseNotes.trim() || undefined,
+      history: appendActivity(existing, {
+        at: nowISO(),
+        type: 'edit',
+        summary,
+        bagsOrdered: editPreviewPurchase.bagsOrdered,
+        bagsReceived: editPreviewPurchase.bagsReceived,
+        detail: summary,
+      }),
     });
     setEditPurchaseId(null);
     flushLedgerPushNow();
@@ -425,6 +525,14 @@ export default function Godaam() {
       lastReceivedKg: kgNow,
       receiveReceiptImage: receiveReceipt ?? receivePurchase.receiveReceiptImage,
       notes,
+      history: appendActivity(receivePurchase, {
+        at: receivedAt,
+        type: 'receive',
+        summary: log,
+        bagsOrdered: receivePurchase.bagsOrdered,
+        bagsReceived: newBags,
+        bagsAdded: bagsNow,
+      }),
     });
 
     setReceivePurchaseId(null);
@@ -523,11 +631,25 @@ export default function Godaam() {
   }
 
   return (
-    <div className="page">
-      <PageBanner titleKey="godaam.title" subtitle="Track purchases & dealer stock" icon="📦" accent="brown" />
-      <PageTitle k="godaam.title" />
+    <div className="page godaam-page godaam-pro">
+      <header className="god-topbar animate-fade-in-up">
+        <div>
+          <p className="god-eyebrow">Warehouse · Purchases</p>
+          <h1 className="god-title">
+            <Label k="godaam.title" variant="stacked" />
+          </h1>
+          <p className="god-meta">
+            <span>{activeDealers.length} dealers</span>
+            <span className="god-meta-dot" aria-hidden />
+            <span>{purchases.length} purchases</span>
+            <span className="god-meta-dot" aria-hidden />
+            <span>{todayISO()}</span>
+          </p>
+        </div>
+      </header>
 
-      <form className="card form-card" onSubmit={handleAddDealer}>
+      <div className="god-forms-grid">
+      <form className="god-panel form-card animate-fade-in-up stagger-1" onSubmit={handleAddDealer}>
         <SectionTitle k="godaam.addDealer" />
         <div className="form-grid">
           <FormField labelKey="godaam.dealerName" value={dealerName} onChange={setDealerName} required />
@@ -539,7 +661,7 @@ export default function Godaam() {
         <button type="submit" className="btn primary">{l('godaam.addDealer')}</button>
       </form>
 
-      <form className="card form-card" onSubmit={handleAddPurchase}>
+      <form className="god-panel form-card animate-fade-in-up stagger-2" onSubmit={handleAddPurchase}>
         <SectionTitle k="godaam.addPurchase" />
         <div className="form-grid">
           <FormField labelKey="common.date" value={pDate} onChange={setPDate} type="date" required />
@@ -587,8 +709,9 @@ export default function Godaam() {
         </div>
         <button type="submit" className="btn primary" disabled={activeDealers.length === 0}>{l('godaam.savePurchase')}</button>
       </form>
+      </div>
 
-      <section className="card-section">
+      <section className="god-panel card-section animate-fade-in-up stagger-3">
         <div className="section-header-row">
           <SectionTitle k="godaam.dealerSummary" />
           <ExportToolbar
@@ -600,12 +723,14 @@ export default function Godaam() {
           />
         </div>
         <div className="table-wrap wide-table">
-          <table>
+          <table className="god-table">
             <thead>
               <tr>
                 <th><Label k="godaam.dealerName" variant="compact" /></th>
                 <th><Label k="common.phone" variant="compact" /></th>
                 <th><Label k="common.address" variant="compact" /></th>
+                <th><Label k="godaam.bagsOrderedTotal" variant="compact" /></th>
+                <th><Label k="godaam.bagsReceivedTotal" variant="compact" /></th>
                 <th><Label k="godaam.receivedMaal" variant="compact" /></th>
                 <th><Label k="godaam.pendingBags" variant="compact" /></th>
                 <th><Label k="godaam.pendingMaal" variant="compact" /></th>
@@ -617,7 +742,7 @@ export default function Godaam() {
             </thead>
             <tbody>
               {activeDealers.length === 0 ? (
-                <tr><td colSpan={10} className="empty">{l('common.noData')}</td></tr>
+                <tr><td colSpan={12} className="empty">{l('common.noData')}</td></tr>
               ) : (
                 activeDealers.map((d) => {
                   const s = computeDealerSummary(d, purchases, payments);
@@ -626,6 +751,8 @@ export default function Godaam() {
                       <td><strong>{d.name}</strong></td>
                       <td><PhoneLink phone={d.phone} /></td>
                       <td className="truncate-cell">{d.address ?? '—'}</td>
+                      <td>{formatBags(s.totalBagsOrdered)}</td>
+                      <td>{formatBags(s.totalBagsReceived)}</td>
                       <td>{formatKg(s.totalReceivedMaalKg)}</td>
                       <td className={s.totalPendingBags > 0 ? 'warn-text' : ''}>{formatBags(s.totalPendingBags)}</td>
                       <td className={s.totalPendingMaalKg > 0 ? 'warn-text' : ''}>{formatKg(s.totalPendingMaalKg)}</td>
@@ -634,6 +761,7 @@ export default function Godaam() {
                       <td className={s.currentDue > 0 ? 'warn-text' : ''}>{formatCurrency(s.currentDue)}</td>
                       <td className="action-cell">
                         <button type="button" className="btn sm" onClick={() => setDetailDealerId(d.id!)}>{l('godaam.viewHistory')}</button>
+                        <button type="button" className="btn sm" onClick={() => openEditDealer(d)}>{l('godaam.editDealer')}</button>
                         <button type="button" className="btn sm" onClick={() => { setDealerFilterId(String(d.id)); setPurchaseSearch(''); }}>{l('godaam.dealerHistory')}</button>
                         <button type="button" className="btn sm" onClick={() => handleDealerPayment(d.id!)}>{l('common.addPayment')}</button>
                         <button type="button" className="btn danger sm" onClick={() => handleDeleteDealer(d.id!)}>{l('godaam.deleteDealer')}</button>
@@ -647,7 +775,7 @@ export default function Godaam() {
         </div>
       </section>
 
-      <section className="card-section">
+      <section className="god-panel card-section animate-fade-in-up stagger-4">
         <div className="section-header-row">
           <SectionTitle k="godaam.purchaseHistory" />
           <ExportToolbar
@@ -669,7 +797,7 @@ export default function Godaam() {
           </div>
         )}
         <div className="table-wrap wide-table">
-          <table>
+          <table className="god-table">
             <thead>
               <tr>
                 <th><Label k="common.date" variant="compact" /></th>
@@ -706,8 +834,8 @@ export default function Godaam() {
                       <td>{dealer?.name ?? '—'}</td>
                       <td>{p.teaName}{p.notes ? <small className="row-note">{p.notes}</small> : null}</td>
                       <PurchaseShipmentCells p={p} />
-                      <td>{p.bagsOrdered}</td>
-                      <td>{p.bagsReceived}</td>
+                      <td className="god-num"><strong>{p.bagsOrdered}</strong></td>
+                      <td className="god-num"><strong>{p.bagsReceived}</strong></td>
                       <td className={pending > 0 ? 'warn-text' : ''}>{pending}</td>
                       <td>{formatKg(receivedMaal)}</td>
                       <td className={pendingMaal > 0 ? 'warn-text' : ''}>{formatKg(pendingMaal)}</td>
@@ -743,6 +871,8 @@ export default function Godaam() {
             <p><Label k="common.address" variant="compact" />: {detailDealer.address ?? '—'}</p>
 
             <div className="detail-grid">
+              <div className="detail-stat"><Label k="godaam.bagsOrderedTotal" variant="compact" /><strong>{formatBags(detailSummary.totalBagsOrdered)}</strong></div>
+              <div className="detail-stat"><Label k="godaam.bagsReceivedTotal" variant="compact" /><strong>{formatBags(detailSummary.totalBagsReceived)}</strong></div>
               <div className="detail-stat"><Label k="godaam.receivedMaal" variant="compact" /><strong>{formatKg(detailSummary.totalReceivedMaalKg)}</strong></div>
               <div className="detail-stat"><Label k="godaam.pendingBags" variant="compact" /><strong className={detailSummary.totalPendingBags > 0 ? 'warn-text' : ''}>{formatBags(detailSummary.totalPendingBags)}</strong></div>
               <div className="detail-stat"><Label k="godaam.pendingMaal" variant="compact" /><strong className={detailSummary.totalPendingMaalKg > 0 ? 'warn-text' : ''}>{formatKg(detailSummary.totalPendingMaalKg)}</strong></div>
@@ -806,6 +936,32 @@ export default function Godaam() {
                 </tbody>
               </table>
             </div>
+
+            <h4><Label k="godaam.activityHistory" variant="compact" /></h4>
+            {detailActivityRows.length === 0 ? (
+              <p className="empty">{l('common.noData')}</p>
+            ) : (
+              <div className="table-wrap payment-ledger-wrap">
+                <table className="payment-ledger-table">
+                  <thead>
+                    <tr>
+                      {DEALER_ACTIVITY_HISTORY_COLUMNS.map((c) => (
+                        <th key={c.key}>{c.header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailActivityRows.map((row, idx) => (
+                      <tr key={`${row.date}-${idx}`} className="is-dues-row">
+                        {DEALER_ACTIVITY_HISTORY_COLUMNS.map((c) => (
+                          <td key={c.key}>{row[c.key] ?? '—'}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             <h4><Label k="export.paymentHistory" variant="compact" /></h4>
             {detailPayments.length === 0 ? (
@@ -871,6 +1027,19 @@ export default function Godaam() {
                 }).catch(console.error)}
               >
                 📄 {l('export.historyPdf')}
+              </button>
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() => downloadDealerFullHistoryCsv({
+                  dealer: detailDealer,
+                  summary: detailSummary,
+                  purchases: detailPurchases,
+                  payments: detailPayments,
+                  shopProfile,
+                })}
+              >
+                📥 {l('export.historyCsv')}
               </button>
               <button type="button" className="btn danger" onClick={() => handleDeleteDealer(detailDealerId!)}>{l('godaam.deleteDealer')}</button>
               <button type="button" className="btn" onClick={() => setDetailDealerId(null)}>{l('common.cancel')}</button>
@@ -998,6 +1167,34 @@ export default function Godaam() {
               <div className="modal-actions">
                 <button type="submit" className="btn primary">{l('godaam.updatePurchase')}</button>
                 <button type="button" className="btn" onClick={() => setEditPurchaseId(null)}>{l('common.cancel')}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editDealerId && (
+        <div className="modal-overlay" onClick={() => setEditDealerId(null)}>
+          <div className="modal card" onClick={(e) => e.stopPropagation()}>
+            <SectionTitle k="godaam.editDealer" />
+            <form onSubmit={handleUpdateDealer}>
+              <div className="form-grid">
+                <FormField labelKey="godaam.dealerName" value={editDealerName} onChange={setEditDealerName} required />
+                <FormField labelKey="common.phone" value={editDealerPhone} onChange={setEditDealerPhone} />
+                <FormField labelKey="common.address" value={editDealerAddress} onChange={setEditDealerAddress} />
+                <FormField
+                  labelKey="godaam.openingDue"
+                  value={editDealerOpeningDue}
+                  onChange={setEditDealerOpeningDue}
+                  type="number"
+                  min={0}
+                  step={0.01}
+                />
+              </div>
+              {editDealerError && <p className="error-msg">{editDealerError}</p>}
+              <div className="modal-actions">
+                <button type="submit" className="btn primary">{l('common.save')}</button>
+                <button type="button" className="btn" onClick={() => setEditDealerId(null)}>{l('common.cancel')}</button>
               </div>
             </form>
           </div>

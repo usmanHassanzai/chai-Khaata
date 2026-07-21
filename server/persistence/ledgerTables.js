@@ -26,6 +26,19 @@ function toIso(value) {
   return new Date(value).toISOString();
 }
 
+function parseHistory(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 function maxUpdatedAt(rows) {
   let max = '';
   for (const row of rows) {
@@ -44,6 +57,7 @@ function dealerFromRow(row) {
     address: row.address || undefined,
     openingDue: Number(row.opening_due) || 0,
     removed: Boolean(row.removed),
+    history: parseHistory(row.history),
     updatedAt: toIso(row.updated_at),
   };
 }
@@ -58,6 +72,7 @@ function dealerToRow(userId, row) {
     address: row.address ?? '',
     opening_due: Number(row.openingDue) || 0,
     removed: Boolean(row.removed),
+    history: row.history ?? [],
     updated_at: toIso(row.updatedAt),
   };
 }
@@ -123,6 +138,7 @@ function purchaseFromRow(row) {
     lastPaymentAmount: row.last_payment_amount != null ? Number(row.last_payment_amount) : undefined,
     lastPaymentAt: row.last_payment_at ? toIso(row.last_payment_at) : undefined,
     paymentReceiptImage: row.payment_receipt_image || undefined,
+    history: parseHistory(row.history),
     updatedAt: toIso(row.updated_at),
   };
 }
@@ -158,6 +174,7 @@ function purchaseToRow(userId, row) {
     last_payment_amount: row.lastPaymentAmount ?? null,
     last_payment_at: row.lastPaymentAt ? toIso(row.lastPaymentAt) : null,
     payment_receipt_image: row.paymentReceiptImage ?? null,
+    history: row.history ?? [],
     updated_at: toIso(row.updatedAt),
   };
 }

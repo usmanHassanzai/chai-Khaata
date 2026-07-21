@@ -261,6 +261,7 @@ export function computeDealerSummary(
     0,
   );
   const totalBagsReceived = dealerPurchases.reduce((sum, p) => sum + p.bagsReceived, 0);
+  const totalBagsOrdered = dealerPurchases.reduce((sum, p) => sum + p.bagsOrdered, 0);
 
   return {
     dealer,
@@ -271,6 +272,7 @@ export function computeDealerSummary(
     totalPendingBags,
     totalPendingMaalKg,
     totalBagsReceived,
+    totalBagsOrdered,
   };
 }
 
@@ -324,6 +326,24 @@ export function formatDateTime(iso?: string): string {
   } catch {
     return iso;
   }
+}
+
+export function appendActivity<T extends { history?: import('../models/types').ActivityEntry[] }>(
+  entity: T,
+  entry: Omit<import('../models/types').ActivityEntry, 'id'> & { id?: string },
+): import('../models/types').ActivityEntry[] {
+  const next: import('../models/types').ActivityEntry = {
+    id: entry.id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    at: entry.at,
+    type: entry.type,
+    summary: entry.summary,
+    bagsOrdered: entry.bagsOrdered,
+    bagsReceived: entry.bagsReceived,
+    bagsAdded: entry.bagsAdded,
+    amount: entry.amount,
+    detail: entry.detail,
+  };
+  return [...(entity.history ?? []), next];
 }
 
 export function computeDashboardStats(

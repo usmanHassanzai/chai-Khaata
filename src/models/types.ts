@@ -5,6 +5,8 @@ export interface Dealer {
   address?: string;
   openingDue: number;
   removed?: boolean;
+  /** Append-only change log (edits show as new rows in history/PDF) */
+  history?: ActivityEntry[];
   updatedAt?: string;
 }
 
@@ -60,8 +62,22 @@ export interface Purchase {
   lastPaymentAt?: string;
   /** Receipt image for the latest payment */
   paymentReceiptImage?: string;
+  /** Append-only change log (receive/edit events as new history rows) */
+  history?: ActivityEntry[];
   updatedAt?: string;
 }
+
+export type ActivityEntry = {
+  id: string;
+  at: string;
+  type: 'create' | 'edit' | 'receive' | 'payment';
+  summary: string;
+  bagsOrdered?: number;
+  bagsReceived?: number;
+  bagsAdded?: number;
+  amount?: number;
+  detail?: string;
+};
 
 export interface Sale {
   id?: number;
@@ -142,6 +158,7 @@ export interface DealerSummary {
   totalPendingBags: number;
   totalPendingMaalKg: number;
   totalBagsReceived: number;
+  totalBagsOrdered: number;
 }
 
 export interface CustomerSummary {

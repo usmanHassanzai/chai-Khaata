@@ -1,0 +1,224 @@
+/* ═══════════════════════════════════════════
+   Godaam Pro — warehouse / dealer purchases
+   ═══════════════════════════════════════════ */
+
+.godaam-pro {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 1240px;
+}
+
+.god-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.15rem 1.35rem;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, var(--surface-2) 100%);
+  border: 1px solid rgba(235, 228, 216, 0.95);
+  box-shadow: 0 2px 14px rgba(26, 61, 47, 0.05);
+}
+
+.god-eyebrow {
+  margin: 0 0 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tea-primary);
+}
+
+.god-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 2.5vw, 1.8rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--tea-deep);
+  line-height: 1.15;
+}
+
+.god-title .urdu-text {
+  font-size: inherit;
+  color: var(--tea-deep);
+}
+
+.god-title .english-text {
+  font-family: var(--font);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.god-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.god-meta-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--text-light);
+}
+
+.god-forms-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.god-panel {
+  background: var(--surface);
+  border: 1px solid rgba(235, 228, 216, 0.95);
+  border-radius: 18px;
+  padding: 1.15rem 1.25rem;
+  box-shadow: 0 2px 12px rgba(26, 61, 47, 0.04);
+}
+
+.godaam-pro .form-card {
+  margin: 0;
+}
+
+.godaam-pro .card-section {
+  margin: 0;
+}
+
+.godaam-pro .section-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(235, 228, 216, 0.9);
+}
+
+.god-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.god-table th {
+  background: rgba(26, 61, 47, 0.06);
+  color: var(--tea-deep);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.65rem 0.55rem;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(235, 228, 216, 0.95);
+}
+
+.god-table td {
+  padding: 0.6rem 0.55rem;
+  border-bottom: 1px solid rgba(235, 228, 216, 0.7);
+  vertical-align: middle;
+}
+
+.god-table tbody tr:hover {
+  background: rgba(248, 250, 248, 0.9);
+}
+
+.god-table .god-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--tea-deep);
+  text-align: right;
+}
+
+.godaam-pro .action-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 12rem;
+}
+
+.godaam-pro .truncate-cell {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.godaam-pro .filter-chip-row {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.godaam-pro .search-input {
+  margin-bottom: 0.65rem;
+}
+
+.godaam-pro .detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.65rem;
+  margin: 1rem 0 1.25rem;
+}
+
+.godaam-pro .detail-stat {
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  background: linear-gradient(160deg, #f8faf8 0%, #f3f0ea 100%);
+  border: 1px solid rgba(235, 228, 216, 0.95);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.godaam-pro .detail-stat strong {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--tea-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+.godaam-pro .modal-wide {
+  max-width: min(1100px, 96vw);
+}
+
+.godaam-pro .payment-ledger-table th {
+  background: #245a42;
+  color: #fff;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.godaam-pro .payment-ledger-table tr.is-dues-row {
+  background: rgba(212, 168, 83, 0.08);
+}
+
+@media (max-width: 960px) {
+  .god-forms-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .god-topbar {
+    padding: 1rem;
+  }
+
+  .god-panel {
+    padding: 1rem;
+    border-radius: 14px;
+  }
+
+  .godaam-pro .action-cell {
+    min-width: 0;
+  }
+}

@@ -437,8 +437,10 @@ export function buildDealerExportRows(dealers: Dealer[], purchases: Purchase[], 
       name: d.name,
       phone: d.phone ?? '',
       address: d.address ?? '',
+      bagsOrdered: formatBags(s.totalBagsOrdered),
+      bagsReceived: formatBags(s.totalBagsReceived),
       receivedMaal: formatKg(s.totalReceivedMaalKg),
-      pendingBags: String(s.totalPendingBags),
+      pendingBags: formatBags(s.totalPendingBags),
       pendingMaal: formatKg(s.totalPendingMaalKg),
       totalPurchased: formatCurrency(s.totalPurchased),
       totalPaid: formatCurrency(s.totalPaid),
@@ -451,6 +453,8 @@ export const DEALER_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'name', header: 'Dealer' },
   { key: 'phone', header: 'Phone' },
   { key: 'address', header: 'Address' },
+  { key: 'bagsOrdered', header: 'Bags ordered' },
+  { key: 'bagsReceived', header: 'Bags received' },
   { key: 'receivedMaal', header: 'Received maal (kg)' },
   { key: 'pendingBags', header: 'Pending bags' },
   { key: 'pendingMaal', header: 'Pending maal (kg)' },
@@ -651,6 +655,16 @@ export const DEALER_MAAL_HISTORY_COLUMNS: ExportColumn[] = [
   { key: 'notes', header: 'Notes' },
 ];
 
+export const DEALER_ACTIVITY_HISTORY_COLUMNS: ExportColumn[] = [
+  { key: 'date', header: 'Date / Time' },
+  { key: 'type', header: 'Type' },
+  { key: 'tea', header: 'Tea / Dealer' },
+  { key: 'bagsOrdered', header: 'Bags Ordered' },
+  { key: 'bagsReceived', header: 'Bags Received' },
+  { key: 'bagsAdded', header: 'Bags Added' },
+  { key: 'summary', header: 'Summary' },
+];
+
 export const DEALER_PAYMENT_HISTORY_COLUMNS: ExportColumn[] = [
   { key: 'date', header: 'Date / Time' },
   { key: 'source', header: 'Type' },
@@ -660,6 +674,63 @@ export const DEALER_PAYMENT_HISTORY_COLUMNS: ExportColumn[] = [
   { key: 'totalPaid', header: 'Total Paid After' },
   { key: 'notes', header: 'Notes' },
 ];
+
+export function buildDealerActivityHistoryRows(dealer: Dealer, purchases: Purchase[]) {
+  type Row = Record<string, string | number> & { _sort: string };
+  const rows: Row[] = [];
+
+  for (const entry of dealer.history ?? []) {
+    rows.push({
+      _sort: entry.at,
+      date: formatDateTime(entry.at),
+      type: entry.type === 'edit' ? 'Dealer edit' : entry.type,
+      tea: dealer.name,
+      bagsOrdered: entry.bagsOrdered != null ? String(entry.bagsOrdered) : '—',
+      bagsReceived: entry.bagsReceived != null ? String(entry.bagsReceived) : '—',
+      bagsAdded: entry.bagsAdded != null ? String(entry.bagsAdded) : '—',
+      summary: entry.summary,
+    });
+  }
+
+  for (const p of purchases) {
+    for (const entry of p.history ?? []) {
+      rows.push({
+        _sort: entry.at,
+        date: formatDateTime(entry.at),
+        type:
+          entry.type === 'receive'
+            ? 'Receive maal'
+            : entry.type === 'edit'
+              ? 'Purchase edit'
+              : entry.type === 'create'
+                ? 'New purchase'
+                : entry.type,
+        tea: p.teaName,
+        bagsOrdered: entry.bagsOrdered != null ? String(entry.bagsOrdered) : String(p.bagsOrdered),
+        bagsReceived: entry.bagsReceived != null ? String(entry.bagsReceived) : String(p.bagsReceived),
+        bagsAdded: entry.bagsAdded != null ? String(entry.bagsAdded) : '—',
+        summary: entry.summary,
+      });
+    }
+    // Legacy receive (before history array) still shows as one row
+    if ((!(p.history?.length)) && p.lastReceivedAt && p.lastReceivedBags) {
+      rows.push({
+        _sort: p.lastReceivedAt,
+        date: formatDateTime(p.lastReceivedAt),
+        type: 'Receive maal',
+        tea: p.teaName,
+        bagsOrdered: String(p.bagsOrdered),
+        bagsReceived: String(p.bagsReceived),
+        bagsAdded: String(p.lastReceivedBags),
+        summary: `Received ${p.lastReceivedBags} bags (legacy record)`,
+      });
+    }
+  }
+
+  return rows
+    .sort((a, b) => b._sort.localeCompare(a._sort))
+    .map(({ _sort: _, ...row }) => row);
+}
 
 export function buildCustomerMaalHistoryRows(sales: Sale[]) {
   return [...sales]
@@ -1200,18 +1271,84 @@ export function printDealerFullHistory(options: {
     title: `Dealer Full History — ${dealer.name}`,
     subtitle: dealer.phone ?? undefined,
     shopProfile,
-    summaryLines: [
-      { label: 'Received Maal', value: formatKg(summary.totalReceivedMaalKg) },
-      { label: 'Pending Maal', value: formatKg(summary.totalPendingMaalKg) },
-      { label: 'Total Purchased', value: formatCurrency(summary.totalPurchased) },
-      { label: 'Total Paid', value: formatCurrency(summary.totalPaid) },
-      { label: 'Current Due', value: formatCurrency(summary.currentDue) },
-    ],
-    sections: [
-      { title: 'Maal / Purchase History', columns: DEALER_MAAL_HISTORY_COLUMNS, rows: buildDealerMaalHistoryRows(purchases) },
-      { title: 'Payment History', columns: DEALER_PAYMENT_HISTORY_COLUMNS, rows: buildDealerPaymentHistoryRows(purchases, payments) },
-    ],
+    summaryLines: dealerHistorySummaryLines(summary),
+    sections: dealerHistorySections(dealer, purchases, payments),
   });
+}
+
+function dealerHistorySections(
+  dealer: Dealer,
+  purchases: Purchase[],
+  payments: Payment[],
+): HistorySection[] {
+  return [
+    { title: 'Maal / Purchase History', columns: DEALER_MAAL_HISTORY_COLUMNS, rows: buildDealerMaalHistoryRows(purchases) },
+    { title: 'Modifications & Receipts', columns: DEALER_ACTIVITY_HISTORY_COLUMNS, rows: buildDealerActivityHistoryRows(dealer, purchases) },
+    { title: 'Payment History', columns: DEALER_PAYMENT_HISTORY_COLUMNS, rows: buildDealerPaymentHistoryRows(purchases, payments) },
+  ];
+}
+
+function dealerHistorySummaryLines(summary: ReturnType<typeof computeDealerSummary>) {
+  return [
+    { label: 'Bags Ordered', value: formatBags(summary.totalBagsOrdered) },
+    { label: 'Bags Received', value: formatBags(summary.totalBagsReceived) },
+    { label: 'Received Maal', value: formatKg(summary.totalReceivedMaalKg) },
+    { label: 'Pending Maal', value: formatKg(summary.totalPendingMaalKg) },
+    { label: 'Total Purchased', value: formatCurrency(summary.totalPurchased) },
+    { label: 'Total Paid', value: formatCurrency(summary.totalPaid) },
+    { label: 'Current Due', value: formatCurrency(summary.currentDue) },
+  ];
+}
+
+export function downloadHistoryCsv(options: {
+  filename: string;
+  title: string;
+  subtitle?: string;
+  shopName?: string;
+  summaryLines?: { label: string; value: string }[];
+  sections: HistorySection[];
+}) {
+  const { filename, title, subtitle, shopName, summaryLines, sections } = options;
+  const escape = (v: string | number) => {
+    const s = String(v ?? '');
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const lines: string[] = [];
+  lines.push(escape(shopName ?? 'Patiwala · Chai Khata'));
+  lines.push(escape(title));
+  if (subtitle) lines.push(escape(subtitle));
+  lines.push(escape(`Generated: ${stamp()}`));
+  lines.push('');
+
+  if (summaryLines?.length) {
+    lines.push(escape('SUMMARY'));
+    lines.push(['Metric', 'Value'].map(escape).join(','));
+    for (const line of summaryLines) {
+      lines.push([line.label, line.value].map(escape).join(','));
+    }
+    lines.push('');
+  }
+
+  for (const section of sections) {
+    lines.push(escape(section.title.toUpperCase()));
+    if (section.rows.length === 0) {
+      lines.push(escape('No entries'));
+      lines.push('');
+      continue;
+    }
+    lines.push(section.columns.map((c) => escape(c.header)).join(','));
+    for (const row of section.rows) {
+      lines.push(section.columns.map((c) => escape(row[c.key] ?? '')).join(','));
+    }
+    lines.push('');
+  }
+
+  const csv = `\uFEFF${lines.join('\n')}`;
+  downloadBlob(
+    filename.endsWith('.csv') ? filename : `${filename}.csv`,
+    new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+  );
 }
 
 export async function downloadDealerFullHistoryPdf(options: {
@@ -1222,22 +1359,32 @@ export async function downloadDealerFullHistoryPdf(options: {
   shopProfile?: ShopPrintProfile;
 }) {
   const { dealer, summary, purchases, payments, shopProfile } = options;
-  const stamp = new Date().toISOString().slice(0, 10);
+  const day = new Date().toISOString().slice(0, 10);
   await downloadHistoryPdf({
-    filename: `dealer-${dealer.name.replace(/\s+/g, '-')}-${stamp}`,
+    filename: `dealer-${dealer.name.replace(/\s+/g, '-')}-${day}`,
     title: `Dealer Full History — ${dealer.name}`,
     subtitle: dealer.phone ?? undefined,
     shopProfile,
-    summaryLines: [
-      { label: 'Received Maal', value: formatKg(summary.totalReceivedMaalKg) },
-      { label: 'Pending Maal', value: formatKg(summary.totalPendingMaalKg) },
-      { label: 'Total Purchased', value: formatCurrency(summary.totalPurchased) },
-      { label: 'Total Paid', value: formatCurrency(summary.totalPaid) },
-      { label: 'Current Due', value: formatCurrency(summary.currentDue) },
-    ],
-    sections: [
-      { title: 'Maal / Purchase History', columns: DEALER_MAAL_HISTORY_COLUMNS, rows: buildDealerMaalHistoryRows(purchases) },
-      { title: 'Payment History', columns: DEALER_PAYMENT_HISTORY_COLUMNS, rows: buildDealerPaymentHistoryRows(purchases, payments) },
-    ],
+    summaryLines: dealerHistorySummaryLines(summary),
+    sections: dealerHistorySections(dealer, purchases, payments),
+  });
+}
+
+export function downloadDealerFullHistoryCsv(options: {
+  dealer: Dealer;
+  summary: ReturnType<typeof computeDealerSummary>;
+  purchases: Purchase[];
+  payments: Payment[];
+  shopProfile?: ShopPrintProfile;
+}) {
+  const { dealer, summary, purchases, payments, shopProfile } = options;
+  const day = new Date().toISOString().slice(0, 10);
+  downloadHistoryCsv({
+    filename: `dealer-${dealer.name.replace(/\s+/g, '-')}-${day}`,
+    title: `Dealer Full History — ${dealer.name}`,
+    subtitle: dealer.phone ?? undefined,
+    shopName: shopProfile?.shopName,
+    summaryLines: dealerHistorySummaryLines(summary),
+    sections: dealerHistorySections(dealer, purchases, payments),
   });
 }
