@@ -87,7 +87,7 @@
 
 .page-container {
   position: relative;
-  z-index: 1;
+  /* No z-index — keeps modals above the fixed sidebar */
 }
 
 .page-enter {

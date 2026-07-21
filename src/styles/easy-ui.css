@@ -26,7 +26,6 @@
 
 .app-shell.easy-pos .page-container {
   position: relative;
-  z-index: 1;
 }
 
 /* Larger, clearer form controls */

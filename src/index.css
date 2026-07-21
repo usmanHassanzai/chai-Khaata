@@ -944,8 +944,10 @@ tfoot td {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 300;
+  /* Above fixed sidebar (200) and app header */
+  z-index: 1200;
   padding: 1rem;
+  padding-left: max(1rem, calc(var(--sidebar-w) + 1rem));
   animation: fadeOverlay 0.2s ease;
 }
 
@@ -961,6 +963,12 @@ tfoot td {
   overflow-y: auto;
   animation: modalIn 0.3s ease;
   border: 1px solid var(--cream-dark);
+  position: relative;
+  z-index: 1;
+}
+
+.modal.modal-wide {
+  max-width: min(960px, calc(100vw - var(--sidebar-w) - 2.5rem));
 }
 
 @keyframes modalIn {
@@ -1610,6 +1618,7 @@ tfoot td {
   .modal-overlay {
     align-items: flex-end;
     padding: 0;
+    padding-left: 0;
   }
   .modal {
     max-height: 92vh;
