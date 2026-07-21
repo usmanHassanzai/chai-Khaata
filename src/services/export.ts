@@ -23,10 +23,12 @@ import {
   purchasePreviousPaid,
   purchaseCurrentPayment,
   purchaseTotalPrice,
+  buildPurchaseChangeEvents,
   saleBagsSold,
   saleCurrentPayment,
   salePreviousPaid,
   saleTotal,
+  buildSaleChangeEvents,
 } from './calculations';
 import {
   buildPrintHeaderHtml,
@@ -366,42 +368,93 @@ export function printCustomerReceipt(options: {
   });
 }
 
-export function buildPurchaseExportRows(purchases: Purchase[], dealers: Dealer[]) {
-  return purchases.map((p) => ({
-    date: p.date,
-    dealer: dealerName(dealers, p.dealerId),
-    tea: p.teaName,
-    contNo: p.contNo ?? '',
-    lotNo: p.lotNo ?? '',
-    country: p.country ?? '',
-    grade: p.grade ?? '',
-    invoiceNumber: p.invoiceNumber ?? '',
-    bagsOrdered: String(p.bagsOrdered),
-    bagsReceived: String(p.bagsReceived),
-    pendingBags: String(purchasePendingBags(p)),
-    orderedMaal: formatKg(purchaseOrderedKg(p)),
-    receivedMaal: formatKg(purchaseNetWeight(p)),
-    pendingMaal: formatKg(purchasePendingBags(p) * p.bagWeightKg),
-    orderedAmount: formatCurrency(purchaseOrderedTotalPrice(p)),
-    previousPaid: formatCurrency(purchasePreviousPaid(p)),
-    currentPayment: formatCurrency(purchaseCurrentPayment(p)),
-    paidAmount: formatCurrency(p.depositPaid),
-    pendingAmount: formatCurrency(purchasePendingAmount(p)),
-    lastPayment: formatDateTime(p.lastPaymentAt),
-    previousReceived: p.previousBagsReceived != null ? String(p.previousBagsReceived) : '—',
-    currentReceived: p.lastReceivedBags != null ? String(p.lastReceivedBags) : '—',
-    previousDate: p.previousReceiveDate ?? '—',
-    currentDate: formatDateTime(p.lastReceivedAt),
-    standardKg: formatKg(p.bagsReceived * p.bagWeightKg),
-    missKg: formatKg(p.missWeightKg),
-    netKg: formatKg(purchaseNetWeight(p)),
-    totalPrice: formatCurrency(purchaseTotalPrice(p)),
-    notes: p.notes ?? '',
-  }));
+export function buildPurchaseExportRows(
+  purchases: Purchase[],
+  dealers: Dealer[],
+  payments: Payment[] = [],
+) {
+  const rows: Record<string, string | number>[] = [];
+  const sorted = [...purchases].sort((a, b) => b.date.localeCompare(a.date));
+
+  for (const p of sorted) {
+    const linked = payments.filter((pay) => pay.purchaseId === p.id);
+    rows.push({
+      date: p.date,
+      event: 'Purchase',
+      dealer: dealerName(dealers, p.dealerId),
+      tea: p.teaName,
+      contNo: p.contNo ?? '',
+      lotNo: p.lotNo ?? '',
+      country: p.country ?? '',
+      grade: p.grade ?? '',
+      invoiceNumber: p.invoiceNumber ?? '',
+      bagsOrdered: String(p.bagsOrdered),
+      bagsReceived: String(p.bagsReceived),
+      pendingBags: String(purchasePendingBags(p)),
+      orderedMaal: formatKg(purchaseOrderedKg(p)),
+      receivedMaal: formatKg(purchaseNetWeight(p)),
+      pendingMaal: formatKg(purchasePendingBags(p) * p.bagWeightKg),
+      orderedAmount: formatCurrency(purchaseOrderedTotalPrice(p)),
+      previousPaid: formatCurrency(purchasePreviousPaid(p)),
+      currentPayment: formatCurrency(purchaseCurrentPayment(p)),
+      paidAmount: formatCurrency(p.depositPaid),
+      pendingAmount: formatCurrency(purchasePendingAmount(p)),
+      lastPayment: formatDateTime(p.lastPaymentAt),
+      previousReceived: p.previousBagsReceived != null ? String(p.previousBagsReceived) : '—',
+      currentReceived: p.lastReceivedBags != null ? String(p.lastReceivedBags) : '—',
+      previousDate: p.previousReceiveDate ?? '—',
+      currentDate: formatDateTime(p.lastReceivedAt),
+      standardKg: formatKg(p.bagsReceived * p.bagWeightKg),
+      missKg: formatKg(p.missWeightKg),
+      netKg: formatKg(purchaseNetWeight(p)),
+      totalPrice: formatCurrency(purchaseTotalPrice(p)),
+      notes: p.notes ?? '',
+    });
+
+    for (const event of buildPurchaseChangeEvents(p, linked)) {
+      const eventLabel =
+        event.type === 'payment' ? 'Pay Pending' : event.type === 'receive' ? 'Receive Maal' : 'Edit';
+      rows.push({
+        date: formatDateTime(event.at),
+        event: eventLabel,
+        dealer: dealerName(dealers, p.dealerId),
+        tea: p.teaName,
+        contNo: '',
+        lotNo: '',
+        country: '',
+        grade: '',
+        invoiceNumber: '',
+        bagsOrdered: event.bagsOrdered != null ? String(event.bagsOrdered) : '—',
+        bagsReceived: event.bagsReceived != null ? String(event.bagsReceived) : '—',
+        pendingBags: event.bagsAdded != null ? `+${event.bagsAdded}` : '—',
+        orderedMaal: '—',
+        receivedMaal: '—',
+        pendingMaal: '—',
+        orderedAmount: '—',
+        previousPaid: event.previousPaid != null ? formatCurrency(event.previousPaid) : '—',
+        currentPayment: event.amount != null ? formatCurrency(event.amount) : '—',
+        paidAmount: event.balanceAfter != null ? formatCurrency(event.balanceAfter) : '—',
+        pendingAmount: '—',
+        lastPayment: event.type === 'payment' ? formatDateTime(event.at) : '—',
+        previousReceived: '—',
+        currentReceived: event.bagsAdded != null ? String(event.bagsAdded) : '—',
+        previousDate: '—',
+        currentDate: event.type === 'receive' ? formatDateTime(event.at) : '—',
+        standardKg: '—',
+        missKg: '—',
+        netKg: '—',
+        totalPrice: event.amount != null ? formatCurrency(event.amount) : '—',
+        notes: event.summary,
+      });
+    }
+  }
+
+  return rows;
 }
 
 export const PURCHASE_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'date', header: 'Date' },
+  { key: 'event', header: 'Type' },
   { key: 'dealer', header: 'Dealer' },
   { key: 'tea', header: 'Tea' },
   { key: 'contNo', header: 'Cont No' },
@@ -506,14 +559,20 @@ export function buildCustomerLedgerExportRows(
   customers: Customer[],
   purchases: Purchase[],
   allSales: Sale[],
+  payments: Payment[] = [],
 ) {
-  return ledger.map((s) => {
+  const rows: Record<string, string | number>[] = [];
+  const sorted = [...ledger].sort((a, b) => b.date.localeCompare(a.date));
+
+  for (const s of sorted) {
     const c = customers.find((x) => x.id === s.customerId);
     const profit = computeSaleProfit(s, purchases, allSales);
     const total = saleTotal(s);
     const dues = Math.max(0, total - s.amountReceived);
-    return {
+    const linked = payments.filter((p) => p.saleId === s.id);
+    rows.push({
       date: s.date,
+      event: 'Sale',
       customerId: c?.customerId ?? '—',
       name: c?.name ?? '—',
       phone: c?.phone ?? '',
@@ -529,12 +588,37 @@ export function buildCustomerLedgerExportRows(
       dues: formatCurrency(dues),
       lastPayment: formatDateTime(s.lastPaymentAt),
       notes: s.notes ?? '',
-    };
-  });
+    });
+
+    for (const event of buildSaleChangeEvents(s, linked)) {
+      rows.push({
+        date: formatDateTime(event.at),
+        event: event.type === 'payment' ? 'Pay Dues' : 'Edit',
+        customerId: c?.customerId ?? '—',
+        name: c?.name ?? '—',
+        phone: c?.phone ?? '',
+        tea: s.teaName,
+        bags: '—',
+        kg: '—',
+        salePrice: '—',
+        total: event.amount != null ? formatCurrency(event.amount) : '—',
+        profit: '—',
+        previousPaid: event.previousPaid != null ? formatCurrency(event.previousPaid) : '—',
+        currentPayment: event.amount != null ? formatCurrency(event.amount) : '—',
+        received: event.balanceAfter != null ? formatCurrency(event.balanceAfter) : '—',
+        dues: '—',
+        lastPayment: event.type === 'payment' ? formatDateTime(event.at) : '—',
+        notes: event.summary,
+      });
+    }
+  }
+
+  return rows;
 }
 
 export const CUSTOMER_LEDGER_COLUMNS: ExportColumn[] = [
   { key: 'date', header: 'Date' },
+  { key: 'event', header: 'Type' },
   { key: 'customerId', header: 'Customer ID' },
   { key: 'name', header: 'Name' },
   { key: 'phone', header: 'Phone' },
@@ -615,6 +699,7 @@ export type HistorySection = {
 
 export const CUSTOMER_MAAL_HISTORY_COLUMNS: ExportColumn[] = [
   { key: 'date', header: 'Date' },
+  { key: 'event', header: 'Type' },
   { key: 'tea', header: 'Tea' },
   { key: 'bags', header: 'Bags' },
   { key: 'kg', header: 'Kg' },
@@ -626,6 +711,14 @@ export const CUSTOMER_MAAL_HISTORY_COLUMNS: ExportColumn[] = [
   { key: 'remaining', header: 'Remaining' },
   { key: 'lastPayment', header: 'Last Payment' },
   { key: 'notes', header: 'Notes' },
+];
+
+export const CUSTOMER_ACTIVITY_HISTORY_COLUMNS: ExportColumn[] = [
+  { key: 'date', header: 'Date / Time' },
+  { key: 'type', header: 'Type' },
+  { key: 'tea', header: 'Tea / Customer' },
+  { key: 'amount', header: 'Amount' },
+  { key: 'summary', header: 'Summary' },
 ];
 
 export const CUSTOMER_PAYMENT_HISTORY_COLUMNS: ExportColumn[] = [
@@ -640,6 +733,7 @@ export const CUSTOMER_PAYMENT_HISTORY_COLUMNS: ExportColumn[] = [
 
 export const DEALER_MAAL_HISTORY_COLUMNS: ExportColumn[] = [
   { key: 'date', header: 'Date' },
+  { key: 'event', header: 'Type' },
   { key: 'tea', header: 'Tea' },
   { key: 'bagsOrdered', header: 'Bags Ordered' },
   { key: 'bagsReceived', header: 'Bags Received' },
@@ -704,7 +798,9 @@ export function buildDealerActivityHistoryRows(dealer: Dealer, purchases: Purcha
               ? 'Purchase edit'
               : entry.type === 'create'
                 ? 'New purchase'
-                : entry.type,
+                : entry.type === 'payment'
+                  ? 'Pay pending'
+                  : entry.type,
         tea: p.teaName,
         bagsOrdered: entry.bagsOrdered != null ? String(entry.bagsOrdered) : String(p.bagsOrdered),
         bagsReceived: entry.bagsReceived != null ? String(entry.bagsReceived) : String(p.bagsReceived),
@@ -732,27 +828,90 @@ export function buildDealerActivityHistoryRows(dealer: Dealer, purchases: Purcha
     .map(({ _sort: _, ...row }) => row);
 }
 
-export function buildCustomerMaalHistoryRows(sales: Sale[]) {
-  return [...sales]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .map((s) => {
-      const total = saleTotal(s);
-      const remaining = Math.max(0, total - s.amountReceived);
-      return {
-        date: s.date,
-        tea: s.teaName,
-        bags: formatBags(saleBagsSold(s)),
-        kg: formatKg(s.quantityKg),
-        salePrice: formatCurrency(s.salePricePerKg),
-        total: formatCurrency(total),
-        previousPaid: formatCurrency(salePreviousPaid(s)),
-        currentPayment: saleCurrentPayment(s) > 0 ? formatCurrency(saleCurrentPayment(s)) : '—',
-        totalPaid: formatCurrency(s.amountReceived),
-        remaining: formatCurrency(remaining),
-        lastPayment: formatDateTime(s.lastPaymentAt),
-        notes: s.notes ?? '',
-      };
+export function buildCustomerMaalHistoryRows(sales: Sale[], payments: Payment[] = []) {
+  const rows: Record<string, string | number>[] = [];
+  const sorted = [...sales].sort((a, b) => b.date.localeCompare(a.date));
+
+  for (const s of sorted) {
+    const total = saleTotal(s);
+    const remaining = Math.max(0, total - s.amountReceived);
+    const linked = payments.filter((p) => p.saleId === s.id);
+    rows.push({
+      date: s.date,
+      event: 'Sale',
+      tea: s.teaName,
+      bags: formatBags(saleBagsSold(s)),
+      kg: formatKg(s.quantityKg),
+      salePrice: formatCurrency(s.salePricePerKg),
+      total: formatCurrency(total),
+      previousPaid: formatCurrency(salePreviousPaid(s)),
+      currentPayment: saleCurrentPayment(s) > 0 ? formatCurrency(saleCurrentPayment(s)) : '—',
+      totalPaid: formatCurrency(s.amountReceived),
+      remaining: formatCurrency(remaining),
+      lastPayment: formatDateTime(s.lastPaymentAt),
+      notes: s.notes ?? '',
     });
+
+    for (const event of buildSaleChangeEvents(s, linked)) {
+      rows.push({
+        date: formatDateTime(event.at),
+        event: event.type === 'payment' ? 'Pay Dues' : 'Edit',
+        tea: s.teaName,
+        bags: '—',
+        kg: '—',
+        salePrice: '—',
+        total: event.amount != null ? formatCurrency(event.amount) : '—',
+        previousPaid: event.previousPaid != null ? formatCurrency(event.previousPaid) : '—',
+        currentPayment: event.amount != null ? formatCurrency(event.amount) : '—',
+        totalPaid: event.balanceAfter != null ? formatCurrency(event.balanceAfter) : '—',
+        remaining: '—',
+        lastPayment: event.type === 'payment' ? formatDateTime(event.at) : '—',
+        notes: event.summary,
+      });
+    }
+  }
+
+  return rows;
+}
+
+export function buildCustomerActivityHistoryRows(customer: Customer, sales: Sale[]) {
+  type Row = Record<string, string | number> & { _sort: string };
+  const rows: Row[] = [];
+
+  for (const entry of customer.history ?? []) {
+    rows.push({
+      _sort: entry.at,
+      date: formatDateTime(entry.at),
+      type: entry.type === 'edit' ? 'Customer edit' : entry.type === 'payment' ? 'Payment' : entry.type,
+      tea: customer.name,
+      amount: entry.amount != null ? formatCurrency(entry.amount) : '—',
+      summary: entry.summary,
+    });
+  }
+
+  for (const s of sales) {
+    for (const entry of s.history ?? []) {
+      rows.push({
+        _sort: entry.at,
+        date: formatDateTime(entry.at),
+        type:
+          entry.type === 'payment'
+            ? 'Pay dues'
+            : entry.type === 'edit'
+              ? 'Sale edit'
+              : entry.type === 'create'
+                ? 'New sale'
+                : entry.type,
+        tea: s.teaName,
+        amount: entry.amount != null ? formatCurrency(entry.amount) : '—',
+        summary: entry.summary,
+      });
+    }
+  }
+
+  return rows
+    .sort((a, b) => b._sort.localeCompare(a._sort))
+    .map(({ _sort: _, ...row }) => row);
 }
 
 export function buildCustomerPaymentHistoryRows(sales: Sale[], payments: Payment[]) {
@@ -862,11 +1021,15 @@ export function buildCustomerPaymentHistoryRows(sales: Sale[], payments: Payment
     .map(({ _sort: _, ...row }) => row);
 }
 
-export function buildDealerMaalHistoryRows(purchases: Purchase[]) {
-  return [...purchases]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .map((p) => ({
+export function buildDealerMaalHistoryRows(purchases: Purchase[], payments: Payment[] = []) {
+  const rows: Record<string, string | number>[] = [];
+  const sorted = [...purchases].sort((a, b) => b.date.localeCompare(a.date));
+
+  for (const p of sorted) {
+    const linked = payments.filter((pay) => pay.purchaseId === p.id);
+    rows.push({
       date: p.date,
+      event: 'Purchase',
       tea: p.teaName,
       bagsOrdered: String(p.bagsOrdered),
       bagsReceived: String(p.bagsReceived),
@@ -880,7 +1043,32 @@ export function buildDealerMaalHistoryRows(purchases: Purchase[]) {
       lastReceive: formatDateTime(p.lastReceivedAt),
       lastPayment: formatDateTime(p.lastPaymentAt),
       notes: p.notes ?? '',
-    }));
+    });
+
+    for (const event of buildPurchaseChangeEvents(p, linked)) {
+      const eventLabel =
+        event.type === 'payment' ? 'Pay Pending' : event.type === 'receive' ? 'Receive Maal' : 'Edit';
+      rows.push({
+        date: formatDateTime(event.at),
+        event: eventLabel,
+        tea: p.teaName,
+        bagsOrdered: event.bagsOrdered != null ? String(event.bagsOrdered) : '—',
+        bagsReceived: event.bagsReceived != null ? String(event.bagsReceived) : '—',
+        pendingBags: event.bagsAdded != null ? `+${event.bagsAdded}` : '—',
+        orderedMaal: '—',
+        receivedMaal: '—',
+        pendingMaal: '—',
+        orderedAmount: '—',
+        totalPaid: event.balanceAfter != null ? formatCurrency(event.balanceAfter) : event.amount != null ? formatCurrency(event.amount) : '—',
+        pendingAmount: '—',
+        lastReceive: event.type === 'receive' ? formatDateTime(event.at) : '—',
+        lastPayment: event.type === 'payment' ? formatDateTime(event.at) : '—',
+        notes: event.summary,
+      });
+    }
+  }
+
+  return rows;
 }
 
 export function buildDealerPaymentHistoryRows(purchases: Purchase[], payments: Payment[]) {
@@ -1219,16 +1407,8 @@ export function printCustomerFullHistory(options: {
     title: `Customer Full History — ${customer.name}`,
     subtitle: `${customer.customerId}${customer.phone ? ` · ${customer.phone}` : ''}`,
     shopProfile,
-    summaryLines: [
-      { label: 'Total Maal', value: formatKg(summary.totalMaalKg) },
-      { label: 'Total Sale', value: formatCurrency(summary.totalSale) },
-      { label: 'Total Received', value: formatCurrency(summary.receivingAmount) },
-      { label: 'Total Dues', value: formatCurrency(summary.pendingAmount) },
-    ],
-    sections: [
-      { title: 'Maal / Sales History', columns: CUSTOMER_MAAL_HISTORY_COLUMNS, rows: buildCustomerMaalHistoryRows(sales) },
-      { title: 'Payment History', columns: CUSTOMER_PAYMENT_HISTORY_COLUMNS, rows: buildCustomerPaymentHistoryRows(sales, payments) },
-    ],
+    summaryLines: customerHistorySummaryLines(summary),
+    sections: customerHistorySections(customer, sales, payments),
   });
 }
 
@@ -1240,23 +1420,55 @@ export async function downloadCustomerFullHistoryPdf(options: {
   shopProfile?: ShopPrintProfile;
 }) {
   const { customer, summary, sales, payments, shopProfile } = options;
-  const stamp = new Date().toISOString().slice(0, 10);
+  const day = new Date().toISOString().slice(0, 10);
   await downloadHistoryPdf({
-    filename: `customer-${customer.customerId}-${stamp}`,
+    filename: `customer-${customer.customerId}-${day}`,
     title: `Customer Full History — ${customer.name}`,
     subtitle: `${customer.customerId}${customer.phone ? ` · ${customer.phone}` : ''}`,
     shopProfile,
-    summaryLines: [
-      { label: 'Total Maal', value: formatKg(summary.totalMaalKg) },
-      { label: 'Total Sale', value: formatCurrency(summary.totalSale) },
-      { label: 'Total Received', value: formatCurrency(summary.receivingAmount) },
-      { label: 'Total Dues', value: formatCurrency(summary.pendingAmount) },
-    ],
-    sections: [
-      { title: 'Maal / Sales History', columns: CUSTOMER_MAAL_HISTORY_COLUMNS, rows: buildCustomerMaalHistoryRows(sales) },
-      { title: 'Payment History', columns: CUSTOMER_PAYMENT_HISTORY_COLUMNS, rows: buildCustomerPaymentHistoryRows(sales, payments) },
-    ],
+    summaryLines: customerHistorySummaryLines(summary),
+    sections: customerHistorySections(customer, sales, payments),
   });
+}
+
+export function downloadCustomerFullHistoryCsv(options: {
+  customer: Customer;
+  summary: ReturnType<typeof computeCustomerSummary>;
+  sales: Sale[];
+  payments: Payment[];
+  shopProfile?: ShopPrintProfile;
+}) {
+  const { customer, summary, sales, payments, shopProfile } = options;
+  const day = new Date().toISOString().slice(0, 10);
+  downloadHistoryCsv({
+    filename: `customer-${customer.customerId}-${day}`,
+    title: `Customer Full History — ${customer.name}`,
+    subtitle: `${customer.customerId}${customer.phone ? ` · ${customer.phone}` : ''}`,
+    shopName: shopProfile?.shopName,
+    summaryLines: customerHistorySummaryLines(summary),
+    sections: customerHistorySections(customer, sales, payments),
+  });
+}
+
+function customerHistorySummaryLines(summary: ReturnType<typeof computeCustomerSummary>) {
+  return [
+    { label: 'Total Maal', value: formatKg(summary.totalMaalKg) },
+    { label: 'Total Sale', value: formatCurrency(summary.totalSale) },
+    { label: 'Total Received', value: formatCurrency(summary.receivingAmount) },
+    { label: 'Total Dues', value: formatCurrency(summary.pendingAmount) },
+  ];
+}
+
+function customerHistorySections(
+  customer: Customer,
+  sales: Sale[],
+  payments: Payment[],
+): HistorySection[] {
+  return [
+    { title: 'Maal / Sales History', columns: CUSTOMER_MAAL_HISTORY_COLUMNS, rows: buildCustomerMaalHistoryRows(sales, payments) },
+    { title: 'Modifications & Payments', columns: CUSTOMER_ACTIVITY_HISTORY_COLUMNS, rows: buildCustomerActivityHistoryRows(customer, sales) },
+    { title: 'Payment History', columns: CUSTOMER_PAYMENT_HISTORY_COLUMNS, rows: buildCustomerPaymentHistoryRows(sales, payments) },
+  ];
 }
 
 export function printDealerFullHistory(options: {
@@ -1282,7 +1494,7 @@ function dealerHistorySections(
   payments: Payment[],
 ): HistorySection[] {
   return [
-    { title: 'Maal / Purchase History', columns: DEALER_MAAL_HISTORY_COLUMNS, rows: buildDealerMaalHistoryRows(purchases) },
+    { title: 'Maal / Purchase History', columns: DEALER_MAAL_HISTORY_COLUMNS, rows: buildDealerMaalHistoryRows(purchases, payments) },
     { title: 'Modifications & Receipts', columns: DEALER_ACTIVITY_HISTORY_COLUMNS, rows: buildDealerActivityHistoryRows(dealer, purchases) },
     { title: 'Payment History', columns: DEALER_PAYMENT_HISTORY_COLUMNS, rows: buildDealerPaymentHistoryRows(purchases, payments) },
   ];

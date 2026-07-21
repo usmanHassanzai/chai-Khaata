@@ -1,15 +1,15 @@
 /* ═══════════════════════════════════════════
-   Godaam Pro — warehouse / dealer purchases
+   Customers Pro — credit customers / sales ledger
    ═══════════════════════════════════════════ */
 
-.godaam-pro {
+.customers-pro {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   max-width: 1240px;
 }
 
-.god-topbar {
+.cust-topbar {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -22,7 +22,7 @@
   box-shadow: 0 2px 14px rgba(26, 61, 47, 0.05);
 }
 
-.god-eyebrow {
+.cust-eyebrow {
   margin: 0 0 0.25rem;
   font-size: 0.68rem;
   font-weight: 800;
@@ -31,7 +31,7 @@
   color: var(--tea-primary);
 }
 
-.god-title {
+.cust-title {
   margin: 0;
   font-family: var(--font-display);
   font-size: clamp(1.4rem, 2.5vw, 1.8rem);
@@ -41,19 +41,19 @@
   line-height: 1.15;
 }
 
-.god-title .urdu-text {
+.cust-title .urdu-text {
   font-size: inherit;
   color: var(--tea-deep);
 }
 
-.god-title .english-text {
+.cust-title .english-text {
   font-family: var(--font);
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-muted);
 }
 
-.god-meta {
+.cust-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -63,21 +63,21 @@
   color: var(--text-muted);
 }
 
-.god-meta-dot {
+.cust-meta-dot {
   width: 3px;
   height: 3px;
   border-radius: 50%;
   background: var(--text-light);
 }
 
-.god-forms-grid {
+.cust-forms-grid {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   gap: 1rem;
   align-items: start;
 }
 
-.god-panel {
+.cust-panel {
   background: var(--surface);
   border: 1px solid rgba(235, 228, 216, 0.95);
   border-radius: 18px;
@@ -85,15 +85,12 @@
   box-shadow: 0 2px 12px rgba(26, 61, 47, 0.04);
 }
 
-.godaam-pro .form-card {
+.customers-pro .form-card,
+.customers-pro .card-section {
   margin: 0;
 }
 
-.godaam-pro .card-section {
-  margin: 0;
-}
-
-.godaam-pro .section-header-row {
+.customers-pro .section-header-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -104,13 +101,13 @@
   border-bottom: 1px solid rgba(235, 228, 216, 0.9);
 }
 
-.god-table {
+.cust-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.84rem;
 }
 
-.god-table th {
+.cust-table th {
   background: rgba(26, 61, 47, 0.06);
   color: var(--tea-deep);
   font-size: 0.68rem;
@@ -123,53 +120,48 @@
   border-bottom: 1px solid rgba(235, 228, 216, 0.95);
 }
 
-.god-table td {
+.cust-table td {
   padding: 0.6rem 0.55rem;
   border-bottom: 1px solid rgba(235, 228, 216, 0.7);
   vertical-align: middle;
 }
 
-.god-table tbody tr:hover {
+.cust-table tbody tr:hover {
   background: rgba(248, 250, 248, 0.9);
 }
 
-.god-table .god-num {
+.cust-num {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   color: var(--tea-deep);
-  text-align: right;
 }
 
-.godaam-pro .action-cell {
+.customers-pro .action-cell {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  min-width: 12rem;
+  min-width: 11rem;
 }
 
-.godaam-pro .truncate-cell {
+.customers-pro .truncate-cell {
   max-width: 10rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.godaam-pro .filter-chip-row {
-  margin: 0.5rem 0 0.75rem;
-}
-
-.godaam-pro .search-input {
+.customers-pro .search-input {
   margin-bottom: 0.65rem;
 }
 
-.godaam-pro .detail-grid {
+.customers-pro .detail-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 0.65rem;
   margin: 1rem 0 1.25rem;
 }
 
-.godaam-pro .detail-stat {
+.customers-pro .detail-stat {
   padding: 0.75rem 0.85rem;
   border-radius: 12px;
   background: linear-gradient(160deg, #f8faf8 0%, #f3f0ea 100%);
@@ -179,30 +171,18 @@
   gap: 0.25rem;
 }
 
-.godaam-pro .detail-stat strong {
+.customers-pro .detail-stat strong {
   font-size: 1.05rem;
   font-weight: 800;
   color: var(--tea-deep);
   font-variant-numeric: tabular-nums;
 }
 
-.godaam-pro .modal-wide {
+.customers-pro .modal-wide {
   max-width: min(1100px, 96vw);
 }
 
-.godaam-pro .payment-ledger-table th {
-  background: #245a42;
-  color: #fff;
-  font-size: 0.68rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.godaam-pro .payment-ledger-table tr.is-dues-row {
-  background: rgba(212, 168, 83, 0.08);
-}
-
-.god-event-pill {
+.cust-event-pill {
   display: inline-flex;
   align-items: center;
   padding: 0.2rem 0.5rem;
@@ -214,53 +194,44 @@
   white-space: nowrap;
 }
 
-.god-event-pill.is-purchase {
+.cust-event-pill.is-sale {
   background: rgba(26, 61, 47, 0.1);
   color: var(--tea-deep);
 }
 
-.god-event-pill.is-payment {
+.cust-event-pill.is-payment {
   background: rgba(212, 168, 83, 0.22);
   color: #8a6418;
 }
 
-.god-event-pill.is-receive {
-  background: rgba(64, 145, 108, 0.18);
-  color: #1b6b45;
-}
-
-.god-event-pill.is-edit {
+.cust-event-pill.is-edit {
   background: rgba(90, 110, 130, 0.14);
   color: #3d4f5f;
 }
 
-.god-event-row {
+.cust-event-row {
   background: rgba(248, 250, 248, 0.95);
 }
 
-.god-event-row.is-payment {
+.cust-event-row.is-payment {
   background: rgba(212, 168, 83, 0.07);
 }
 
-.god-event-row.is-receive {
-  background: rgba(64, 145, 108, 0.06);
-}
-
-.god-event-row.is-edit {
+.cust-event-row.is-edit {
   background: rgba(90, 110, 130, 0.05);
 }
 
-.god-event-row td {
+.cust-event-row td {
   font-size: 0.8rem;
   color: var(--text-muted);
   border-bottom-style: dashed;
 }
 
-.god-event-indent {
+.cust-event-indent {
   padding-left: 1rem !important;
 }
 
-.god-event-summary {
+.cust-event-summary {
   display: block;
   max-width: 22rem;
   color: var(--tea-deep);
@@ -268,33 +239,45 @@
   line-height: 1.35;
 }
 
-.god-event-follow {
+.cust-event-follow {
   color: var(--tea-primary);
   font-weight: 700;
   text-align: center;
 }
 
-.god-purchase-row td {
+.cust-sale-row td {
   border-bottom-color: rgba(26, 61, 47, 0.12);
 }
 
+.customers-pro .payment-ledger-table th {
+  background: #245a42;
+  color: #fff;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.customers-pro .payment-ledger-table tr.is-dues-row {
+  background: rgba(212, 168, 83, 0.08);
+}
+
 @media (max-width: 960px) {
-  .god-forms-grid {
+  .cust-forms-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 640px) {
-  .god-topbar {
+  .cust-topbar {
     padding: 1rem;
   }
 
-  .god-panel {
+  .cust-panel {
     padding: 1rem;
     border-radius: 14px;
   }
 
-  .godaam-pro .action-cell {
+  .customers-pro .action-cell {
     min-width: 0;
   }
 }

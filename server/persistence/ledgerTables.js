@@ -88,6 +88,7 @@ function customerFromRow(row) {
     profilePicture: row.profile_picture || undefined,
     notes: row.notes || undefined,
     registerDate: row.register_date || undefined,
+    history: parseHistory(row.history),
     updatedAt: toIso(row.updated_at),
   };
 }
@@ -104,6 +105,7 @@ function customerToRow(userId, row) {
     profile_picture: row.profilePicture ?? null,
     notes: row.notes ?? '',
     register_date: row.registerDate ?? null,
+    history: row.history ?? [],
     updated_at: toIso(row.updatedAt),
   };
 }
@@ -198,6 +200,7 @@ function saleFromRow(row) {
     paymentReceiptImage: row.payment_receipt_image || undefined,
     previousAmountReceived: row.previous_amount_received != null ? Number(row.previous_amount_received) : undefined,
     lastPaymentAmount: row.last_payment_amount != null ? Number(row.last_payment_amount) : undefined,
+    history: parseHistory(row.history),
     updatedAt: toIso(row.updated_at),
   };
 }
@@ -222,6 +225,7 @@ function saleToRow(userId, row) {
     payment_receipt_image: row.paymentReceiptImage ?? null,
     previous_amount_received: row.previousAmountReceived ?? null,
     last_payment_amount: row.lastPaymentAmount ?? null,
+    history: row.history ?? [],
     updated_at: toIso(row.updatedAt),
   };
 }

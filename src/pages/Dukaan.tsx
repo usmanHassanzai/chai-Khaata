@@ -18,6 +18,7 @@ import {
   getStockForTea,
   getTeaNames,
   kgFromBags,
+  nowISO,
   profitPerKg,
   saleBagsSold,
   saleTotal,
@@ -144,6 +145,15 @@ export default function Dukaan() {
       amountReceived: Math.min(received, saleValue),
       billImage,
       notes: notes.trim() || undefined,
+      history: selectedCustomer
+        ? [{
+            id: `create-${Date.now()}`,
+            at: nowISO(),
+            type: 'create',
+            summary: `Sale created — ${formatKg(qty)} @ ${formatCurrency(price)}/kg`,
+            amount: Math.min(received, saleValue),
+          }]
+        : undefined,
     });
     setTeaName('');
     setBagsSold('');

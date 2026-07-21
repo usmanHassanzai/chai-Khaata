@@ -15,6 +15,7 @@ import './styles/interior-pro.css';
 import './styles/dashboard-pro.css';
 import './styles/dukaan-pro.css';
 import './styles/godaam-pro.css';
+import './styles/customers-pro.css';
 import './styles/export.css';
 import './styles/landing.css';
 

@@ -346,6 +346,224 @@ export function appendActivity<T extends { history?: import('../models/types').A
   return [...(entity.history ?? []), next];
 }
 
+/** Follow-up rows for a purchase (pay pending, receive, edit) — shown as next lines under the purchase. */
+export type PurchaseChangeEvent = {
+  id: string;
+  at: string;
+  type: 'payment' | 'receive' | 'edit';
+  summary: string;
+  bagsOrdered?: number;
+  bagsReceived?: number;
+  bagsAdded?: number;
+  amount?: number;
+  previousPaid?: number;
+  balanceAfter?: number;
+  receiptImage?: string;
+};
+
+export function buildPurchaseChangeEvents(
+  purchase: Purchase,
+  linkedPayments: Payment[] = [],
+): PurchaseChangeEvent[] {
+  const events: PurchaseChangeEvent[] = [];
+  const seenPaymentKeys = new Set<string>();
+  const paymentPool = [...linkedPayments];
+
+  function takeMatchingPayment(at: string, amount?: number): Payment | undefined {
+    const idx = paymentPool.findIndex((pay) => {
+      const payAt = pay.paidAt ?? pay.date;
+      if (amount != null && Math.abs(pay.amount - amount) > 0.01) return false;
+      return payAt.slice(0, 16) === at.slice(0, 16) || Math.abs(new Date(payAt).getTime() - new Date(at).getTime()) < 5000;
+    });
+    if (idx < 0) return undefined;
+    return paymentPool.splice(idx, 1)[0];
+  }
+
+  for (const entry of purchase.history ?? []) {
+    if (entry.type === 'create') continue;
+    if (entry.type !== 'payment' && entry.type !== 'receive' && entry.type !== 'edit') continue;
+    const matched = entry.type === 'payment' ? takeMatchingPayment(entry.at, entry.amount) : undefined;
+    if (entry.type === 'payment') {
+      seenPaymentKeys.add(`pay:${entry.at.slice(0, 16)}:${entry.amount ?? matched?.amount ?? 0}`);
+    }
+    events.push({
+      id: entry.id,
+      at: entry.at,
+      type: entry.type,
+      summary: entry.summary,
+      bagsOrdered: entry.bagsOrdered,
+      bagsReceived: entry.bagsReceived,
+      bagsAdded: entry.bagsAdded,
+      amount: entry.amount ?? matched?.amount,
+      previousPaid: matched?.previousPaid,
+      balanceAfter: matched?.balanceAfter,
+      receiptImage: matched?.receiptImage ?? (entry.type === 'receive' ? purchase.receiveReceiptImage : undefined),
+    });
+  }
+
+  for (const pay of paymentPool) {
+    const at = pay.paidAt ?? pay.date;
+    const key = `pay:${at.slice(0, 16)}:${pay.amount}`;
+    if (seenPaymentKeys.has(key)) continue;
+    seenPaymentKeys.add(key);
+    events.push({
+      id: `payment-${pay.id ?? at}`,
+      at,
+      type: 'payment',
+      summary: pay.note ?? `Payment ${formatCurrency(pay.amount)}`,
+      amount: pay.amount,
+      previousPaid: pay.previousPaid,
+      balanceAfter: pay.balanceAfter,
+      receiptImage: pay.receiptImage,
+    });
+  }
+
+  // Legacy receive before history existed
+  if (
+    (!(purchase.history?.length)) &&
+    purchase.lastReceivedAt &&
+    purchase.lastReceivedBags
+  ) {
+    events.push({
+      id: `legacy-receive-${purchase.id}`,
+      at: purchase.lastReceivedAt,
+      type: 'receive',
+      summary: `Received ${purchase.lastReceivedBags} bags`,
+      bagsOrdered: purchase.bagsOrdered,
+      bagsReceived: purchase.bagsReceived,
+      bagsAdded: purchase.lastReceivedBags,
+      receiptImage: purchase.receiveReceiptImage,
+    });
+  }
+
+  // Legacy payment before Payment rows / history
+  if (
+    purchase.lastPaymentAt &&
+    purchase.lastPaymentAmount &&
+    !seenPaymentKeys.has(`pay:${purchase.lastPaymentAt.slice(0, 16)}:${purchase.lastPaymentAmount}`)
+  ) {
+    const coveredByLinked = linkedPayments.some(
+      (p) =>
+        (p.paidAt ?? p.date).slice(0, 16) === purchase.lastPaymentAt!.slice(0, 16) &&
+        Math.abs(p.amount - purchase.lastPaymentAmount!) < 0.01,
+    );
+    if (!coveredByLinked) {
+      events.push({
+        id: `legacy-pay-${purchase.id}`,
+        at: purchase.lastPaymentAt,
+        type: 'payment',
+        summary: `Payment ${formatCurrency(purchase.lastPaymentAmount)}`,
+        amount: purchase.lastPaymentAmount,
+        previousPaid: purchase.previousDepositPaid,
+        balanceAfter: purchase.depositPaid,
+        receiptImage: purchase.paymentReceiptImage,
+      });
+    }
+  }
+
+  return events.sort((a, b) => a.at.localeCompare(b.at));
+}
+
+/** Follow-up rows for a sale (pay dues, edit) — shown as next lines under the sale. */
+export type SaleChangeEvent = {
+  id: string;
+  at: string;
+  type: 'payment' | 'edit';
+  summary: string;
+  amount?: number;
+  previousPaid?: number;
+  balanceAfter?: number;
+  receiptImage?: string;
+  kg?: number;
+  bags?: number;
+  salePrice?: number;
+};
+
+export function buildSaleChangeEvents(
+  sale: Sale,
+  linkedPayments: Payment[] = [],
+): SaleChangeEvent[] {
+  const events: SaleChangeEvent[] = [];
+  const paymentPool = [...linkedPayments];
+
+  function takeMatchingPayment(at: string, amount?: number): Payment | undefined {
+    const idx = paymentPool.findIndex((pay) => {
+      const payAt = pay.paidAt ?? pay.date;
+      if (amount != null && Math.abs(pay.amount - amount) > 0.01) return false;
+      return (
+        payAt.slice(0, 16) === at.slice(0, 16) ||
+        Math.abs(new Date(payAt).getTime() - new Date(at).getTime()) < 5000
+      );
+    });
+    if (idx < 0) return undefined;
+    return paymentPool.splice(idx, 1)[0];
+  }
+
+  const seenPaymentKeys = new Set<string>();
+
+  for (const entry of sale.history ?? []) {
+    if (entry.type === 'create') continue;
+    if (entry.type !== 'payment' && entry.type !== 'edit') continue;
+    const matched = entry.type === 'payment' ? takeMatchingPayment(entry.at, entry.amount) : undefined;
+    if (entry.type === 'payment') {
+      seenPaymentKeys.add(`pay:${entry.at.slice(0, 16)}:${entry.amount ?? matched?.amount ?? 0}`);
+    }
+    events.push({
+      id: entry.id,
+      at: entry.at,
+      type: entry.type,
+      summary: entry.summary,
+      amount: entry.amount ?? matched?.amount,
+      previousPaid: matched?.previousPaid,
+      balanceAfter: matched?.balanceAfter,
+      receiptImage: matched?.receiptImage,
+    });
+  }
+
+  for (const pay of paymentPool) {
+    const at = pay.paidAt ?? pay.date;
+    const key = `pay:${at.slice(0, 16)}:${pay.amount}`;
+    if (seenPaymentKeys.has(key)) continue;
+    seenPaymentKeys.add(key);
+    events.push({
+      id: `payment-${pay.id ?? at}`,
+      at,
+      type: 'payment',
+      summary: pay.note ?? `Payment ${formatCurrency(pay.amount)}`,
+      amount: pay.amount,
+      previousPaid: pay.previousPaid,
+      balanceAfter: pay.balanceAfter,
+      receiptImage: pay.receiptImage,
+    });
+  }
+
+  if (
+    sale.lastPaymentAt &&
+    sale.lastPaymentAmount &&
+    !seenPaymentKeys.has(`pay:${sale.lastPaymentAt.slice(0, 16)}:${sale.lastPaymentAmount}`)
+  ) {
+    const coveredByLinked = linkedPayments.some(
+      (p) =>
+        (p.paidAt ?? p.date).slice(0, 16) === sale.lastPaymentAt!.slice(0, 16) &&
+        Math.abs(p.amount - sale.lastPaymentAmount!) < 0.01,
+    );
+    if (!coveredByLinked) {
+      events.push({
+        id: `legacy-pay-${sale.id}`,
+        at: sale.lastPaymentAt,
+        type: 'payment',
+        summary: `Payment ${formatCurrency(sale.lastPaymentAmount)}`,
+        amount: sale.lastPaymentAmount,
+        previousPaid: sale.previousAmountReceived,
+        balanceAfter: sale.amountReceived,
+        receiptImage: sale.paymentReceiptImage,
+      });
+    }
+  }
+
+  return events.sort((a, b) => a.at.localeCompare(b.at));
+}
+
 export function computeDashboardStats(
   sales: Sale[],
   purchases: Purchase[],

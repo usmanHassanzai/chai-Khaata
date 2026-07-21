@@ -2,15 +2,16 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useState } from 'react';
 import FormField, { FieldLabel, ReadOnlyField } from '../components/FormField';
 import ImageUpload, { ImageThumb } from '../components/ImageUpload';
-import PageBanner from '../components/PageBanner';
 import PhoneLink from '../components/PhoneLink';
 import ExportToolbar from '../components/ExportToolbar';
 import TextAreaField from '../components/TextAreaField';
 import { db, nextCustomerId } from '../db/database';
 import { flushLedgerPushNow } from '../services/ledgerSync';
-import { Label, PageTitle, SectionTitle, useLabel } from '../i18n/useLabel';
+import { Label, SectionTitle, useLabel } from '../i18n/useLabel';
 import type { Customer, Sale } from '../models/types';
 import {
+  appendActivity,
+  buildSaleChangeEvents,
   computeCustomerSummary,
   DEFAULT_BAG_WEIGHT_KG,
   formatBags,
@@ -28,12 +29,16 @@ import {
   salePreviousPaid,
   saleTotal,
   todayISO,
+  type SaleChangeEvent,
 } from '../services/calculations';
 import {
+  buildCustomerActivityHistoryRows,
   buildCustomerLedgerExportRows,
   buildCustomerSummaryExportRows,
+  CUSTOMER_ACTIVITY_HISTORY_COLUMNS,
   CUSTOMER_LEDGER_COLUMNS,
   CUSTOMER_SUMMARY_COLUMNS,
+  downloadCustomerFullHistoryCsv,
   downloadCustomerFullHistoryPdf,
   printCustomerFullHistory,
   printCustomerReceipt,
@@ -47,6 +52,15 @@ function ReadOnlyDisplay({ labelKey, value }: { labelKey: string; value: string 
       <span className="readonly-value">{value}</span>
     </div>
   );
+}
+
+function saleEventTypeLabel(type: SaleChangeEvent['type'], l: (k: string) => string) {
+  if (type === 'payment') return l('customers.eventPayDues');
+  return l('customers.eventEdit');
+}
+
+function saleEventTypeClass(type: SaleChangeEvent['type']) {
+  return type === 'payment' ? 'is-payment' : 'is-edit';
 }
 
 export default function Customers() {
@@ -164,8 +178,8 @@ export default function Customers() {
   );
 
   const customerLedgerRows = useMemo(
-    () => buildCustomerLedgerExportRows(filteredLedger, customers, purchases, sales),
-    [filteredLedger, customers, purchases, sales],
+    () => buildCustomerLedgerExportRows(filteredLedger, customers, purchases, sales, payments),
+    [filteredLedger, customers, purchases, sales, payments],
   );
 
   async function refreshPreviewId() {
@@ -188,6 +202,12 @@ export default function Customers() {
       notes: notes.trim() || undefined,
       profilePicture,
       registerDate: registerDate || todayISO(),
+      history: [{
+        id: `create-${Date.now()}`,
+        at: nowISO(),
+        type: 'create',
+        summary: `Customer created (${customerId})`,
+      }],
     };
     await db.customers.add(customer);
     setName('');
@@ -205,7 +225,28 @@ export default function Customers() {
     const amount = parseFloat(amountStr);
     if (amount <= 0) return;
     const note = window.prompt(l('common.notes')) ?? undefined;
-    await db.payments.add({ date: todayISO(), customerId, amount, note: note || undefined });
+    const customer = customers.find((c) => c.id === customerId);
+    const paidAt = nowISO();
+    await db.transaction('rw', [db.customers, db.payments], async () => {
+      await db.payments.add({
+        date: todayISO(),
+        customerId,
+        amount,
+        paidAt,
+        note: note || undefined,
+      });
+      if (customer) {
+        await db.customers.update(customerId, {
+          history: appendActivity(customer, {
+            at: paidAt,
+            type: 'payment',
+            summary: note?.trim() ? `Payment ${formatCurrency(amount)} — ${note.trim()}` : `Payment ${formatCurrency(amount)}`,
+            amount,
+          }),
+        });
+      }
+    });
+    flushLedgerPushNow();
   }
 
   async function handleDelete(id: number) {
@@ -242,6 +283,17 @@ export default function Customers() {
   async function handleEditSave(e: React.FormEvent) {
     e.preventDefault();
     if (!editId || !editName.trim()) return;
+    const existing = customers.find((c) => c.id === editId);
+    if (!existing) return;
+    const summary = [
+      'Customer edited',
+      existing.name !== editName.trim() ? `name ${existing.name}→${editName.trim()}` : null,
+      (existing.phone ?? '') !== editPhone.trim() ? 'phone updated' : null,
+      (existing.address ?? '') !== editAddress.trim() ? 'address updated' : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
     await db.customers.update(editId, {
       name: editName.trim(),
       phone: editPhone.trim() || undefined,
@@ -249,8 +301,15 @@ export default function Customers() {
       registerDate: editRegisterDate || undefined,
       notes: editNotes.trim() || undefined,
       profilePicture: editPicture,
+      history: appendActivity(existing, {
+        at: nowISO(),
+        type: 'edit',
+        summary: summary || 'Customer details updated',
+        detail: summary,
+      }),
     });
     setEditId(null);
+    flushLedgerPushNow();
   }
 
   async function handleQuickSale(e: React.FormEvent) {
@@ -290,6 +349,13 @@ export default function Customers() {
       amountReceived: Math.min(received, total),
       billImage: saleBillImage,
       notes: saleNotes.trim() || undefined,
+      history: [{
+        id: `create-${Date.now()}`,
+        at: nowISO(),
+        type: 'create',
+        summary: `Sale created — ${formatKg(qty)} @ ${formatCurrency(price)}/kg`,
+        amount: Math.min(received, total),
+      }],
     });
 
     setSaleTea('');
@@ -350,6 +416,14 @@ export default function Customers() {
     const total = qty * price;
     const purchasePrice = resolvePurchasePrice(editSaleTea.trim(), editSaleExternalTea, editSaleManualPurchasePrice);
     const existing = sales.find((s) => s.id === editSaleId);
+    if (!existing) return;
+
+    const summary = [
+      'Sale edited',
+      `qty ${formatKg(existing.quantityKg)}→${formatKg(qty)}`,
+      `rate ${formatCurrency(existing.salePricePerKg)}→${formatCurrency(price)}`,
+      `paid ${formatCurrency(existing.amountReceived)}→${formatCurrency(Math.min(received, total))}`,
+    ].join(' · ');
 
     await db.sales.update(editSaleId, {
       date: editSaleDate,
@@ -359,10 +433,17 @@ export default function Customers() {
       bagWeightKg: bags > 0 ? bagWeight : undefined,
       salePricePerKg: price,
       purchasePricePerKg: purchasePrice || undefined,
-      customerId: existing?.customerId,
+      customerId: existing.customerId,
       amountReceived: Math.min(received, total),
       billImage: editSaleBillImage,
       notes: editSaleNotes.trim() || undefined,
+      history: appendActivity(existing, {
+        at: nowISO(),
+        type: 'edit',
+        summary,
+        amount: Math.min(received, total),
+        detail: summary,
+      }),
     });
     setEditSaleId(null);
     flushLedgerPushNow();
@@ -432,6 +513,13 @@ export default function Customers() {
         lastPaymentAt: paymentAt,
         paymentReceiptImage: payDuesReceipt ?? payDuesSale.paymentReceiptImage,
         notes,
+        history: appendActivity(payDuesSale, {
+          at: paymentAt,
+          type: 'payment',
+          summary: paymentLog,
+          amount: payAmount,
+          detail: `Previous paid ${formatCurrency(previousPaid)} → ${formatCurrency(newReceived)}`,
+        }),
       });
       await db.payments.add({
         date: todayISO(),
@@ -475,13 +563,32 @@ export default function Customers() {
     return p.note?.trim() || 'Direct payment';
   }
 
-  return (
-    <div className="page">
-      <PageBanner titleKey="customers.title" subtitle="Manage customer credit & sales" icon="👥" accent="blue" />
-      <PageTitle k="customers.title" />
+  const detailActivityRows = useMemo(() => {
+    if (!detailCustomer) return [];
+    return buildCustomerActivityHistoryRows(detailCustomer, detailSales);
+  }, [detailCustomer, detailSales]);
 
+  return (
+    <div className="page customers-page customers-pro">
+      <header className="cust-topbar animate-fade-in-up">
+        <div>
+          <p className="cust-eyebrow">Retail · Credit customers</p>
+          <h1 className="cust-title">
+            <Label k="customers.title" variant="stacked" />
+          </h1>
+          <p className="cust-meta">
+            <span>{customers.length} customers</span>
+            <span className="cust-meta-dot" aria-hidden />
+            <span>{sales.filter((s) => s.customerId != null).length} credit sales</span>
+            <span className="cust-meta-dot" aria-hidden />
+            <span>{todayISO()}</span>
+          </p>
+        </div>
+      </header>
+
+      <div className="cust-forms-grid">
       {/* ── ADD CUSTOMER ── */}
-      <form className="card form-card" onSubmit={handleAdd}>
+      <form className="cust-panel form-card animate-fade-in-up stagger-1" onSubmit={handleAdd}>
         <SectionTitle k="customers.addCustomer" />
         <div className="form-grid">
           <ReadOnlyDisplay labelKey="customers.customerId" value={previewId} />
@@ -496,7 +603,7 @@ export default function Customers() {
       </form>
 
       {/* ── QUICK SALE FOR CUSTOMER ── */}
-      <form className="card form-card" onSubmit={handleQuickSale}>
+      <form className="cust-panel form-card animate-fade-in-up stagger-2" onSubmit={handleQuickSale}>
         <SectionTitle k="customers.addSaleForCustomer" />
         <div className="form-grid">
           <label className="form-field">
@@ -575,9 +682,10 @@ export default function Customers() {
         {saleError && <p className="error-msg">{saleError}</p>}
         <button type="submit" className="btn primary" disabled={customers.length === 0}>{l('dukaan.saveSale')}</button>
       </form>
+      </div>
 
       {/* ── CUSTOMER SUMMARY TABLE ── */}
-      <section className="card-section">
+      <section className="cust-panel card-section animate-fade-in-up stagger-3">
         <div className="section-header-row">
           <SectionTitle k="customers.customerRecord" />
           <ExportToolbar
@@ -589,7 +697,7 @@ export default function Customers() {
           />
         </div>
         <div className="table-wrap wide-table">
-          <table>
+          <table className="cust-table">
             <thead>
               <tr>
                 <th><Label k="customers.customerId" variant="compact" /></th>
@@ -647,7 +755,7 @@ export default function Customers() {
       </section>
 
       {/* ── FULL SALES LEDGER (all fields visible) ── */}
-      <section className="card-section">
+      <section className="cust-panel card-section animate-fade-in-up stagger-4">
         <div className="section-header-row">
           <SectionTitle k="customers.allSalesLedger" />
           <ExportToolbar
@@ -661,10 +769,11 @@ export default function Customers() {
         </div>
         <input className="search-input" placeholder={l('common.search')} value={ledgerSearch} onChange={(e) => setLedgerSearch(e.target.value)} />
         <div className="table-wrap wide-table">
-          <table>
+          <table className="cust-table">
             <thead>
               <tr>
                 <th><Label k="common.date" variant="compact" /></th>
+                <th><Label k="customers.eventType" variant="compact" /></th>
                 <th><Label k="customers.customerId" variant="compact" /></th>
                 <th><Label k="customers.customerName" variant="compact" /></th>
                 <th><Label k="common.phone" variant="compact" /></th>
@@ -686,14 +795,17 @@ export default function Customers() {
             </thead>
             <tbody>
               {filteredLedger.length === 0 ? (
-                <tr><td colSpan={18} className="empty">{l('common.noData')}</td></tr>
+                <tr><td colSpan={19} className="empty">{l('common.noData')}</td></tr>
               ) : (
-                filteredLedger.map((s) => {
+                filteredLedger.flatMap((s) => {
                   const c = customerForSale(s);
                   const dues = saleDues(s);
-                  return (
-                    <tr key={s.id}>
+                  const linked = payments.filter((p) => p.saleId === s.id);
+                  const changeEvents = buildSaleChangeEvents(s, linked);
+                  const mainRow = (
+                    <tr key={s.id} className="cust-sale-row">
                       <td>{s.date}</td>
+                      <td><span className="cust-event-pill is-sale">{l('customers.eventSale')}</span></td>
                       <td>{c?.customerId ?? '—'}</td>
                       <td>{c?.name ?? '—'}</td>
                       <td><PhoneLink phone={c?.phone} /></td>
@@ -719,6 +831,30 @@ export default function Customers() {
                       </td>
                     </tr>
                   );
+                  const eventRows = changeEvents.map((event) => (
+                    <tr key={`${s.id}-${event.id}`} className={`cust-event-row ${saleEventTypeClass(event.type)}`}>
+                      <td>{formatDateTime(event.at)}</td>
+                      <td><span className={`cust-event-pill ${saleEventTypeClass(event.type)}`}>{saleEventTypeLabel(event.type, l)}</span></td>
+                      <td>{c?.customerId ?? '—'}</td>
+                      <td className="cust-event-indent">{c?.name ?? '—'}</td>
+                      <td>—</td>
+                      <td><span className="cust-event-summary">{event.summary}</span></td>
+                      <td>—</td>
+                      <td>—</td>
+                      <td>—</td>
+                      <td>{event.amount != null ? formatCurrency(event.amount) : '—'}</td>
+                      <td>{event.previousPaid != null ? formatCurrency(event.previousPaid) : '—'}</td>
+                      <td className="cust-num">{event.amount != null ? formatCurrency(event.amount) : '—'}</td>
+                      <td className="cust-num">{event.balanceAfter != null ? formatCurrency(event.balanceAfter) : '—'}</td>
+                      <td>—</td>
+                      <td>{event.type === 'payment' ? formatDateTime(event.at) : '—'}</td>
+                      <td>—</td>
+                      <td><ImageThumb src={event.receiptImage} /></td>
+                      <td className="truncate-cell">{event.summary}</td>
+                      <td className="cust-event-follow">↳</td>
+                    </tr>
+                  ));
+                  return [mainRow, ...eventRows];
                 })
               )}
             </tbody>
@@ -758,10 +894,11 @@ export default function Customers() {
 
             <h4><Label k="customers.salesToCustomer" variant="compact" /></h4>
             <div className="table-wrap wide-table">
-              <table>
+              <table className="cust-table">
                 <thead>
                   <tr>
                     <th><Label k="common.date" variant="compact" /></th>
+                    <th><Label k="customers.eventType" variant="compact" /></th>
                     <th><Label k="dukaan.teaName" variant="compact" /></th>
                     <th>kg</th>
                     <th><Label k="customers.bagsSold" variant="compact" /></th>
@@ -779,37 +916,91 @@ export default function Customers() {
                   </tr>
                 </thead>
                 <tbody>
-                  {detailSales.map((s) => {
-                    const dues = saleDues(s);
-                    return (
-                      <tr key={s.id}>
-                        <td>{s.date}</td>
-                        <td>{s.teaName}</td>
-                        <td>{s.quantityKg}</td>
-                        <td>{formatBags(saleBagsSold(s))}</td>
-                        <td>{formatCurrency(s.salePricePerKg)}</td>
-                        <td>{formatCurrency(saleTotal(s))}</td>
-                        <td>{formatCurrency(salePreviousPaid(s))}</td>
-                        <td>{saleCurrentPayment(s) > 0 ? formatCurrency(saleCurrentPayment(s)) : '—'}</td>
-                        <td>{formatCurrency(s.amountReceived)}</td>
-                        <td className={dues > 0 ? 'warn-text' : ''}>{formatCurrency(dues)}</td>
-                        <td>{formatDateTime(s.lastPaymentAt)}</td>
-                        <td><ImageThumb src={s.billImage} /></td>
-                        <td><ImageThumb src={s.paymentReceiptImage} /></td>
-                        <td>{s.notes ?? '—'}</td>
-                        <td className="action-cell">
-                          {dues > 0 && (
-                            <button type="button" className="btn sm primary" onClick={() => openPayDues(s)}>{l('customers.payDues')}</button>
-                          )}
-                          <button type="button" className="btn sm" onClick={() => openEditSale(s)}>{l('customers.editSale')}</button>
-                          <button type="button" className="btn sm" onClick={() => printCustomerSale(s)} title={l('customers.printReceipt')}>🖨</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {detailSales.length === 0 ? (
+                    <tr><td colSpan={16} className="empty">{l('common.noData')}</td></tr>
+                  ) : (
+                    detailSales.flatMap((s) => {
+                      const dues = saleDues(s);
+                      const linked = detailPayments.filter((p) => p.saleId === s.id);
+                      const changeEvents = buildSaleChangeEvents(s, linked);
+                      const mainRow = (
+                        <tr key={s.id} className="cust-sale-row">
+                          <td>{s.date}</td>
+                          <td><span className="cust-event-pill is-sale">{l('customers.eventSale')}</span></td>
+                          <td>{s.teaName}</td>
+                          <td>{s.quantityKg}</td>
+                          <td>{formatBags(saleBagsSold(s))}</td>
+                          <td>{formatCurrency(s.salePricePerKg)}</td>
+                          <td>{formatCurrency(saleTotal(s))}</td>
+                          <td>{formatCurrency(salePreviousPaid(s))}</td>
+                          <td>{saleCurrentPayment(s) > 0 ? formatCurrency(saleCurrentPayment(s)) : '—'}</td>
+                          <td>{formatCurrency(s.amountReceived)}</td>
+                          <td className={dues > 0 ? 'warn-text' : ''}>{formatCurrency(dues)}</td>
+                          <td>{formatDateTime(s.lastPaymentAt)}</td>
+                          <td><ImageThumb src={s.billImage} /></td>
+                          <td><ImageThumb src={s.paymentReceiptImage} /></td>
+                          <td>{s.notes ?? '—'}</td>
+                          <td className="action-cell">
+                            {dues > 0 && (
+                              <button type="button" className="btn sm primary" onClick={() => openPayDues(s)}>{l('customers.payDues')}</button>
+                            )}
+                            <button type="button" className="btn sm" onClick={() => openEditSale(s)}>{l('customers.editSale')}</button>
+                            <button type="button" className="btn sm" onClick={() => printCustomerSale(s)} title={l('customers.printReceipt')}>🖨</button>
+                          </td>
+                        </tr>
+                      );
+                      const eventRows = changeEvents.map((event) => (
+                        <tr key={`${s.id}-${event.id}`} className={`cust-event-row ${saleEventTypeClass(event.type)}`}>
+                          <td>{formatDateTime(event.at)}</td>
+                          <td><span className={`cust-event-pill ${saleEventTypeClass(event.type)}`}>{saleEventTypeLabel(event.type, l)}</span></td>
+                          <td><span className="cust-event-summary">{event.summary}</span></td>
+                          <td>—</td>
+                          <td>—</td>
+                          <td>—</td>
+                          <td>{event.amount != null ? formatCurrency(event.amount) : '—'}</td>
+                          <td>{event.previousPaid != null ? formatCurrency(event.previousPaid) : '—'}</td>
+                          <td className="cust-num">{event.amount != null ? formatCurrency(event.amount) : '—'}</td>
+                          <td className="cust-num">{event.balanceAfter != null ? formatCurrency(event.balanceAfter) : '—'}</td>
+                          <td>—</td>
+                          <td>{event.type === 'payment' ? formatDateTime(event.at) : '—'}</td>
+                          <td>—</td>
+                          <td><ImageThumb src={event.receiptImage} /></td>
+                          <td>{event.summary}</td>
+                          <td className="cust-event-follow">↳</td>
+                        </tr>
+                      ));
+                      return [mainRow, ...eventRows];
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
+
+            <h4><Label k="customers.activityHistory" variant="compact" /></h4>
+            {detailActivityRows.length === 0 ? (
+              <p className="empty">{l('common.noData')}</p>
+            ) : (
+              <div className="table-wrap payment-ledger-wrap">
+                <table className="payment-ledger-table">
+                  <thead>
+                    <tr>
+                      {CUSTOMER_ACTIVITY_HISTORY_COLUMNS.map((col) => (
+                        <th key={col.key}>{col.header}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailActivityRows.map((row, idx) => (
+                      <tr key={`${row.date}-${idx}`} className="is-dues-row">
+                        {CUSTOMER_ACTIVITY_HISTORY_COLUMNS.map((col) => (
+                          <td key={col.key}>{row[col.key] ?? '—'}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             <h4><Label k="customers.paymentsFromCustomer" variant="compact" /></h4>
             {detailPayments.length === 0 ? (
@@ -875,6 +1066,19 @@ export default function Customers() {
                 }).catch(console.error)}
               >
                 📄 {l('export.historyPdf')}
+              </button>
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() => downloadCustomerFullHistoryCsv({
+                  customer: detailCustomer,
+                  summary: detailSummary,
+                  sales: detailSales,
+                  payments: detailPayments,
+                  shopProfile,
+                })}
+              >
+                📥 {l('export.historyCsv')}
               </button>
               <button type="button" className="btn danger" onClick={() => handleDelete(detailCustomer.id!)}>{l('customers.deleteCustomer')}</button>
               <button type="button" className="btn" onClick={() => setDetailId(null)}>{l('common.cancel')}</button>

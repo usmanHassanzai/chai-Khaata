@@ -12,6 +12,7 @@ import type { Dealer, Purchase } from '../models/types';
 import {
   computeDealerSummary,
   appendActivity,
+  buildPurchaseChangeEvents,
   formatBags,
   formatCurrency,
   formatDateTime,
@@ -28,6 +29,7 @@ import {
   purchaseCurrentPayment,
   purchaseTotalPrice,
   todayISO,
+  type PurchaseChangeEvent,
 } from '../services/calculations';
 import { useShopPrintProfile } from '../hooks/useShopPrintProfile';
 import {
@@ -120,6 +122,82 @@ function PurchaseAmountCells({ p }: { p: Purchase }) {
       <td>{p.lastReceivedBags != null ? p.lastReceivedBags : '—'}</td>
       <td>{p.previousReceiveDate ?? '—'}</td>
       <td>{formatDateTime(p.lastReceivedAt)}</td>
+    </>
+  );
+}
+
+function eventTypeLabel(type: PurchaseChangeEvent['type'], l: (k: string) => string) {
+  if (type === 'payment') return l('godaam.eventPayPending');
+  if (type === 'receive') return l('godaam.eventReceive');
+  return l('godaam.eventEdit');
+}
+
+function eventTypeClass(type: PurchaseChangeEvent['type']) {
+  if (type === 'payment') return 'is-payment';
+  if (type === 'receive') return 'is-receive';
+  return 'is-edit';
+}
+
+function PurchaseEventAmountCells({ event }: { event: PurchaseChangeEvent }) {
+  if (event.type === 'payment') {
+    return (
+      <>
+        <td>—</td>
+        <td>—</td>
+        <td>{event.previousPaid != null ? formatCurrency(event.previousPaid) : '—'}</td>
+        <td className="god-num">{event.amount != null ? formatCurrency(event.amount) : '—'}</td>
+        <td className="god-num">{event.balanceAfter != null ? formatCurrency(event.balanceAfter) : '—'}</td>
+        <td>—</td>
+        <td>{formatDateTime(event.at)}</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+      </>
+    );
+  }
+  if (event.type === 'receive') {
+    return (
+      <>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        <td>—</td>
+        <td className="god-num">{event.bagsAdded != null ? event.bagsAdded : '—'}</td>
+        <td>—</td>
+        <td>{formatDateTime(event.at)}</td>
+      </>
+    );
+  }
+  return (
+    <>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+    </>
+  );
+}
+
+function EmptyShipmentCells() {
+  return (
+    <>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
     </>
   );
 }
@@ -340,8 +418,8 @@ export default function Godaam() {
   );
 
   const purchaseExportRows = useMemo(
-    () => buildPurchaseExportRows(filteredPurchases, dealers),
-    [filteredPurchases, dealers],
+    () => buildPurchaseExportRows(filteredPurchases, dealers, payments),
+    [filteredPurchases, dealers, payments],
   );
 
   async function handleAddDealer(e: React.FormEvent) {
@@ -583,6 +661,15 @@ export default function Godaam() {
         lastPaymentAt: paymentAt,
         paymentReceiptImage: payReceipt ?? payPurchase.paymentReceiptImage,
         notes,
+        history: appendActivity(payPurchase, {
+          at: paymentAt,
+          type: 'payment',
+          summary: paymentLog,
+          amount: amountNow,
+          bagsOrdered: payPurchase.bagsOrdered,
+          bagsReceived: payPurchase.bagsReceived,
+          detail: `Previous paid ${formatCurrency(prevPaid)} → ${formatCurrency(newPaid)}`,
+        }),
       });
       await db.payments.add({
         date: todayISO(),
@@ -627,7 +714,28 @@ export default function Godaam() {
     if (!amountStr) return;
     const amount = parseFloat(amountStr);
     if (amount <= 0) return;
-    await db.payments.add({ date: todayISO(), dealerId, amount });
+    const dealer = dealers.find((d) => d.id === dealerId);
+    const paidAt = nowISO();
+    await db.transaction('rw', [db.dealers, db.payments], async () => {
+      await db.payments.add({
+        date: todayISO(),
+        dealerId,
+        amount,
+        paidAt,
+        note: 'Direct dealer payment',
+      });
+      if (dealer) {
+        await db.dealers.update(dealerId, {
+          history: appendActivity(dealer, {
+            at: paidAt,
+            type: 'payment',
+            summary: `Payment ${formatCurrency(amount)}`,
+            amount,
+          }),
+        });
+      }
+    });
+    flushLedgerPushNow();
   }
 
   return (
@@ -801,6 +909,7 @@ export default function Godaam() {
             <thead>
               <tr>
                 <th><Label k="common.date" variant="compact" /></th>
+                <th><Label k="godaam.eventType" variant="compact" /></th>
                 <th><Label k="godaam.dealer" variant="compact" /></th>
                 <th><Label k="godaam.teaName" variant="compact" /></th>
                 <PurchaseShipmentHeaders />
@@ -820,17 +929,20 @@ export default function Godaam() {
             </thead>
             <tbody>
               {filteredPurchases.length === 0 ? (
-                <tr><td colSpan={30} className="empty">{l('common.noData')}</td></tr>
+                <tr><td colSpan={31} className="empty">{l('common.noData')}</td></tr>
               ) : (
-                filteredPurchases.map((p) => {
+                filteredPurchases.flatMap((p) => {
                   const dealer = dealers.find((d) => d.id === p.dealerId);
                   const pending = purchasePendingBags(p);
                   const pendingPay = purchasePendingAmount(p);
                   const receivedMaal = purchaseNetWeight(p);
                   const pendingMaal = pending * p.bagWeightKg;
-                  return (
-                    <tr key={p.id}>
+                  const linked = payments.filter((pay) => pay.purchaseId === p.id);
+                  const changeEvents = buildPurchaseChangeEvents(p, linked);
+                  const mainRow = (
+                    <tr key={p.id} className="god-purchase-row">
                       <td>{p.date}</td>
+                      <td><span className="god-event-pill is-purchase">{l('godaam.eventPurchase')}</span></td>
                       <td>{dealer?.name ?? '—'}</td>
                       <td>{p.teaName}{p.notes ? <small className="row-note">{p.notes}</small> : null}</td>
                       <PurchaseShipmentCells p={p} />
@@ -856,6 +968,30 @@ export default function Godaam() {
                       </td>
                     </tr>
                   );
+                  const eventRows = changeEvents.map((event) => (
+                    <tr key={`${p.id}-${event.id}`} className={`god-event-row ${eventTypeClass(event.type)}`}>
+                      <td>{formatDateTime(event.at)}</td>
+                      <td><span className={`god-event-pill ${eventTypeClass(event.type)}`}>{eventTypeLabel(event.type, l)}</span></td>
+                      <td className="god-event-indent">{dealer?.name ?? '—'}</td>
+                      <td>
+                        <span className="god-event-summary">{event.summary}</span>
+                      </td>
+                      <EmptyShipmentCells />
+                      <td className="god-num">{event.bagsOrdered != null ? event.bagsOrdered : '—'}</td>
+                      <td className="god-num">{event.bagsReceived != null ? event.bagsReceived : '—'}</td>
+                      <td>{event.bagsAdded != null ? `+${event.bagsAdded}` : '—'}</td>
+                      <td>—</td>
+                      <td>—</td>
+                      <PurchaseEventAmountCells event={event} />
+                      <td>—</td>
+                      <td>{event.amount != null ? formatCurrency(event.amount) : '—'}</td>
+                      <td>—</td>
+                      <td><ImageThumb src={event.type === 'payment' ? event.receiptImage : undefined} /></td>
+                      <td><ImageThumb src={event.type === 'receive' ? event.receiptImage : undefined} /></td>
+                      <td className="god-event-follow">↳</td>
+                    </tr>
+                  ));
+                  return [mainRow, ...eventRows];
                 })
               )}
             </tbody>
@@ -881,10 +1017,11 @@ export default function Godaam() {
 
             <h4><Label k="godaam.dealerHistory" variant="compact" /></h4>
             <div className="table-wrap wide-table">
-              <table>
+              <table className="god-table">
                 <thead>
                   <tr>
                     <th><Label k="common.date" variant="compact" /></th>
+                    <th><Label k="godaam.eventType" variant="compact" /></th>
                     <th><Label k="godaam.teaName" variant="compact" /></th>
                     <PurchaseShipmentHeaders />
                     <th><Label k="godaam.bagsOrderedCol" variant="compact" /></th>
@@ -901,18 +1038,21 @@ export default function Godaam() {
                 </thead>
                 <tbody>
                   {detailPurchases.length === 0 ? (
-                    <tr><td colSpan={27} className="empty">{l('common.noData')}</td></tr>
+                    <tr><td colSpan={28} className="empty">{l('common.noData')}</td></tr>
                   ) : (
-                    detailPurchases.map((p) => {
+                    detailPurchases.flatMap((p) => {
                       const pending = purchasePendingBags(p);
                       const pendingPay = purchasePendingAmount(p);
-                      return (
-                        <tr key={p.id}>
+                      const linked = detailPayments.filter((pay) => pay.purchaseId === p.id);
+                      const changeEvents = buildPurchaseChangeEvents(p, linked);
+                      const mainRow = (
+                        <tr key={p.id} className="god-purchase-row">
                           <td>{p.date}</td>
+                          <td><span className="god-event-pill is-purchase">{l('godaam.eventPurchase')}</span></td>
                           <td>{p.teaName}</td>
                           <PurchaseShipmentCells p={p} />
-                          <td>{p.bagsOrdered}</td>
-                          <td>{p.bagsReceived}</td>
+                          <td className="god-num"><strong>{p.bagsOrdered}</strong></td>
+                          <td className="god-num"><strong>{p.bagsReceived}</strong></td>
                           <td className={pending > 0 ? 'warn-text' : ''}>{pending}</td>
                           <td>{formatKg(purchaseNetWeight(p))}</td>
                           <td className={pending > 0 ? 'warn-text' : ''}>{formatKg(pending * p.bagWeightKg)}</td>
@@ -931,6 +1071,25 @@ export default function Godaam() {
                           </td>
                         </tr>
                       );
+                      const eventRows = changeEvents.map((event) => (
+                        <tr key={`${p.id}-${event.id}`} className={`god-event-row ${eventTypeClass(event.type)}`}>
+                          <td>{formatDateTime(event.at)}</td>
+                          <td><span className={`god-event-pill ${eventTypeClass(event.type)}`}>{eventTypeLabel(event.type, l)}</span></td>
+                          <td><span className="god-event-summary">{event.summary}</span></td>
+                          <EmptyShipmentCells />
+                          <td className="god-num">{event.bagsOrdered != null ? event.bagsOrdered : '—'}</td>
+                          <td className="god-num">{event.bagsReceived != null ? event.bagsReceived : '—'}</td>
+                          <td>{event.bagsAdded != null ? `+${event.bagsAdded}` : '—'}</td>
+                          <td>—</td>
+                          <td>—</td>
+                          <PurchaseEventAmountCells event={event} />
+                          <td>{event.amount != null ? formatCurrency(event.amount) : '—'}</td>
+                          <td><ImageThumb src={event.type === 'payment' ? event.receiptImage : undefined} /></td>
+                          <td><ImageThumb src={event.type === 'receive' ? event.receiptImage : undefined} /></td>
+                          <td className="god-event-follow">↳</td>
+                        </tr>
+                      ));
+                      return [mainRow, ...eventRows];
                     })
                   )}
                 </tbody>

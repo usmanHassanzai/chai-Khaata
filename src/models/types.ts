@@ -19,6 +19,8 @@ export interface Customer {
   profilePicture?: string;
   notes?: string;
   registerDate?: string;
+  /** Append-only change log (edits/payments show as new rows in history/PDF) */
+  history?: ActivityEntry[];
   updatedAt?: string;
 }
 
@@ -102,6 +104,8 @@ export interface Sale {
   previousAmountReceived?: number;
   /** Amount from the latest dues payment */
   lastPaymentAmount?: number;
+  /** Append-only change log (pay dues / edits as new history rows) */
+  history?: ActivityEntry[];
   updatedAt?: string;
 }
 
