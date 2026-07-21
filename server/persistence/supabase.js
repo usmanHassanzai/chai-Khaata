@@ -576,6 +576,15 @@ export async function sbReadLedger(userId, options = {}) {
   // Lite login should not run a heavy migrate; return slim snapshot if present
   const snapshot = await sbReadLedgerSnapshotOnly(userId);
   if (!snapshot) return null;
+
+  // Cursor-only rows use payload: {} — treat as empty so clients upload local data
+  const entityCount = (snapshot.dealers?.length || 0)
+    + (snapshot.customers?.length || 0)
+    + (snapshot.purchases?.length || 0)
+    + (snapshot.sales?.length || 0)
+    + (snapshot.payments?.length || 0);
+  if (entityCount === 0) return null;
+
   if (options.lite) return slimSnapshotImages(snapshot);
 
   const migrated = await sbMigrateSnapshotToTables(userId, snapshot);

@@ -103,14 +103,14 @@ function LayoutShell() {
     return () => document.body.classList.remove('scroll-lock');
   }, [mobileMenuOpen]);
 
-  /* After login, pages use quick sync — full download already happened at login */
+  /* One quiet refresh after login — do not re-sync on every page change */
   useEffect(() => {
     if (!cloudOn || !dbReady || !user || !db) return;
     const timer = window.setTimeout(() => {
       void syncLedgerWithCloud(db, user.id, { mode: 'quick' });
-    }, 150);
+    }, 400);
     return () => window.clearTimeout(timer);
-  }, [location.pathname, cloudOn, dbReady, user]);
+  }, [cloudOn, dbReady, user]);
 
   function renderNavLinks(
     links: readonly { readonly to: string; readonly key: string; readonly icon: string; readonly glyph?: string }[],

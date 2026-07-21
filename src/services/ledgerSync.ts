@@ -30,11 +30,12 @@ type LedgerChange =
   | { table: SyncableEntity; op: 'delete'; id: number | string; updatedAt: string };
 
 const LEGACY_UPDATED_AT_KEY = 'chai-khata-ledger-updated-at';
-/** Full login download can be large (receipts) — give mobile enough time */
-const SYNC_TIMEOUT_MS = 60000;
+/** Lite login should finish quickly; full image sync can wait in background */
+const SYNC_TIMEOUT_MS = 45000;
+const LITE_SYNC_TIMEOUT_MS = 20000;
 const PUSH_DEBOUNCE_MS = 40;
-const POLL_INTERVAL_MS = 10000;
-const FULL_SYNC_EVERY_N_POLLS = 3;
+const POLL_INTERVAL_MS = 20000;
+const FULL_SYNC_EVERY_N_POLLS = 6;
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -177,24 +178,37 @@ export function resetLedgerSyncState() {
   setStatus('idle');
 }
 
-async function syncRequest<T>(path: string, options: RequestInit = {}): Promise<{ ok: boolean; status: number; data: T }> {
+function snapshotRowCount(ledger: LedgerSnapshot | undefined | null) {
+  if (!ledger) return 0;
+  return (ledger.dealers?.length ?? 0)
+    + (ledger.customers?.length ?? 0)
+    + (ledger.purchases?.length ?? 0)
+    + (ledger.sales?.length ?? 0)
+    + (ledger.payments?.length ?? 0);
+}
+
+async function syncRequest<T>(
+  path: string,
+  options: RequestInit & { timeoutMs?: number } = {},
+): Promise<{ ok: boolean; status: number; data: T }> {
   const base = getCloudApiUrl();
   if (!base) throw new Error('Cloud sync not configured');
 
   const token = getStoredToken();
   if (!token) throw new Error('Login required for cloud sync');
 
+  const { timeoutMs, ...fetchOptions } = options;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> | undefined),
+    ...(fetchOptions.headers as Record<string, string> | undefined),
   };
   headers.Authorization = `Bearer ${token}`;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs ?? SYNC_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(`${base}${path}`, { ...options, headers, signal: controller.signal });
+    res = await fetch(`${base}${path}`, { ...fetchOptions, headers, signal: controller.signal });
   } finally {
     clearTimeout(timeout);
   }
@@ -422,7 +436,7 @@ export async function pullLedgerFromCloud(
       return { pulled: false as const, unchanged: true as const };
     }
 
-    if (res.data.empty || !res.data.ledger) {
+    if (res.data.empty || !res.data.ledger || snapshotRowCount(res.data.ledger) === 0) {
       setStatus('synced');
       return { pulled: false as const, empty: true as const };
     }
@@ -434,11 +448,16 @@ export async function pullLedgerFromCloud(
       || localCounts.sales > 0
       || localCounts.payments > 0;
     const remoteHasMore = serverHasMoreData(localCounts, res.data.ledger);
+    const localRicher = localHasMoreData(localCounts, res.data.ledger);
     const hasPendingLocal = pendingChanges.size > 0;
 
-    // Empty local (mobile login) always full-replaces — never soft-merge
-    if (!localHasData || (!hasPendingLocal && (!useSince || remoteHasMore))) {
+    // Empty device: full replace. Never wipe a richer local ledger with a smaller cloud copy.
+    if (!localHasData) {
       await importLedgerSnapshotFull(db, res.data.ledger, uid);
+    } else if (localRicher) {
+      await importLedgerSnapshot(db, res.data.ledger, uid);
+    } else if (!hasPendingLocal && remoteHasMore) {
+      await importLedgerSnapshot(db, res.data.ledger, uid);
     } else {
       await importLedgerSnapshot(db, res.data.ledger, uid);
     }
@@ -774,7 +793,7 @@ export async function downloadUserLedgerOnLogin(
   clearLocalSyncCursor(userId);
   setStatus('syncing');
 
-  const attempts = 3;
+  const attempts = 2;
   let lastError = '';
 
   for (let i = 0; i < attempts; i += 1) {
@@ -784,9 +803,9 @@ export async function downloadUserLedgerOnLogin(
         empty?: boolean;
         ledger?: LedgerSnapshot;
         lite?: boolean;
-      }>('/api/sync/ledger?lite=1');
+      }>('/api/sync/ledger?lite=1', { timeoutMs: LITE_SYNC_TIMEOUT_MS });
 
-      if (res.data.empty || !res.data.ledger) {
+      if (res.data.empty || !res.data.ledger || snapshotRowCount(res.data.ledger) === 0) {
         setStatus('synced');
         return { ok: true, pulled: false, rowCount: 0 };
       }
@@ -798,7 +817,9 @@ export async function downloadUserLedgerOnLogin(
       return { ok: true, pulled: true, rowCount };
     } catch (err) {
       lastError = err instanceof Error ? err.message : 'Download failed';
-      await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+      if (i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+      }
     }
   }
 
@@ -850,7 +871,8 @@ export async function syncLedgerWithCloud(
       }
 
       if (pull.empty) {
-        return { ok: true, uploaded: true };
+        // Brand-new account — nothing in cloud yet
+        return { ok: true, pulled: false, rowCount: 0 };
       }
       return { ok: true, pulled: pull.pulled };
     }
@@ -924,7 +946,7 @@ export function startLedgerSyncLoop(db: ChaiKhataDB, userId: string) {
   }
   visibilityHandler = () => {
     if (document.visibilityState === 'visible') {
-      void syncLedgerWithCloud(db, userId, { mode: 'full' });
+      void syncLedgerWithCloud(db, userId, { mode: 'quick' });
     } else {
       flushLedgerPushNow();
     }

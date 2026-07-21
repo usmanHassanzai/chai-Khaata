@@ -108,8 +108,13 @@ export async function initUserDatabase(userId: string): Promise<{ syncOk: boolea
   attachLedgerSyncHooks(db, userId);
   startLedgerSyncLoop(db, userId);
 
-  // 5) Quiet background full sync (includes images when network allows)
-  void syncLedgerWithCloud(db, userId, { mode: 'full' });
+  // 5) Quiet background sync (defer heavy full pass a bit so UI opens first)
+  window.setTimeout(() => {
+    void syncLedgerWithCloud(db, userId, { mode: 'quick' });
+  }, 800);
+  window.setTimeout(() => {
+    void syncLedgerWithCloud(db, userId, { mode: 'full' });
+  }, 5000);
 
   if (!result.ok) {
     console.warn('[Chai Khata] Login download failed:', result.error);

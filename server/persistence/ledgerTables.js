@@ -563,11 +563,32 @@ export async function sbWriteLedgerTables(userId, snapshot) {
     settings: stamp(snapshot.settings ?? []),
   };
 
+  const incomingCount = Object.values(batches).reduce((n, rows) => n + rows.length, 0);
+
   if (!(await ledgerTablesAvailable())) {
+    if (incomingCount === 0) {
+      const existing = await sbReadLedgerSnapshotOnly(userId);
+      const existingCount = (existing?.dealers?.length || 0)
+        + (existing?.customers?.length || 0)
+        + (existing?.purchases?.length || 0)
+        + (existing?.sales?.length || 0)
+        + (existing?.payments?.length || 0);
+      if (existingCount > 0) {
+        throw new Error('Refusing to wipe cloud ledger with an empty snapshot');
+      }
+    }
     return sbWriteLedgerSnapshot(userId, {
       ...snapshotPayload(snapshot),
       updatedAt,
     });
+  }
+
+  // Never delete-all when the incoming PUT is empty but cloud already has rows
+  if (incomingCount === 0) {
+    const existingCount = await sbCountLedgerRows(userId);
+    if (existingCount > 0) {
+      throw new Error('Refusing to wipe cloud ledger with an empty snapshot');
+    }
   }
 
   const entityKeys = Object.keys(batches);

@@ -11,6 +11,8 @@
     { "source": "/api/health", "destination": "/api/health" },
     { "source": "/api/auth/login", "destination": "/api/auth/login" },
     { "source": "/api/auth/config", "destination": "/api/auth/config" },
+    { "source": "/api/auth/me", "destination": "/api/auth/me" },
+    { "source": "/api/sync/ledger", "destination": "/api/sync/ledger" },
     { "source": "/api/cron/subscription-reminders", "destination": "/api/cron/subscription-reminders" },
     { "source": "/api/(.*)", "destination": "/api/server?__vercel_path=$1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }

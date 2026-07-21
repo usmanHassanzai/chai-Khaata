@@ -79,6 +79,14 @@ export function ensureCloudServerConfigured(): string {
     return url;
   }
 
+  // Local Vite: pin live cloud by default so phone + laptop share Supabase
+  if (import.meta.env.DEV && localStorage.getItem('chai-khata-use-local-api') !== '1') {
+    const url = readSavedCloudUrl() || envCloudUrl();
+    localStorage.setItem(CLOUD_URL_KEY, url);
+    localStorage.setItem(FORCE_LIVE_CLOUD_KEY, '1');
+    return url;
+  }
+
   return getCloudApiUrl();
 }
 
@@ -95,9 +103,13 @@ export function getCloudApiUrl(): string {
     return envCloudUrl();
   }
 
-  // Dev web: same-origin Vite proxy (local auth server)
+  // Dev web: prefer live cloud so laptop + phone share the same database.
+  // Opt into local API only with localStorage chai-khata-use-local-api=1
   if (import.meta.env.DEV && typeof window !== 'undefined') {
-    return normalizeUrl(window.location.origin);
+    if (localStorage.getItem('chai-khata-use-local-api') === '1') {
+      return normalizeUrl(window.location.origin);
+    }
+    return readSavedCloudUrl() || envCloudUrl();
   }
 
   // Live site (patiwala.pk, *.vercel.app): API is always same-origin.
