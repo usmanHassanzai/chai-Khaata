@@ -12,6 +12,8 @@
     { "source": "/api/auth/login", "destination": "/api/auth/login" },
     { "source": "/api/auth/config", "destination": "/api/auth/config" },
     { "source": "/api/auth/me", "destination": "/api/auth/me" },
+    { "source": "/api/auth/register", "destination": "/api/auth/register" },
+    { "source": "/api/auth/subscription-plans", "destination": "/api/auth/subscription-plans" },
     { "source": "/api/sync/ledger", "destination": "/api/sync/ledger" },
     { "source": "/api/cron/subscription-reminders", "destination": "/api/cron/subscription-reminders" },
     { "source": "/api/(.*)", "destination": "/api/server?__vercel_path=$1" },

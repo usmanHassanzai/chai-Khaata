@@ -5,9 +5,9 @@ import { setCors, sendJson } from '../server/httpUtils.js';
 const expressHandler = createVercelApiHandler();
 
 /**
- * Catch-all API. Sync is handled here too as a safety net (dedicated
- * /api/sync/ledger is preferred via vercel.json rewrite).
- * Express import is raced so a hung cold-start returns 503 instead of infinite hang.
+ * Catch-all API for laptop/admin routes.
+ * Critical auth/sync paths use dedicated functions; this covers the rest.
+ * NODEJS_HELPERS=0 is set in Vercel env recommendation — body stream stays readable.
  */
 export default async function handler(req, res) {
   setCors(res);
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
           const err = new Error('API cold start timed out');
           err.code = 'TIMEOUT';
           reject(err);
-        }, 25000);
+        }, 28000);
       }),
     ]);
   } catch (err) {
@@ -41,10 +41,12 @@ export default async function handler(req, res) {
     sendJson(res, err?.code === 'TIMEOUT' ? 503 : 500, {
       error: err?.code === 'TIMEOUT' ? 'TIMEOUT' : 'SERVER_ERROR',
       message: err?.code === 'TIMEOUT'
-        ? 'Server is warming up. Please retry in a few seconds.'
+        ? 'Server is warming up. Please refresh and try again.'
         : (err?.message || 'API unavailable'),
     });
   }
 }
 
-export const config = vercelFunctionConfig;
+export const config = {
+  ...vercelFunctionConfig,
+};

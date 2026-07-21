@@ -50,7 +50,11 @@ export default defineConfig({
       },
       includeAssets: ['favicon.svg'],
       workbox: {
+        cacheId: 'patiwala-ledger-v3',
         globPatterns: ['**/*.{js,css,html,ico,svg,woff,woff2}'],
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

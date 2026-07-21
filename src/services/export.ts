@@ -117,7 +117,8 @@ export async function downloadPdf(options: {
   const profile: ShopPrintProfile = options.shopProfile ?? {
     shopName: options.shopName || 'Chai Khata',
   };
-  const doc = new jsPDF({ orientation: columns.length > 6 ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+  const wide = columns.length > 8;
+  const doc = new jsPDF({ orientation: wide ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
   const { pageW, startY } = drawPdfBrandBar(doc);
 
   let y = startY;
@@ -171,26 +172,33 @@ export async function downloadPdf(options: {
   doc.text(`Generated: ${stamp()}`, 14, y);
   doc.setTextColor(0);
 
+  const fontSize = columns.length > 12 ? 6.5 : columns.length > 8 ? 7.5 : 8.5;
+
   autoTable(doc, {
     startY: y + 5,
     head: [columns.map((c) => c.header)],
     body: rows.map((row) => columns.map((c) => String(row[c.key] ?? ''))),
     styles: {
-      fontSize: 8,
-      cellPadding: 2.4,
+      fontSize,
+      cellPadding: 2,
       lineColor: [230, 224, 214],
       lineWidth: 0.2,
       textColor: [28, 43, 36],
       font: 'helvetica',
+      overflow: 'linebreak',
+      cellWidth: 'wrap',
+      valign: 'top',
     },
     headStyles: {
       fillColor: [26, 61, 47],
       textColor: 255,
       fontStyle: 'bold',
-      fontSize: 8,
+      fontSize: Math.max(fontSize, 7),
+      overflow: 'linebreak',
     },
     alternateRowStyles: { fillColor: [248, 245, 240] },
-    margin: { left: 14, right: 14, bottom: 18 },
+    margin: { left: 12, right: 12, bottom: 18 },
+    tableWidth: 'auto',
   });
 
   drawPdfFooter(doc, profile);
@@ -482,6 +490,294 @@ export const PURCHASE_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'totalPrice', header: 'Received value' },
   { key: 'notes', header: 'Notes' },
 ];
+
+/** Slim columns for readable PDF / print (full detail stays in CSV). */
+export const PURCHASE_PDF_COLUMNS: ExportColumn[] = [
+  { key: 'date', header: 'Date' },
+  { key: 'dealer', header: 'Dealer' },
+  { key: 'tea', header: 'Tea' },
+  { key: 'ref', header: 'Invoice / Cont' },
+  { key: 'bags', header: 'Bags R/O' },
+  { key: 'netKg', header: 'Net kg' },
+  { key: 'ordered', header: 'Order value' },
+  { key: 'paid', header: 'Paid' },
+  { key: 'pending', header: 'Pending' },
+];
+
+export function buildPurchasePdfRows(
+  purchases: Purchase[],
+  dealers: Dealer[],
+  payments: Payment[] = [],
+) {
+  return [...purchases]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((p) => {
+      const linked = payments.filter((pay) => pay.purchaseId === p.id);
+      const events = buildPurchaseChangeEvents(p, linked).slice(0, 3);
+      const ref = [p.invoiceNumber, p.contNo, p.lotNo].filter(Boolean).join(' · ') || '—';
+      const activity = events
+        .map((e) => {
+          const label = e.type === 'payment' ? 'Pay' : e.type === 'receive' ? 'Recv' : 'Edit';
+          return `${label}: ${e.summary}`;
+        })
+        .join(' | ');
+
+      return {
+        date: p.date,
+        dealer: dealerName(dealers, p.dealerId),
+        tea: p.teaName,
+        ref,
+        bags: `${p.bagsReceived}/${p.bagsOrdered}`,
+        pendingBags: String(purchasePendingBags(p)),
+        netKg: formatKg(purchaseNetWeight(p)),
+        ordered: formatCurrency(purchaseOrderedTotalPrice(p)),
+        paid: formatCurrency(p.depositPaid),
+        pending: formatCurrency(purchasePendingAmount(p)),
+        country: p.country ?? '',
+        grade: p.grade ?? '',
+        notes: p.notes ?? '',
+        activity,
+      };
+    });
+}
+
+/**
+ * Professional Godaam purchase ledger PDF — portrait A4, summary + readable table.
+ * Avoids the unreadable 28-column landscape dump on mobile.
+ */
+export async function downloadGodaamPurchasesPdf(options: {
+  filename: string;
+  title?: string;
+  subtitle?: string;
+  shopProfile?: ShopPrintProfile;
+  purchases: Purchase[];
+  dealers: Dealer[];
+  payments?: Payment[];
+}) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+
+  const {
+    filename,
+    purchases,
+    dealers,
+    payments = [],
+    subtitle,
+  } = options;
+  const profile: ShopPrintProfile = options.shopProfile ?? { shopName: 'Chai Khata' };
+  const title = options.title || 'Godaam — Purchase Ledger';
+  const rows = buildPurchasePdfRows(purchases, dealers, payments);
+
+  const totalOrdered = purchases.reduce((s, p) => s + purchaseOrderedTotalPrice(p), 0);
+  const totalPaid = purchases.reduce((s, p) => s + (p.depositPaid || 0), 0);
+  const totalPending = purchases.reduce((s, p) => s + purchasePendingAmount(p), 0);
+  const totalNetKg = purchases.reduce((s, p) => s + purchaseNetWeight(p), 0);
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const { pageW, startY } = drawPdfBrandBar(doc);
+
+  let y = startY;
+  let textX = 14;
+
+  if (profile.shopLogo) {
+    try {
+      const fmt = logoImageFormat(profile.shopLogo);
+      doc.addImage(profile.shopLogo, fmt, 14, y, 16, 16);
+      textX = 34;
+    } catch {
+      /* skip */
+    }
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(26, 61, 47);
+  doc.text(profile.shopName, textX, y + 6);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(100);
+  const contact = formatShopContact(profile);
+  if (contact) doc.text(contact, textX, y + 11);
+  y += 18;
+
+  doc.setDrawColor(212, 168, 83);
+  doc.setLineWidth(0.5);
+  doc.line(14, y, pageW - 14, y);
+  y += 8;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(26, 61, 47);
+  doc.text(title, 14, y);
+  y += 6;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(90);
+  doc.text(
+    `${subtitle ? `${subtitle}  ·  ` : ''}${rows.length} purchase${rows.length === 1 ? '' : 's'}  ·  ${stamp()}`,
+    14,
+    y,
+  );
+  y += 8;
+
+  // Summary strip
+  autoTable(doc, {
+    startY: y,
+    body: [[
+      `Purchases\n${rows.length}`,
+      `Net maal\n${formatKg(totalNetKg)}`,
+      `Order value\n${formatCurrency(totalOrdered)}`,
+      `Paid\n${formatCurrency(totalPaid)}`,
+      `Pending\n${formatCurrency(totalPending)}`,
+    ]],
+    theme: 'plain',
+    styles: {
+      fontSize: 8.5,
+      cellPadding: 3.2,
+      textColor: [26, 61, 47],
+      fontStyle: 'bold',
+      halign: 'center',
+      valign: 'middle',
+      lineWidth: 0.3,
+      lineColor: [212, 168, 83],
+      fillColor: [248, 245, 240],
+      overflow: 'linebreak',
+    },
+    margin: { left: 14, right: 14 },
+    tableWidth: pageW - 28,
+  });
+
+  y = ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y) + 8;
+
+  autoTable(doc, {
+    startY: y,
+    head: [PURCHASE_PDF_COLUMNS.map((c) => c.header)],
+    body: rows.map((row) => PURCHASE_PDF_COLUMNS.map((c) => String(row[c.key as keyof typeof row] ?? ''))),
+    styles: {
+      fontSize: 8,
+      cellPadding: 2.6,
+      lineColor: [230, 224, 214],
+      lineWidth: 0.2,
+      textColor: [28, 43, 36],
+      font: 'helvetica',
+      overflow: 'linebreak',
+      valign: 'top',
+    },
+    headStyles: {
+      fillColor: [26, 61, 47],
+      textColor: 255,
+      fontStyle: 'bold',
+      fontSize: 8,
+      overflow: 'linebreak',
+    },
+    alternateRowStyles: { fillColor: [248, 245, 240] },
+    columnStyles: {
+      0: { cellWidth: 22 },
+      1: { cellWidth: 28 },
+      2: { cellWidth: 24 },
+      3: { cellWidth: 28 },
+      4: { cellWidth: 18, halign: 'center' },
+      5: { cellWidth: 18, halign: 'right' },
+      6: { cellWidth: 22, halign: 'right' },
+      7: { cellWidth: 20, halign: 'right' },
+      8: { cellWidth: 22, halign: 'right' },
+    },
+    margin: { left: 14, right: 14, bottom: 18 },
+  });
+
+  // Detail cards for each purchase (readable on phone PDF viewers)
+  let detailY = ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y) + 10;
+  const pageH = doc.internal.pageSize.getHeight();
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(26, 61, 47);
+  if (detailY > pageH - 40) {
+    doc.addPage();
+    drawPdfBrandBar(doc);
+    detailY = 22;
+  }
+  doc.text('Purchase details', 14, detailY);
+  detailY += 4;
+
+  for (const p of [...purchases].sort((a, b) => b.date.localeCompare(a.date))) {
+    const linked = payments.filter((pay) => pay.purchaseId === p.id);
+    const events = buildPurchaseChangeEvents(p, linked);
+    const need = 28 + Math.min(events.length, 4) * 5;
+    if (detailY + need > pageH - 16) {
+      doc.addPage();
+      drawPdfBrandBar(doc);
+      detailY = 22;
+    }
+
+    const dName = dealerName(dealers, p.dealerId);
+    const meta = [
+      p.invoiceNumber ? `Inv ${p.invoiceNumber}` : null,
+      p.contNo ? `Cont ${p.contNo}` : null,
+      p.lotNo ? `Lot ${p.lotNo}` : null,
+      p.country || null,
+      p.grade ? `Grade ${p.grade}` : null,
+    ].filter(Boolean).join('  ·  ');
+
+    autoTable(doc, {
+      startY: detailY,
+      body: [
+        [
+          {
+            content: `${p.date}   ${dName}   —   ${p.teaName}`,
+            styles: { fontStyle: 'bold', fillColor: [26, 61, 47], textColor: 255, fontSize: 9 },
+            colSpan: 4,
+          },
+        ],
+        [
+          `Bags: ${p.bagsReceived} / ${p.bagsOrdered} (pending ${purchasePendingBags(p)})`,
+          `Net: ${formatKg(purchaseNetWeight(p))}`,
+          `Order: ${formatCurrency(purchaseOrderedTotalPrice(p))}`,
+          `Pending: ${formatCurrency(purchasePendingAmount(p))}`,
+        ],
+        [
+          {
+            content: meta || 'No shipment references',
+            colSpan: 4,
+            styles: { textColor: [90, 90, 90], fontSize: 7.5 },
+          },
+        ],
+        [
+          {
+            content: `Paid ${formatCurrency(p.depositPaid)}  ·  Received value ${formatCurrency(purchaseTotalPrice(p))}${p.notes ? `  ·  ${p.notes}` : ''}`,
+            colSpan: 4,
+            styles: { fontSize: 8 },
+          },
+        ],
+        ...events.slice(0, 5).map((e) => ([{
+          content: `${formatDateTime(e.at)}  ·  ${e.type === 'payment' ? 'Payment' : e.type === 'receive' ? 'Receive maal' : 'Edit'}  —  ${e.summary}`,
+          colSpan: 4,
+          styles: { fontSize: 7.5, textColor: [60, 70, 65] as [number, number, number], fillColor: [252, 250, 246] as [number, number, number] },
+        }])),
+      ],
+      theme: 'grid',
+      styles: {
+        fontSize: 8,
+        cellPadding: 2.2,
+        lineColor: [230, 224, 214],
+        lineWidth: 0.2,
+        overflow: 'linebreak',
+        valign: 'middle',
+      },
+      margin: { left: 14, right: 14 },
+      tableWidth: pageW - 28,
+    });
+
+    detailY = ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? detailY) + 6;
+  }
+
+  drawPdfFooter(doc, profile);
+  doc.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
+}
 
 export function buildDealerExportRows(dealers: Dealer[], purchases: Purchase[], payments: Payment[]) {
   return dealers.map((d) => {

@@ -28,15 +28,32 @@ async function bootstrap() {
   initAppPreferences();
   // Pin live cloud API for mobile APK / Capacitor (https://patiwala.pk)
   ensureCloudServerConfigured();
-  // In production, force service worker to pick up new sync fixes
+
   if ('serviceWorker' in navigator) {
     try {
       const regs = await navigator.serviceWorker.getRegistrations();
       if (import.meta.env.DEV) {
         await Promise.all(regs.map((r) => r.unregister()));
       } else {
-        await Promise.all(regs.map((r) => r.update()));
+        // Force update so laptop picks up new API routes (old SW cached hanging /api/server)
+        await Promise.all(regs.map(async (r) => {
+          await r.update();
+          if (r.waiting) r.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }));
       }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (typeof window !== 'undefined' && 'caches' in window) {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys
+          .filter((k) => /workbox|precache|patiwala-ledger-v[12]/i.test(k))
+          .map((k) => caches.delete(k)),
+      );
     } catch {
       /* ignore */
     }

@@ -6,7 +6,6 @@ import {
   runWithSuppressedAutoPush,
   startLedgerSyncLoop,
   stopLedgerSyncLoop,
-  syncLedgerWithCloud,
   touchLocalLedgerUpdatedAt,
   getLocalLedgerUpdatedAt,
 } from '../services/ledgerSync';
@@ -109,9 +108,13 @@ async function openLocalDatabase(userId: string) {
 }
 
 async function pullCloudLedger(userId: string) {
+  if (!isCloudSyncEnabled()) {
+    useProductionCloudServer();
+  }
   if (!isCloudSyncEnabled()) return { syncOk: true as const, rowCount: 0 };
 
   clearLocalSyncCursor(userId);
+  // Import from cloud + export local so laptop and phone share one database
   let result = await downloadUserLedgerOnLogin(db, userId);
   if (!result.ok) {
     useProductionCloudServer();
@@ -121,12 +124,8 @@ async function pullCloudLedger(userId: string) {
 
   bumpDbGeneration();
 
-  window.setTimeout(() => {
-    void syncLedgerWithCloud(db, userId, { mode: 'quick' });
-  }, 1500);
-
   if (!result.ok) {
-    console.warn('[Chai Khata] Login download failed:', result.error);
+    console.warn('[Chai Khata] Login sync failed:', result.error);
     return { syncOk: false as const, syncError: result.error, rowCount: 0 };
   }
 

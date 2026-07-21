@@ -35,13 +35,16 @@ import { useShopPrintProfile } from '../hooks/useShopPrintProfile';
 import {
   buildDealerExportRows,
   buildPurchaseExportRows,
+  buildPurchasePdfRows,
   buildDealerActivityHistoryRows,
   DEALER_EXPORT_COLUMNS,
   DEALER_ACTIVITY_HISTORY_COLUMNS,
   downloadDealerFullHistoryPdf,
   downloadDealerFullHistoryCsv,
+  downloadGodaamPurchasesPdf,
   printDealerFullHistory,
   PURCHASE_EXPORT_COLUMNS,
+  PURCHASE_PDF_COLUMNS,
 } from '../services/export';
 
 function cell(value?: string) {
@@ -417,6 +420,11 @@ export default function Godaam() {
 
   const purchaseExportRows = useMemo(
     () => buildPurchaseExportRows(filteredPurchases, dealers, payments),
+    [filteredPurchases, dealers, payments],
+  );
+
+  const purchasePdfRows = useMemo(
+    () => buildPurchasePdfRows(filteredPurchases, dealers, payments),
     [filteredPurchases, dealers, payments],
   );
 
@@ -886,10 +894,21 @@ export default function Godaam() {
           <SectionTitle k="godaam.purchaseHistory" />
           <ExportToolbar
             filenamePrefix="godaam-purchases"
-            title="Godaam — Purchase History"
+            title="Godaam — Purchase Ledger"
             subtitle={purchaseSearch ? `Search: ${purchaseSearch}` : undefined}
             columns={PURCHASE_EXPORT_COLUMNS}
             rows={purchaseExportRows}
+            pdfColumns={PURCHASE_PDF_COLUMNS}
+            pdfRows={purchasePdfRows}
+            onPdf={() => downloadGodaamPurchasesPdf({
+              filename: `godaam-purchases-${new Date().toISOString().slice(0, 10)}`,
+              title: 'Godaam — Purchase Ledger',
+              subtitle: purchaseSearch ? `Search: ${purchaseSearch}` : undefined,
+              shopProfile,
+              purchases: filteredPurchases,
+              dealers,
+              payments,
+            })}
             compact
           />
         </div>

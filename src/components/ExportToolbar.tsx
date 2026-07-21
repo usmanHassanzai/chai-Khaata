@@ -15,6 +15,11 @@ type ExportToolbarProps = {
   subtitle?: string;
   columns: ExportColumn[];
   rows: Record<string, string | number>[];
+  /** Optional narrower columns for PDF / print (CSV still uses `columns`). */
+  pdfColumns?: ExportColumn[];
+  pdfRows?: Record<string, string | number>[];
+  /** Custom PDF builder (e.g. professional Godaam report). */
+  onPdf?: () => void | Promise<void>;
   jsonData?: unknown;
   disabled?: boolean;
   compact?: boolean;
@@ -26,6 +31,9 @@ export default function ExportToolbar({
   subtitle,
   columns,
   rows,
+  pdfColumns,
+  pdfRows,
+  onPdf,
   jsonData,
   disabled,
   compact,
@@ -33,7 +41,7 @@ export default function ExportToolbar({
   const shopProfile = useShopPrintProfile();
   const stamp = new Date().toISOString().slice(0, 10);
   const base = `${filenamePrefix}-${stamp}`;
-  const noData = rows.length === 0;
+  const noData = rows.length === 0 && !(pdfRows && pdfRows.length > 0);
   const blocked = disabled || noData;
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -54,7 +62,18 @@ export default function ExportToolbar({
 
   async function exportPdf() {
     try {
-      await downloadPdf({ filename: base, title, shopProfile, subtitle, columns, rows });
+      if (onPdf) {
+        await onPdf();
+      } else {
+        await downloadPdf({
+          filename: base,
+          title,
+          shopProfile,
+          subtitle,
+          columns: pdfColumns ?? columns,
+          rows: pdfRows ?? rows,
+        });
+      }
     } catch (err) {
       console.error('[Chai Khata] PDF export failed:', err);
     }
@@ -62,7 +81,13 @@ export default function ExportToolbar({
   }
 
   function exportPrint() {
-    printTable({ title, shopProfile, subtitle, columns, rows });
+    printTable({
+      title,
+      shopProfile,
+      subtitle,
+      columns: pdfColumns ?? columns,
+      rows: pdfRows ?? rows,
+    });
     setMenuOpen(false);
   }
 
@@ -79,7 +104,7 @@ export default function ExportToolbar({
         <button type="button" className="btn sm" disabled={blocked} onClick={exportCsv} title="Download CSV">
           📥 <Label k="export.csv" variant="compact" />
         </button>
-        <button type="button" className="btn sm" disabled={blocked} onClick={exportPdf} title="Download PDF">
+        <button type="button" className="btn sm" disabled={blocked} onClick={() => void exportPdf()} title="Download PDF">
           📄 <Label k="export.pdf" variant="compact" />
         </button>
         <button type="button" className="btn sm" disabled={blocked} onClick={exportPrint} title="Print">
@@ -104,7 +129,7 @@ export default function ExportToolbar({
         </button>
         {menuOpen && (
           <div className="export-mobile-sheet" role="menu">
-            <button type="button" className="export-sheet-item" role="menuitem" onClick={exportPdf}>
+            <button type="button" className="export-sheet-item" role="menuitem" onClick={() => void exportPdf()}>
               <span>📄</span>
               <Label k="export.pdf" variant="compact" />
             </button>

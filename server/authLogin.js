@@ -2,11 +2,13 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { ADMIN_EMAIL, JWT_SECRET } from './env.js';
 import { findUserByLogin, isPaymentBlocked, paymentDueAmount, publicUser, updateUser } from './store.js';
-import { isRenewalGraceActive, isSubscriptionAccessBlocked } from './renewalGrace.js';
+import { isSubscriptionAccessBlocked } from './renewalGrace.js';
 import { isSupabaseEnabled, validateSupabaseConfig } from './supabase.js';
-import { withTimeout, sanitizeAuthErrorMessage } from './httpUtils.js';
+import { withTimeout } from './httpUtils.js';
 import { ensurePendingTrial, getPendingTrialDays } from './trialAccess.js';
 import { notifyAdminPendingLogin } from './authHelpers.js';
+import { getSubscriptionPlans } from './subscriptions.js';
+import { getPaymentConfig } from './paymentConfig.js';
 
 function signToken(user) {
   return jwt.sign(
@@ -100,5 +102,7 @@ export function getAuthConfig() {
     cloudSync: true,
     storage: isSupabaseEnabled() ? 'supabase' : 'file',
     supabase: validateSupabaseConfig(),
+    subscriptionPlans: getSubscriptionPlans(),
+    payment: getPaymentConfig(),
   };
 }

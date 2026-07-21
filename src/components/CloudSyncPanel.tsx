@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getCloudApiUrl, isCloudSyncEnabled, isDeployedWebOrigin, setCloudApiUrl, testCloudConnection } from '../services/cloudConfig';
-import { onSyncStatus, syncLedgerWithCloud, type SyncStatus } from '../services/ledgerSync';
+import { onSyncStatus, reconcileLedgerWithCloud, type SyncStatus } from '../services/ledgerSync';
 import { db } from '../db/database';
 import { Label } from '../i18n/useLabel';
+import { PRODUCTION_CLOUD_URL, useProductionCloudServer } from '../services/cloudConfig';
 
 export default function CloudSyncPanel() {
   const { user } = useAuth();
@@ -48,14 +49,20 @@ export default function CloudSyncPanel() {
     showMessage('');
     try {
       if (!db) throw new Error('Database not ready');
-      const result = await syncLedgerWithCloud(db, user.id);
+      useProductionCloudServer();
+      const result = await reconcileLedgerWithCloud(db, user.id);
       if (!result.ok) {
         showMessage(
-          ('error' in result && result.error) || 'Sync failed. Check internet and that Supabase is configured on the server.',
+          ('error' in result && result.error) || 'Sync failed. Check internet and open https://patiwala.pk on both devices.',
           'error',
         );
       } else {
-        showMessage('Synced successfully. Your inventory is saved in the cloud and available on any device.');
+        const bits = [];
+        if ('uploaded' in result && result.uploaded) bits.push('uploaded to cloud');
+        if ('pulled' in result && result.pulled) bits.push('downloaded from cloud');
+        const detail = bits.length ? bits.join(' + ') : 'already in sync';
+        const rows = 'rowCount' in result && result.rowCount != null ? ` (${result.rowCount} rows)` : '';
+        showMessage(`Synced successfully — ${detail}${rows}. Use the same account on phone and laptop.`);
       }
     } catch (err) {
       showMessage(err instanceof Error ? err.message : 'Sync failed.', 'error');
@@ -114,9 +121,9 @@ export default function CloudSyncPanel() {
               type="button"
               className="btn"
               onClick={() => {
-                setUrl('https://patiwala.pk');
-                setCloudApiUrl('https://patiwala.pk');
-                showMessage('Live server saved: https://patiwala.pk — log out and log in again on every device.');
+                setUrl(PRODUCTION_CLOUD_URL);
+                useProductionCloudServer();
+                showMessage('Live server saved: https://patiwala.pk — tap Sync now on every device.');
               }}
             >
               Use patiwala.pk
@@ -139,9 +146,10 @@ export default function CloudSyncPanel() {
       {message && <p className={`auth-banner ${messageKind === 'error' ? 'error' : 'info'}`}>{message}</p>}
 
       <ul className="cloud-sync-steps">
-        <li>Log in with the same account on every device.</li>
-        <li>Add sales or purchases — they save automatically (green dot in header = live).</li>
-        <li>Open the app on another phone or Wi‑Fi — your full inventory loads after login.</li>
+        <li>Open <strong>https://patiwala.pk</strong> on laptop and phone (same account).</li>
+        <li>On the device that has your data, tap <strong>Sync now</strong> once to upload.</li>
+        <li>On the other device, open the app or tap Sync now — it downloads the same cloud ledger.</li>
+        <li>New sales/purchases auto-save to the cloud (green sync status).</li>
       </ul>
     </section>
   );

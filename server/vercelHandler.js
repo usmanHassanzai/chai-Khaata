@@ -1,13 +1,10 @@
-import serverless from 'serverless-http';
+let appPromise = null;
 
-let expressHandler = null;
-
-async function getExpressHandler() {
-  if (!expressHandler) {
-    const { default: app } = await import('./app.js');
-    expressHandler = serverless(app);
+async function getExpressApp() {
+  if (!appPromise) {
+    appPromise = import('./app.js').then((m) => m.default);
   }
-  return expressHandler;
+  return appPromise;
 }
 
 /** Normalize URL so Express routes match on Vercel rewrites. */
@@ -38,11 +35,40 @@ export function normalizeVercelUrl(req) {
   }
 }
 
+/**
+ * Run Express as a plain Node listener — no serverless-http.
+ * That wrapper was hanging on Vercel (0-byte timeouts) for laptop/admin routes.
+ */
 export function createVercelApiHandler() {
   return async function vercelApiHandler(req, res) {
     normalizeVercelUrl(req);
-    const handler = await getExpressHandler();
-    return handler(req, res);
+    const app = await getExpressApp();
+
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve(undefined);
+      };
+      const fail = (err) => {
+        if (settled) return;
+        settled = true;
+        reject(err);
+      };
+
+      res.once('finish', done);
+      res.once('close', done);
+
+      try {
+        app(req, res, (err) => {
+          if (err) fail(err);
+          else done();
+        });
+      } catch (err) {
+        fail(err);
+      }
+    });
   };
 }
 

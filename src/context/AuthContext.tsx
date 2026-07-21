@@ -65,8 +65,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (dbErr) {
       if (seq !== prepareSeq.current) return;
       console.warn('[Chai Khata] Database init:', dbErr);
-      setDbReady(false);
-      throw dbErr;
+      // Still unlock UI on laptop — empty local DB is better than infinite spinner
+      setDbReady(true);
     }
   }, []);
 

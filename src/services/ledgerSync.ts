@@ -8,7 +8,7 @@ import type {
   Sale,
 } from '../models/types';
 import { getStoredToken } from './authCommon';
-import { getCloudApiUrl, isCloudSyncEnabled } from './cloudConfig';
+import { getCloudApiUrl, isCloudSyncEnabled, useProductionCloudServer } from './cloudConfig';
 
 export type LedgerSnapshot = {
   updatedAt: string;
@@ -776,69 +776,160 @@ type SyncLedgerResult =
   | { ok: false; error: string };
 
 /**
- * Mobile/laptop login: download THIS user's full cloud ledger (lite = no images, fast).
- * Bypasses quick/since sync so empty phones never stay empty.
+ * Bidirectional sync for the same account on laptop + phone.
+ * - Cloud has data, device empty → import (download)
+ * - Device has data, cloud empty → export (upload)
+ * - Both have data → soft-merge then upload so every device converges
+ */
+export async function reconcileLedgerWithCloud(
+  db: ChaiKhataDB,
+  userId: string,
+): Promise<SyncLedgerResult> {
+  // Always use the live shared database (never a laptop-only localhost store)
+  useProductionCloudServer();
+
+  if (!isCloudSyncEnabled() || !getStoredToken()) {
+    return { ok: false, error: 'Cloud sync not configured. Open https://patiwala.pk on every device.' };
+  }
+
+  activeUserId = userId;
+  syncDb = db;
+  clearLocalSyncCursor(userId);
+  setStatus('syncing');
+
+  try {
+    const localCounts = await localEntityCounts(db);
+    const localEmpty = localCounts.dealers === 0
+      && localCounts.customers === 0
+      && localCounts.purchases === 0
+      && localCounts.sales === 0
+      && localCounts.payments === 0;
+    const localRowCount = localCounts.dealers
+      + localCounts.customers
+      + localCounts.purchases
+      + localCounts.sales
+      + localCounts.payments;
+
+    // 1) IMPORT from cloud (prefer lite for speed, fall back to full)
+    let cloud: LedgerSnapshot | null = null;
+    try {
+      const lite = await syncRequest<{ empty?: boolean; ledger?: LedgerSnapshot }>(
+        '/api/sync/ledger?lite=1',
+        { timeoutMs: LITE_SYNC_TIMEOUT_MS },
+      );
+      if (!lite.data.empty && lite.data.ledger && snapshotRowCount(lite.data.ledger) > 0) {
+        cloud = lite.data.ledger;
+      } else {
+        const full = await syncRequest<{ empty?: boolean; ledger?: LedgerSnapshot }>(
+          '/api/sync/ledger',
+          { timeoutMs: SYNC_TIMEOUT_MS },
+        );
+        if (!full.data.empty && full.data.ledger && snapshotRowCount(full.data.ledger) > 0) {
+          cloud = full.data.ledger;
+        }
+      }
+    } catch (err) {
+      // If pull fails but we have local data, still try to export so cloud is filled
+      if (!localEmpty) {
+        const push = await pushLedgerToCloud(db, userId, { forceFull: true });
+        if ('error' in push && push.error) {
+          setStatus('error');
+          return { ok: false, error: push.message || (err instanceof Error ? err.message : 'Sync failed') };
+        }
+        setStatus('synced');
+        return { ok: true, uploaded: true, rowCount: localRowCount };
+      }
+      setStatus('error');
+      return { ok: false, error: err instanceof Error ? err.message : 'Could not download cloud data' };
+    }
+
+    const cloudEmpty = !cloud || snapshotRowCount(cloud) === 0;
+
+    // 2) Empty device → IMPORT full cloud ledger
+    if (localEmpty && !cloudEmpty && cloud) {
+      await importLedgerSnapshotFull(db, cloud, userId);
+      const after = await localEntityCounts(db);
+      const rowCount = after.dealers + after.customers + after.purchases + after.sales + after.payments;
+      setStatus('synced');
+      return { ok: true, pulled: true, rowCount };
+    }
+
+    // 3) Cloud empty → EXPORT this device's ledger (seeds shared DB for other devices)
+    if (!localEmpty && cloudEmpty) {
+      const push = await pushLedgerToCloud(db, userId, { forceFull: true });
+      if ('error' in push && push.error) {
+        setStatus('error');
+        return { ok: false, error: push.message || 'Could not upload data to cloud' };
+      }
+      setStatus('synced');
+      return { ok: true, uploaded: true, rowCount: localRowCount };
+    }
+
+    // 4) Both empty — new account
+    if (localEmpty && cloudEmpty) {
+      setStatus('synced');
+      return { ok: true, pulled: false, rowCount: 0 };
+    }
+
+    // 5) Both have data — merge cloud into local, then EXPORT so cloud matches
+    if (cloud) {
+      await importLedgerSnapshot(db, cloud, userId);
+    }
+    const push = await pushLedgerToCloud(db, userId, { forceFull: true });
+    if ('error' in push && push.error) {
+      // Merge already applied locally; still report partial success
+      console.warn('[Chai Khata] Merge ok but upload failed:', push.message);
+      setStatus('error');
+      return { ok: false, error: push.message || 'Could not upload merged data' };
+    }
+
+    // Re-import server copy so this device matches what others will download
+    if (push.pushed || ('recovered' in push && push.recovered)) {
+      try {
+        const confirm = await syncRequest<{ empty?: boolean; ledger?: LedgerSnapshot }>(
+          '/api/sync/ledger?lite=1',
+          { timeoutMs: LITE_SYNC_TIMEOUT_MS },
+        );
+        if (!confirm.data.empty && confirm.data.ledger && snapshotRowCount(confirm.data.ledger) > 0) {
+          await importLedgerSnapshot(db, confirm.data.ledger, userId);
+        }
+      } catch {
+        /* keep merged local copy */
+      }
+    }
+
+    const after = await localEntityCounts(db);
+    const rowCount = after.dealers + after.customers + after.purchases + after.sales + after.payments;
+    setStatus('synced');
+    return { ok: true, pulled: true, uploaded: true, rowCount };
+  } catch (err) {
+    setStatus('error');
+    return { ok: false, error: err instanceof Error ? err.message : 'Sync failed' };
+  }
+}
+
+/**
+ * Mobile/laptop login: download + upload so every device shares one cloud ledger.
  */
 export async function downloadUserLedgerOnLogin(
   db: ChaiKhataDB,
   userId: string,
 ): Promise<SyncLedgerResult> {
-  if (!isCloudSyncEnabled() || !getStoredToken()) {
-    return { ok: false, error: 'Cloud sync not configured. Open https://patiwala.pk or set Cloud URL.' };
-  }
-
-  activeUserId = userId;
-  syncDb = db;
-  clearPendingChanges();
-  clearLocalSyncCursor(userId);
-  setStatus('syncing');
-
   const attempts = 2;
   let lastError = '';
 
   for (let i = 0; i < attempts; i += 1) {
-    try {
-      // lite=1 skips heavy receipt images so mobile finishes in seconds
-      const res = await syncRequest<{
-        empty?: boolean;
-        ledger?: LedgerSnapshot;
-        lite?: boolean;
-      }>('/api/sync/ledger?lite=1', { timeoutMs: LITE_SYNC_TIMEOUT_MS });
-
-      if (res.data.empty || !res.data.ledger || snapshotRowCount(res.data.ledger) === 0) {
-        // Lite returned empty — try one full pull (covers older snapshot-only rows)
-        const full = await syncRequest<{
-          empty?: boolean;
-          ledger?: LedgerSnapshot;
-          counts?: { total?: number };
-        }>('/api/sync/ledger', { timeoutMs: SYNC_TIMEOUT_MS });
-        if (full.data.empty || !full.data.ledger || snapshotRowCount(full.data.ledger) === 0) {
-          console.warn('[Chai Khata] Cloud ledger empty for this account', full.data.counts || { total: 0 });
-          setStatus('synced');
-          return { ok: true, pulled: false, rowCount: 0 };
-        }
-        await importLedgerSnapshotFull(db, full.data.ledger, userId);
-        const counts = await localEntityCounts(db);
-        const rowCount = counts.dealers + counts.customers + counts.purchases + counts.sales + counts.payments;
-        setStatus('synced');
-        return { ok: true, pulled: true, rowCount };
-      }
-
-      await importLedgerSnapshotFull(db, res.data.ledger, userId);
-      const counts = await localEntityCounts(db);
-      const rowCount = counts.dealers + counts.customers + counts.purchases + counts.sales + counts.payments;
-      setStatus('synced');
-      return { ok: true, pulled: true, rowCount };
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : 'Download failed';
-      if (i < attempts - 1) {
-        await new Promise((r) => setTimeout(r, 400 * (i + 1)));
-      }
+    const result = await reconcileLedgerWithCloud(db, userId);
+    if (result.ok) return result;
+    lastError = 'error' in result ? result.error : 'Sync failed';
+    if (i < attempts - 1) {
+      useProductionCloudServer();
+      await new Promise((r) => setTimeout(r, 500 * (i + 1)));
     }
   }
 
   setStatus('error');
-  return { ok: false, error: lastError || 'Could not download your data from the cloud' };
+  return { ok: false, error: lastError || 'Could not sync your data with the cloud' };
 }
 
 /** Pull cloud data first, then push local changes if needed. Call once after login. */
