@@ -1,0 +1,265 @@
+/* ═══════════════════════════════════════════
+   Easy UI — Nodex-inspired professional POS
+   Big targets · clear hierarchy · calm workspace
+   ═══════════════════════════════════════════ */
+
+.app-shell.easy-pos {
+  --easy-input-h: 52px;
+  --easy-btn-h: 52px;
+  --easy-nav-h: 56px;
+}
+
+/* Calm workspace — less decoration, more focus */
+.app-shell.easy-pos .app-interior-glow,
+.app-shell.easy-pos .floating-leaf,
+.app-shell.easy-pos .app-interior-featured {
+  display: none !important;
+}
+
+.app-shell.easy-pos .app-interior-pattern {
+  opacity: 0.025;
+}
+
+.app-shell.easy-pos .main-content {
+  background: linear-gradient(180deg, #f7f5f0 0%, var(--cream) 40%, #f3f0ea 100%);
+}
+
+.app-shell.easy-pos .page-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* Larger, clearer form controls */
+.app-shell.easy-pos .form-field input,
+.app-shell.easy-pos .form-field select,
+.app-shell.easy-pos .search-input,
+.app-shell.easy-pos .textarea-input {
+  min-height: var(--easy-input-h);
+  font-size: 1.05rem;
+  font-weight: 600;
+  border-width: 2px;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+}
+
+.app-shell.easy-pos .field-label {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--tea-deep);
+  letter-spacing: 0.01em;
+}
+
+.app-shell.easy-pos .btn {
+  min-height: var(--easy-btn-h);
+  font-size: 1rem;
+  font-weight: 800;
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
+}
+
+.app-shell.easy-pos .btn.primary {
+  box-shadow: 0 4px 14px rgba(45, 106, 79, 0.28);
+}
+
+.app-shell.easy-pos .btn.sm {
+  min-height: 42px;
+  font-size: 0.88rem;
+  padding: 0.45rem 0.85rem;
+}
+
+/* Sidebar — clean POS menu */
+.app-shell.easy-pos .sidebar-pro {
+  background: linear-gradient(180deg, #143528 0%, #1a3d2f 55%, #1e4636 100%);
+}
+
+.app-shell.easy-pos .sidebar-tea-strip {
+  display: none;
+}
+
+.app-shell.easy-pos .sidebar-nav .nav-link {
+  min-height: var(--easy-nav-h);
+  border-radius: 14px;
+  margin: 0.2rem 0;
+  padding: 0.65rem 0.85rem;
+  gap: 0.85rem;
+}
+
+.app-shell.easy-pos .sidebar-nav .nav-link .nav-text {
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+.app-shell.easy-pos .sidebar-nav .nav-icon-wrap {
+  width: 42px;
+  height: 42px;
+  font-size: 1.25rem;
+  border-radius: 12px;
+}
+
+.app-shell.easy-pos .sidebar-section-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+}
+
+/* Bottom nav — thumb-friendly */
+.app-shell.easy-pos .bottom-nav-pro .bottom-link {
+  min-height: 64px;
+  padding: 0.35rem 0.25rem;
+}
+
+.app-shell.easy-pos .bottom-nav-pro .bottom-icon-wrap {
+  width: 40px;
+  height: 40px;
+  font-size: 1.2rem;
+}
+
+.app-shell.easy-pos .bottom-nav-pro .bottom-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+/* Tables — readable ledger */
+.app-shell.easy-pos table th {
+  font-size: 0.72rem;
+  padding: 0.75rem 0.6rem;
+}
+
+.app-shell.easy-pos table td {
+  font-size: 0.92rem;
+  padding: 0.7rem 0.6rem;
+}
+
+/* Primary action emphasis on pages */
+.app-shell.easy-pos .form-card > .btn.primary,
+.app-shell.easy-pos .cust-panel > .btn.primary,
+.app-shell.easy-pos .god-panel > .btn.primary,
+.app-shell.easy-pos .duk-panel > .btn.primary {
+  width: 100%;
+  margin-top: 0.5rem;
+  font-size: 1.05rem;
+}
+
+/* Easy home tiles (dashboard) */
+.easy-home-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+@media (min-width: 720px) {
+  .easy-home-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.easy-home-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 1.25rem 1.15rem;
+  min-height: 132px;
+  border-radius: 18px;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid rgba(235, 228, 216, 0.95);
+  background: var(--surface);
+  box-shadow: 0 2px 12px rgba(26, 61, 47, 0.05);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.easy-home-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(26, 61, 47, 0.1);
+}
+
+.easy-home-tile.is-primary {
+  background: linear-gradient(145deg, #2d6a4f 0%, #1a3d2f 100%);
+  color: #fff;
+  border-color: transparent;
+}
+
+.easy-home-tile.is-primary .easy-home-sub {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.easy-home-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 1.45rem;
+  background: rgba(26, 61, 47, 0.08);
+}
+
+.easy-home-tile.is-primary .easy-home-icon {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.easy-home-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--tea-deep);
+}
+
+.easy-home-tile.is-primary .easy-home-title {
+  color: #fff;
+}
+
+.easy-home-sub {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+/* Stock cards (mobile-friendly) */
+.stock-card-grid {
+  display: none;
+  gap: 0.75rem;
+}
+
+.stock-card {
+  padding: 1rem 1.1rem;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid rgba(235, 228, 216, 0.95);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.stock-card.is-low {
+  border-color: rgba(184, 84, 80, 0.45);
+  background: linear-gradient(160deg, #fff8f7 0%, #fff 100%);
+}
+
+.stock-card-name {
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--tea-deep);
+}
+
+.stock-card-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.stock-card-row strong {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .stock-table-desktop {
+    display: none;
+  }
+
+  .stock-card-grid {
+    display: grid;
+  }
+}

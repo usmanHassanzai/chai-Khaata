@@ -19,17 +19,15 @@ import {
   saleTotal,
 } from '../services/calculations';
 import {
-  buildDashboardExportRows,
   buildSalesExportRows,
-  DASHBOARD_EXPORT_COLUMNS,
   SALES_EXPORT_COLUMNS,
 } from '../services/export';
 
 const ACTIONS = [
-  { to: '/dukaan', label: 'New sale', icon: '＋' },
-  { to: '/godaam', label: 'Purchase', icon: '⬇' },
-  { to: '/customers', label: 'Customers', icon: '◎' },
-  { to: '/stock', label: 'Stock ledger', icon: '☰' },
+  { to: '/dukaan', titleKey: 'dashboard.easySale', subKey: 'dashboard.easySaleSub', icon: '🛒', primary: true },
+  { to: '/godaam', titleKey: 'dashboard.easyPurchase', subKey: 'dashboard.easyPurchaseSub', icon: '📦', primary: false },
+  { to: '/customers', titleKey: 'dashboard.easyCustomers', subKey: 'dashboard.easyCustomersSub', icon: '👤', primary: false },
+  { to: '/stock', titleKey: 'dashboard.easyStock', subKey: 'dashboard.easyStockSub', icon: '📋', primary: false },
 ] as const;
 
 function stockStatus(currentStock: number, isLow: boolean) {
@@ -71,7 +69,6 @@ export default function Dashboard() {
     [sales, purchases, customers, payments, dealers, settings.lowStockThresholdKg],
   );
 
-  const dashboardRows = useMemo(() => buildDashboardExportRows(stats), [stats]);
   const recentExportRows = useMemo(
     () => buildSalesExportRows(stats.recentSales, purchases, sales, customers),
     [stats.recentSales, purchases, sales, customers],
@@ -102,26 +99,17 @@ export default function Dashboard() {
     <div className="page dashboard-page dashboard-retail">
       <header className="dash-topbar animate-fade-in-up">
         <div className="dash-topbar-text">
-          <p className="dash-eyebrow">Retail overview</p>
+          <p className="dash-eyebrow"><Label k="dashboard.easyWelcome" variant="compact" /></p>
           <h1 className="dash-title">{shopName}</h1>
           <p className="dash-meta">
             <span>{todayLabel}</span>
             <span className="dash-meta-dot" aria-hidden />
-            <span>{stats.stockSkuCount} tea SKUs</span>
-            <span className="dash-meta-dot" aria-hidden />
-            <span>{stats.todaySaleCount} sales today</span>
+            <span>{stats.todaySaleCount} · <Label k="dashboard.todaySale" variant="compact" /></span>
           </p>
         </div>
         <div className="dash-topbar-actions">
-          <ExportToolbar
-            filenamePrefix="dashboard-summary"
-            title="Dashboard Summary"
-            columns={DASHBOARD_EXPORT_COLUMNS}
-            rows={dashboardRows}
-            compact
-          />
           <Link to="/dukaan" className="btn primary">
-            New sale
+            <Label k="dashboard.easySale" variant="compact" />
           </Link>
         </div>
       </header>
@@ -130,77 +118,73 @@ export default function Dashboard() {
         <div className="dash-attention animate-fade-in-up stagger-1" role="status">
           {stats.lowStockCount > 0 && (
             <Link to="/stock" className="dash-attention-item is-warn">
-              <span className="dash-attention-label">Reorder needed</span>
-              <strong>{stats.lowStockCount} items low</strong>
+              <span className="dash-attention-label"><Label k="dashboard.attentionLow" variant="compact" /></span>
+              <strong>{stats.lowStockCount}</strong>
             </Link>
           )}
           {stats.customerDues > 0 && (
             <Link to="/customers" className="dash-attention-item is-due">
-              <span className="dash-attention-label">Customer receivables</span>
+              <span className="dash-attention-label"><Label k="dashboard.attentionCustomerDue" variant="compact" /></span>
               <strong>{formatCurrency(stats.customerDues)}</strong>
             </Link>
           )}
           {stats.dealerDues > 0 && (
             <Link to="/godaam" className="dash-attention-item is-due">
-              <span className="dash-attention-label">Dealer payables</span>
+              <span className="dash-attention-label"><Label k="dashboard.attentionDealerDue" variant="compact" /></span>
               <strong>{formatCurrency(stats.dealerDues)}</strong>
             </Link>
           )}
         </div>
       )}
 
+      <nav className="easy-home-grid animate-fade-in-up stagger-1" aria-label="Quick actions">
+        {ACTIONS.map((action) => (
+          <Link
+            key={action.to}
+            to={action.to}
+            className={`easy-home-tile${action.primary ? ' is-primary' : ''}`}
+          >
+            <span className="easy-home-icon" aria-hidden>{action.icon}</span>
+            <h2 className="easy-home-title"><Label k={action.titleKey} variant="compact" /></h2>
+            <p className="easy-home-sub"><Label k={action.subKey} variant="compact" /></p>
+          </Link>
+        ))}
+      </nav>
+
       <section className="dash-kpi-row animate-fade-in-up stagger-2" aria-label="Key metrics">
         <article className="dash-kpi dash-kpi-primary">
           <span className="dash-kpi-label">
-            <Label k="dashboard.todaySale" variant="stacked" />
+            <Label k="dashboard.todaySale" variant="compact" />
           </span>
           <strong className="dash-kpi-value">{formatCurrency(stats.todaySale)}</strong>
-          <span className="dash-kpi-hint">{stats.todaySaleCount} transactions</span>
         </article>
         <article className="dash-kpi">
           <span className="dash-kpi-label">
-            <Label k="dashboard.monthSale" variant="stacked" />
+            <Label k="dashboard.monthSale" variant="compact" />
           </span>
           <strong className="dash-kpi-value">{formatCurrency(stats.monthSale)}</strong>
-          <span className="dash-kpi-hint">This month</span>
         </article>
         {showProfit && (
           <article className="dash-kpi">
             <span className="dash-kpi-label">
-              <Label k="dashboard.monthProfit" variant="stacked" />
+              <Label k="dashboard.monthProfit" variant="compact" />
             </span>
             <strong className="dash-kpi-value">{formatCurrency(stats.monthProfit)}</strong>
-            <span className="dash-kpi-hint">Gross estimate</span>
           </article>
         )}
         <article className="dash-kpi">
           <span className="dash-kpi-label">
-            <Label k="dashboard.stockValue" variant="stacked" />
+            <Label k="dashboard.stockValue" variant="compact" />
           </span>
           <strong className="dash-kpi-value">{formatCurrency(stats.stockValue)}</strong>
-          <span className="dash-kpi-hint">{stats.stockSkuCount} SKUs on hand</span>
         </article>
         <article className={`dash-kpi${stats.lowStockCount > 0 ? ' is-alert' : ''}`}>
           <span className="dash-kpi-label">
-            <Label k="dashboard.lowStockAlerts" variant="stacked" />
+            <Label k="dashboard.lowStockAlerts" variant="compact" />
           </span>
           <strong className="dash-kpi-value">{stats.lowStockCount}</strong>
-          <span className="dash-kpi-hint">
-            Threshold {formatKg(settings.lowStockThresholdKg)}
-          </span>
         </article>
       </section>
-
-      <nav className="dash-actions animate-fade-in-up stagger-2" aria-label="Quick actions">
-        {ACTIONS.map((action) => (
-          <Link key={action.to} to={action.to} className="dash-action">
-            <span className="dash-action-icon" aria-hidden>
-              {action.icon}
-            </span>
-            {action.label}
-          </Link>
-        ))}
-      </nav>
 
       <div className="dash-main-grid">
         <section className="dash-panel animate-fade-in-up stagger-3">

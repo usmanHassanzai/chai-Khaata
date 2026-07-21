@@ -9,16 +9,15 @@ import AppLoading from './AppLoading';
 import TrialBanner from './TrialBanner';
 import RenewalGraceBanner from './RenewalGraceBanner';
 import SubscriptionBanner from './SubscriptionBanner';
-import { TEA_GALLERY } from '../data/teaGallery';
 import { Label } from '../i18n/useLabel';
 import { getLabel } from '../i18n/labels';
 import { useLabelMode } from '../i18n/useLabel';
 
 const mainLinks = [
-  { to: '/dashboard', key: 'dashboard', icon: '📊' },
-  { to: '/dukaan', key: 'dukaan', icon: '🏪' },
+  { to: '/dashboard', key: 'dashboard', icon: '🏠' },
+  { to: '/dukaan', key: 'dukaan', icon: '🛒' },
   { to: '/godaam', key: 'godaam', icon: '📦' },
-  { to: '/customers', key: 'customers', icon: '👥' },
+  { to: '/customers', key: 'customers', icon: '👤' },
   { to: '/stock', key: 'stock', icon: '📋' },
 ] as const;
 
@@ -27,8 +26,11 @@ const adminLink = { to: '/admin', key: 'approvals', icon: '✅' } as const;
 function navShortLabel(key: string, mode: ReturnType<typeof useLabelMode>): string {
   const text = getLabel(`nav.${key}`);
   if (mode === 'ur') return text.ur.split(/[\s—]/)[0];
-  if (mode === 'en') return text.en.split(' ')[0];
-  if (mode === 'ur-roman') return (text.roman ?? text.en).split(' ')[0];
+  if (mode === 'en') return text.en.split(/[\s(]/)[0];
+  if (mode === 'ur-roman') {
+    const roman = text.roman ?? text.en;
+    return roman.split(/[\s—]/)[0];
+  }
   return text.ur.split(/[\s—]/)[0];
 }
 
@@ -65,15 +67,6 @@ function LayoutShell() {
   const pendingCount = useAdminPendingCount();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
 
-  const [sidebarTea, setSidebarTea] = useState(0);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setSidebarTea((i) => (i + 1) % TEA_GALLERY.length);
-    }, 5000);
-    return () => window.clearInterval(timer);
-  }, []);
-
   const isAdmin = user?.role === 'admin';
   const mobilePageTitle = pageTitleFromPath(location.pathname, mode);
 
@@ -90,37 +83,24 @@ function LayoutShell() {
   ];
 
   return (
-    <div className="app-shell">
+    <div className="app-shell easy-pos">
       <aside className="sidebar sidebar-pro">
         <div className="sidebar-top">
           <div className="sidebar-brand">
             <div className="sidebar-logo-ring">
               <div className="sidebar-logo-wrap">
-                <img
-                  src={TEA_GALLERY[sidebarTea].image}
-                  alt=""
-                  className="sidebar-logo-img animate-scale-in"
-                />
-                <span className="sidebar-logo-steam" aria-hidden>🍵</span>
+                <img src="/images/tea/karak-chai.jpg" alt="" className="sidebar-logo-img" />
               </div>
             </div>
             <div className="sidebar-brand-text">
               <span className="sidebar-brand-name"><Label k="appName" variant="compact" /></span>
-              <span className="sidebar-brand-tag">Patiwala · Pakistan</span>
-            </div>
-          </div>
-
-          <div className="sidebar-tea-strip animate-fade-in-up">
-            <img src={TEA_GALLERY[sidebarTea].image} alt="" />
-            <div>
-              <strong>{TEA_GALLERY[sidebarTea].name}</strong>
-              <small>{TEA_GALLERY[sidebarTea].nameUr}</small>
+              <span className="sidebar-brand-tag">Asaan billing · Stock</span>
             </div>
           </div>
         </div>
 
         <div className="sidebar-scroll">
-          <p className="sidebar-section-label">Menu</p>
+          <p className="sidebar-section-label">MENU</p>
           <nav className="sidebar-nav">
             {mainLinks.map(({ to, key, icon }) => (
               <NavLink
@@ -131,7 +111,7 @@ function LayoutShell() {
               >
                 <span className="nav-icon-wrap">{icon}</span>
                 <span className="nav-text">
-                  <Label k={`nav.${key}`} variant="stacked" />
+                  <Label k={`nav.${key}`} variant="compact" />
                 </span>
               </NavLink>
             ))}
@@ -142,7 +122,7 @@ function LayoutShell() {
               >
                 <span className="nav-icon-wrap">{adminLink.icon}</span>
                 <span className="nav-text">
-                  <Label k={`nav.${adminLink.key}`} variant="stacked" />
+                  <Label k={`nav.${adminLink.key}`} variant="compact" />
                   {pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}
                 </span>
               </NavLink>
@@ -157,7 +137,7 @@ function LayoutShell() {
           >
             <span className="nav-icon-wrap">⚙️</span>
             <span className="nav-text">
-              <Label k="nav.settings" variant="stacked" />
+              <Label k="nav.settings" variant="compact" />
             </span>
           </NavLink>
         </div>
@@ -203,7 +183,7 @@ function LayoutShell() {
           <SubscriptionBanner />
           <RenewalGraceBanner />
           {!dbReady ? (
-            <AppLoading message="Loading your inventory from cloud…" />
+            <AppLoading message="Loading…" />
           ) : (
             <>
               <AppInterior />

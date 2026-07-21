@@ -1,4 +1,4 @@
-import { Label, useLabel } from '../i18n/useLabel';
+import { Label } from '../i18n/useLabel';
 
 interface Props {
   labelKey: string;
@@ -12,6 +12,7 @@ interface Props {
   autoComplete?: string;
 }
 
+/** Compact single-line labels — easier for shop staff than stacked bilingual. */
 export default function FormField({
   labelKey,
   value,
@@ -26,7 +27,7 @@ export default function FormField({
   return (
     <label className="form-field">
       <span className="field-label">
-        <Label k={labelKey} variant="stacked" />
+        <Label k={labelKey} variant="compact" />
       </span>
       <input
         type={type}
@@ -46,7 +47,7 @@ export function ReadOnlyField({ labelKey, value }: { labelKey: string; value: st
   return (
     <div className="form-field readonly">
       <span className="field-label">
-        <Label k={labelKey} variant="stacked" />
+        <Label k={labelKey} variant="compact" />
       </span>
       <span className="readonly-value">{value}</span>
     </div>
@@ -56,9 +57,9 @@ export function ReadOnlyField({ labelKey, value }: { labelKey: string; value: st
 export function FieldLabel({ labelKey }: { labelKey: string }) {
   return (
     <span className="field-label">
-      <Label k={labelKey} variant="stacked" />
+      <Label k={labelKey} variant="compact" />
     </span>
   );
 }
 
-export { useLabel };
+export { useLabel } from '../i18n/useLabel';
