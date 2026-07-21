@@ -1,17 +1,16 @@
-import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import FormField from '../components/FormField';
 import ExportToolbar from '../components/ExportToolbar';
-import { db, getSettingsQuery } from '../db/database';
+import { db } from '../db/database';
+import { useLedgerLive } from '../hooks/useLedgerLive';
 import { Label, SectionTitle, useLabel } from '../i18n/useLabel';
 import { computeTeaStocks, formatCurrency, formatKg } from '../services/calculations';
 import { buildStockExportRows, STOCK_EXPORT_COLUMNS } from '../services/export';
 
 export default function StockLedger() {
   const l = useLabel();
-  const purchases = useLiveQuery(() => db.purchases.toArray(), []) ?? [];
-  const sales = useLiveQuery(() => db.sales.toArray(), []) ?? [];
-  const settings = useLiveQuery(() => getSettingsQuery(), []) ?? {
+  const { purchases, sales, settings: liveSettings } = useLedgerLive();
+  const settings = liveSettings ?? {
     id: 'settings' as const,
     lowStockThresholdKg: 50,
     language: 'ur-roman' as const,

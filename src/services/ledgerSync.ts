@@ -806,8 +806,22 @@ export async function downloadUserLedgerOnLogin(
       }>('/api/sync/ledger?lite=1', { timeoutMs: LITE_SYNC_TIMEOUT_MS });
 
       if (res.data.empty || !res.data.ledger || snapshotRowCount(res.data.ledger) === 0) {
+        // Lite returned empty — try one full pull (covers older snapshot-only rows)
+        const full = await syncRequest<{
+          empty?: boolean;
+          ledger?: LedgerSnapshot;
+          counts?: { total?: number };
+        }>('/api/sync/ledger', { timeoutMs: SYNC_TIMEOUT_MS });
+        if (full.data.empty || !full.data.ledger || snapshotRowCount(full.data.ledger) === 0) {
+          console.warn('[Chai Khata] Cloud ledger empty for this account', full.data.counts || { total: 0 });
+          setStatus('synced');
+          return { ok: true, pulled: false, rowCount: 0 };
+        }
+        await importLedgerSnapshotFull(db, full.data.ledger, userId);
+        const counts = await localEntityCounts(db);
+        const rowCount = counts.dealers + counts.customers + counts.purchases + counts.sales + counts.payments;
         setStatus('synced');
-        return { ok: true, pulled: false, rowCount: 0 };
+        return { ok: true, pulled: true, rowCount };
       }
 
       await importLedgerSnapshotFull(db, res.data.ledger, userId);

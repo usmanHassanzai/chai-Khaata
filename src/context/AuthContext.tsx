@@ -4,10 +4,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { initUserDatabase } from '../db/database';
+import { openUserDatabaseFast, syncUserDatabaseFromCloud } from '../db/database';
 import { stopLedgerSyncLoop } from '../services/ledgerSync';
 import {
   ApiError,
@@ -43,17 +44,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [dbReady, setDbReady] = useState(false);
+  const prepareSeq = useRef(0);
 
   const prepareDatabase = useCallback(async (userId: string) => {
+    const seq = ++prepareSeq.current;
     setDbReady(false);
     try {
-      const result = await initUserDatabase(userId);
-      if (!result.syncOk && result.syncError) {
-        console.warn('[Chai Khata] Cloud sync:', result.syncError);
-      }
-      // Open UI after lite download — background sync continues without blocking
+      // 1) Open local DB instantly so the app is usable
+      await openUserDatabaseFast(userId);
+      if (seq !== prepareSeq.current) return;
       setDbReady(true);
+
+      // 2) Pull Supabase ledger in background — live queries refresh when done
+      void syncUserDatabaseFromCloud(userId).then((result) => {
+        if (seq !== prepareSeq.current) return;
+        if (!result.syncOk && result.syncError) {
+          console.warn('[Chai Khata] Cloud sync:', result.syncError);
+        }
+      });
     } catch (dbErr) {
+      if (seq !== prepareSeq.current) return;
       console.warn('[Chai Khata] Database init:', dbErr);
       setDbReady(false);
       throw dbErr;
@@ -86,18 +96,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStoredToken(null);
         setUser(null);
       } else {
-        // Network/server error — keep token so user can retry without re-login
         console.warn('[Chai Khata] Session refresh failed:', err);
       }
     }
   }, [prepareDatabase]);
 
   useEffect(() => {
-    refreshUser().finally(() => setLoading(false));
+    let cancelled = false;
+    refreshUser().finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
   }, [refreshUser]);
 
   useEffect(() => {
     const onSessionInvalid = () => {
+      prepareSeq.current += 1;
       stopLedgerSyncLoop();
       setUser(null);
       setDbReady(false);
@@ -143,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    prepareSeq.current += 1;
     stopLedgerSyncLoop();
     setStoredToken(null);
     setUser(null);

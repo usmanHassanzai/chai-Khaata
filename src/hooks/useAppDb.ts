@@ -1,8 +1,12 @@
 import { useAuth } from '../context/AuthContext';
-import { db, isDbInitialized } from '../db/database';
+import { db, getDbGeneration, isDbInitialized, subscribeDbGeneration } from '../db/database';
+import { useSyncExternalStore } from 'react';
 
-/** Returns the active Dexie DB when ready (re-renders after login). */
+/** Returns the active Dexie DB when ready (re-renders after login AND after cloud import). */
 export function useAppDb() {
   const { dbReady } = useAuth();
-  return dbReady && isDbInitialized() ? db : undefined;
+  const generation = useSyncExternalStore(subscribeDbGeneration, getDbGeneration, getDbGeneration);
+  if (!dbReady || !isDbInitialized()) return undefined;
+  void generation;
+  return db;
 }

@@ -1,10 +1,9 @@
-import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useSyncExternalStore } from 'react';
 import { Link } from 'react-router-dom';
 import MobileSaleCards from '../components/MobileSaleCards';
 import ExportToolbar from '../components/ExportToolbar';
 import { useAuth } from '../context/AuthContext';
-import { db, getSettingsQuery } from '../db/database';
+import { useLedgerLive } from '../hooks/useLedgerLive';
 import { Label, useLabel } from '../i18n/useLabel';
 import {
   getPreferencesSnapshot,
@@ -45,12 +44,15 @@ export default function Dashboard() {
     getPreferencesSnapshot,
   );
 
-  const sales = useLiveQuery(() => db.sales.toArray(), []) ?? [];
-  const purchases = useLiveQuery(() => db.purchases.toArray(), []) ?? [];
-  const customers = useLiveQuery(() => db.customers.toArray(), []) ?? [];
-  const payments = useLiveQuery(() => db.payments.toArray(), []) ?? [];
-  const dealers = useLiveQuery(() => db.dealers.toArray(), []) ?? [];
-  const settings = useLiveQuery(() => getSettingsQuery(), []) ?? {
+  const {
+    sales,
+    purchases,
+    customers,
+    payments,
+    dealers,
+    settings: liveSettings,
+  } = useLedgerLive();
+  const settings = liveSettings ?? {
     id: 'settings' as const,
     lowStockThresholdKg: 50,
     language: 'ur-roman' as const,

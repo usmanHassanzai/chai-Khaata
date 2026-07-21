@@ -1,10 +1,10 @@
-import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useState } from 'react';
 import FormField, { FieldLabel, ReadOnlyField } from '../components/FormField';
 import ImageUpload, { ImageThumb } from '../components/ImageUpload';
 import ExportToolbar from '../components/ExportToolbar';
 import TextAreaField from '../components/TextAreaField';
 import { db } from '../db/database';
+import { useLedgerLive } from '../hooks/useLedgerLive';
 import { flushLedgerPushNow } from '../services/ledgerSync';
 import { Label, useLabel } from '../i18n/useLabel';
 import type { Sale, SaleFilter } from '../models/types';
@@ -47,9 +47,7 @@ type QtyMode = 'bags' | 'kg';
 export default function Dukaan() {
   const l = useLabel();
   const shopProfile = useShopPrintProfile();
-  const sales = useLiveQuery(() => db.sales.toArray(), []) ?? [];
-  const purchases = useLiveQuery(() => db.purchases.toArray(), []) ?? [];
-  const customers = useLiveQuery(() => db.customers.toArray(), []) ?? [];
+  const { sales, purchases, customers } = useLedgerLive();
 
   const [step, setStep] = useState<SaleStep>(1);
   const [qtyMode, setQtyMode] = useState<QtyMode>('bags');

@@ -1,4 +1,3 @@
-import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useState } from 'react';
 import FormField, { FieldLabel, ReadOnlyField } from '../components/FormField';
 import ImageUpload, { ImageThumb } from '../components/ImageUpload';
@@ -6,6 +5,7 @@ import PhoneLink from '../components/PhoneLink';
 import ExportToolbar from '../components/ExportToolbar';
 import TextAreaField from '../components/TextAreaField';
 import { db, nextCustomerId } from '../db/database';
+import { useLedgerLive } from '../hooks/useLedgerLive';
 import { flushLedgerPushNow } from '../services/ledgerSync';
 import { Label, SectionTitle, useLabel } from '../i18n/useLabel';
 import type { Customer, Sale } from '../models/types';
@@ -66,10 +66,7 @@ function saleEventTypeClass(type: SaleChangeEvent['type']) {
 export default function Customers() {
   const l = useLabel();
   const shopProfile = useShopPrintProfile();
-  const customers = useLiveQuery(() => db.customers.toArray(), []) ?? [];
-  const sales = useLiveQuery(() => db.sales.toArray(), []) ?? [];
-  const purchases = useLiveQuery(() => db.purchases.toArray(), []) ?? [];
-  const payments = useLiveQuery(() => db.payments.toArray(), []) ?? [];
+  const { customers, sales, purchases, payments } = useLedgerLive();
 
   // Add customer
   const [name, setName] = useState('');

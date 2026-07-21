@@ -28,10 +28,18 @@ async function bootstrap() {
   initAppPreferences();
   // Pin live cloud API for mobile APK / Capacitor (https://patiwala.pk)
   ensureCloudServerConfigured();
-  // In dev, remove stale service workers from earlier production builds
-  if (import.meta.env.DEV && 'serviceWorker' in navigator) {
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(registrations.map((r) => r.unregister()));
+  // In production, force service worker to pick up new sync fixes
+  if ('serviceWorker' in navigator) {
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      if (import.meta.env.DEV) {
+        await Promise.all(regs.map((r) => r.unregister()));
+      } else {
+        await Promise.all(regs.map((r) => r.update()));
+      }
+    } catch {
+      /* ignore */
+    }
   }
 
   const root = document.getElementById('root');

@@ -60,71 +60,114 @@ class ChaiKhataDB extends Dexie {
 export type { ChaiKhataDB };
 export let db: ChaiKhataDB;
 
+let dbGeneration = 0;
+const dbListeners = new Set<() => void>();
+let initInFlight: Promise<{ syncOk: boolean; syncError?: string; rowCount?: number }> | null = null;
+let initUserId: string | null = null;
+
+export function getDbGeneration() {
+  return dbGeneration;
+}
+
+export function subscribeDbGeneration(listener: () => void) {
+  dbListeners.add(listener);
+  return () => { dbListeners.delete(listener); };
+}
+
+export function bumpDbGeneration() {
+  dbGeneration += 1;
+  dbListeners.forEach((fn) => fn());
+}
+
 export function isDbInitialized(): boolean {
   return Boolean(db);
 }
 
-export async function initUserDatabase(userId: string): Promise<{ syncOk: boolean; syncError?: string; rowCount?: number }> {
+async function openLocalDatabase(userId: string) {
   stopLedgerSyncLoop();
-
   if (db) {
-    db.close();
+    try { db.close(); } catch { /* ignore */ }
   }
-
   db = new ChaiKhataDB(`ChaiKhataDB_${userId}`);
+  bumpDbGeneration();
 
-  // Always prefer live cloud for phone/laptop shared data
   ensureCloudServerConfigured();
   if (!isCloudSyncEnabled()) {
     useProductionCloudServer();
   }
 
-  if (!isCloudSyncEnabled()) {
+  await runWithSuppressedAutoPush(async () => {
     await ensureSettings();
-    if (!getLocalLedgerUpdatedAt(userId)) {
-      touchLocalLedgerUpdatedAt(userId);
-    }
-    return { syncOk: true, rowCount: 0 };
+  });
+
+  if (!getLocalLedgerUpdatedAt(userId)) {
+    touchLocalLedgerUpdatedAt(userId);
   }
 
+  attachLedgerSyncHooks(db, userId);
+  startLedgerSyncLoop(db, userId);
+}
+
+async function pullCloudLedger(userId: string) {
+  if (!isCloudSyncEnabled()) return { syncOk: true as const, rowCount: 0 };
+
   clearLocalSyncCursor(userId);
-
-  // 1) Fast login download (no receipt images) — this is what fills empty mobile screens
   let result = await downloadUserLedgerOnLogin(db, userId);
-
-  // 2) If download failed, force production URL and retry
   if (!result.ok) {
     useProductionCloudServer();
     clearLocalSyncCursor(userId);
     result = await downloadUserLedgerOnLogin(db, userId);
   }
 
-  // 3) Settings after import
-  await runWithSuppressedAutoPush(async () => {
-    await ensureSettings();
-  });
+  bumpDbGeneration();
 
-  // 4) Hooks + background sync only after login data is loaded
-  attachLedgerSyncHooks(db, userId);
-  startLedgerSyncLoop(db, userId);
-
-  // 5) Quiet background sync (defer heavy full pass a bit so UI opens first)
   window.setTimeout(() => {
     void syncLedgerWithCloud(db, userId, { mode: 'quick' });
-  }, 800);
-  window.setTimeout(() => {
-    void syncLedgerWithCloud(db, userId, { mode: 'full' });
-  }, 5000);
+  }, 1500);
 
   if (!result.ok) {
     console.warn('[Chai Khata] Login download failed:', result.error);
-    return { syncOk: false, syncError: result.error, rowCount: 0 };
+    return { syncOk: false as const, syncError: result.error, rowCount: 0 };
   }
 
   return {
-    syncOk: true,
+    syncOk: true as const,
     rowCount: 'rowCount' in result ? (result.rowCount ?? 0) : 0,
   };
+}
+
+/**
+ * Open local DB immediately (fast UI), then pull cloud in the same call
+ * but callers may set dbReady after open via initUserDatabaseFast.
+ * Concurrent calls for the same user share one in-flight init (StrictMode-safe).
+ */
+export async function initUserDatabase(userId: string): Promise<{ syncOk: boolean; syncError?: string; rowCount?: number }> {
+  if (initInFlight && initUserId === userId) {
+    return initInFlight;
+  }
+
+  initUserId = userId;
+  initInFlight = (async () => {
+    await openLocalDatabase(userId);
+    return pullCloudLedger(userId);
+  })().finally(() => {
+    initInFlight = null;
+    initUserId = null;
+  });
+
+  return initInFlight;
+}
+
+/** Open IndexedDB only — UI can render while cloud pull continues. */
+export async function openUserDatabaseFast(userId: string): Promise<void> {
+  if (db?.name === `ChaiKhataDB_${userId}` && isDbInitialized()) {
+    return;
+  }
+  await openLocalDatabase(userId);
+}
+
+export async function syncUserDatabaseFromCloud(userId: string) {
+  return pullCloudLedger(userId);
 }
 
 export async function ensureSettings(): Promise<AppSettings> {

@@ -55,6 +55,34 @@ function parseLiteParam(req) {
   return lite === '1' || lite === 'true';
 }
 
+function parseMetaParam(req) {
+  const raw = req.url || '';
+  const qIndex = raw.indexOf('?');
+  if (qIndex < 0) return false;
+  const params = new URLSearchParams(raw.slice(qIndex + 1));
+  const meta = params.get('meta');
+  return meta === '1' || meta === 'true';
+}
+
+function ledgerCounts(ledger) {
+  if (!ledger) {
+    return { dealers: 0, customers: 0, purchases: 0, sales: 0, payments: 0, total: 0 };
+  }
+  const dealers = ledger.dealers?.length || 0;
+  const customers = ledger.customers?.length || 0;
+  const purchases = ledger.purchases?.length || 0;
+  const sales = ledger.sales?.length || 0;
+  const payments = ledger.payments?.length || 0;
+  return {
+    dealers,
+    customers,
+    purchases,
+    sales,
+    payments,
+    total: dealers + customers + purchases + sales + payments,
+  };
+}
+
 export async function handleSyncLedgerRequest(req, res) {
   const userId = readUserId(req);
   if (!userId) {
@@ -71,20 +99,45 @@ export async function handleSyncLedgerRequest(req, res) {
     try {
       const since = parseSinceParam(req);
       const lite = parseLiteParam(req);
+      const meta = parseMetaParam(req);
+
+      if (meta) {
+        const { sbCountLedgerRows, sbGetLedgerUpdatedAt } = await import('./persistence/ledgerTables.js');
+        const [total, updatedAt] = await Promise.all([
+          withTimeout(sbCountLedgerRows(userId), 10000, 'Sync count'),
+          withTimeout(sbGetLedgerUpdatedAt(userId), 8000, 'Sync meta'),
+        ]);
+        sendJson(res, 200, {
+          empty: !total,
+          userId,
+          counts: { total },
+          updatedAt,
+          meta: true,
+        });
+        return;
+      }
+
       if (since && !lite) {
         const serverUpdated = await withTimeout(getLedgerUpdatedAt(userId), 8000, 'Sync meta');
         if (!serverUpdated || new Date(serverUpdated).getTime() <= new Date(since).getTime()) {
-          sendJson(res, 200, { unchanged: true, updatedAt: serverUpdated });
+          sendJson(res, 200, { unchanged: true, updatedAt: serverUpdated, userId });
           return;
         }
       }
 
       const ledger = await withTimeout(readLedger(userId, { lite }), lite ? 20000 : 45000, 'Sync pull');
       if (!ledger) {
-        sendJson(res, 200, { empty: true, ledger: null, source: 'tables', lite });
+        sendJson(res, 200, { empty: true, ledger: null, source: 'tables', lite, userId, counts: ledgerCounts(null) });
         return;
       }
-      sendJson(res, 200, { empty: false, ledger, source: 'tables', lite });
+      sendJson(res, 200, {
+        empty: false,
+        ledger,
+        source: 'tables',
+        lite,
+        userId,
+        counts: ledgerCounts(ledger),
+      });
     } catch (err) {
       if (/timed out after/i.test(String(err?.message || ''))) {
         sendJson(res, 503, { error: 'TIMEOUT', message: 'Cloud download timed out. Please retry.' });

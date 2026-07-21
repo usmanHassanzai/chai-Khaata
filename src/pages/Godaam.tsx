@@ -1,4 +1,3 @@
-import { useLiveQuery } from 'dexie-react-hooks';
 import { useMemo, useState } from 'react';
 import FormField, { FieldLabel, ReadOnlyField } from '../components/FormField';
 import ImageUpload, { ImageThumb } from '../components/ImageUpload';
@@ -6,6 +5,7 @@ import PhoneLink from '../components/PhoneLink';
 import ExportToolbar from '../components/ExportToolbar';
 import TextAreaField from '../components/TextAreaField';
 import { db } from '../db/database';
+import { useLedgerLive } from '../hooks/useLedgerLive';
 import { flushLedgerPushNow } from '../services/ledgerSync';
 import { Label, SectionTitle, useLabel } from '../i18n/useLabel';
 import type { Dealer, Purchase } from '../models/types';
@@ -205,9 +205,7 @@ function EmptyShipmentCells() {
 export default function Godaam() {
   const l = useLabel();
   const shopProfile = useShopPrintProfile();
-  const dealers = useLiveQuery(() => db.dealers.toArray(), []) ?? [];
-  const purchases = useLiveQuery(() => db.purchases.toArray(), []) ?? [];
-  const payments = useLiveQuery(() => db.payments.toArray(), []) ?? [];
+  const { dealers, purchases, payments } = useLedgerLive();
   const activeDealers = dealers.filter((d) => !d.removed);
 
   const teaNames = useMemo(() => getTeaNames(purchases), [purchases]);

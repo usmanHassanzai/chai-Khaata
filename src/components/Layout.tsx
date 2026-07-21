@@ -2,13 +2,13 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { AdminUsersProvider, useAdminPendingCount } from '../context/AdminUsersContext';
+import { useAppDb } from '../hooks/useAppDb';
 import { isCloudSyncEnabled } from '../services/cloudConfig';
 import {
   onSyncStatus,
   syncLedgerWithCloud,
   type SyncStatus,
 } from '../services/ledgerSync';
-import { db } from '../db/database';
 import AppInterior from './AppInterior';
 import AppLoading from './AppLoading';
 import TrialBanner from './TrialBanner';
@@ -103,6 +103,7 @@ function LayoutShell() {
     return () => document.body.classList.remove('scroll-lock');
   }, [mobileMenuOpen]);
 
+  const db = useAppDb();
   /* One quiet refresh after login — do not re-sync on every page change */
   useEffect(() => {
     if (!cloudOn || !dbReady || !user || !db) return;
@@ -110,7 +111,7 @@ function LayoutShell() {
       void syncLedgerWithCloud(db, user.id, { mode: 'quick' });
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [cloudOn, dbReady, user]);
+  }, [cloudOn, dbReady, user, db]);
 
   function renderNavLinks(
     links: readonly { readonly to: string; readonly key: string; readonly icon: string; readonly glyph?: string }[],
