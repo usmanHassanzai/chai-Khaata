@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { AdminUsersProvider, useAdminPendingCount } from '../context/AdminUsersContext';
@@ -79,7 +79,6 @@ export default function Layout() {
 function LayoutShell() {
   const mode = useLabelMode();
   const location = useLocation();
-  const navigate = useNavigate();
   const { user, logout, dbReady } = useAuth();
   const pendingCount = useAdminPendingCount();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
@@ -87,7 +86,6 @@ function LayoutShell() {
   const [syncBusy, setSyncBusy] = useState(false);
 
   const isAdmin = user?.role === 'admin';
-  const isHome = location.pathname === '/dashboard' || location.pathname === '/';
   const mobilePageTitle = pageTitleFromPath(location.pathname, mode);
   const cloudOn = isCloudSyncEnabled();
 
@@ -115,14 +113,6 @@ function LayoutShell() {
       flushLedgerPushNow();
     });
   }, [location.pathname, cloudOn, dbReady, user]);
-
-  function handleBack() {
-    if (window.history.length > 1) {
-      navigate(-1);
-      return;
-    }
-    navigate('/dashboard');
-  }
 
   async function handleSyncTap() {
     if (!cloudOn || !user || !db || syncBusy) return;
@@ -256,29 +246,17 @@ function LayoutShell() {
         <header className="app-header app-header-pro">
           <div className="header-inner">
             <div className="header-title-mobile">
-              {!isHome ? (
-                <button
-                  type="button"
-                  className="mobile-back-btn"
-                  onClick={handleBack}
-                  aria-label={getLabel('common.back').en}
-                >
-                  <span className="mobile-back-arrow" aria-hidden>←</span>
-                  <span className="mobile-back-text"><Label k="common.back" variant="compact" /></span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className={`mobile-hamburger${mobileMenuOpen ? ' is-open' : ''}`}
-                  onClick={() => setMobileMenuOpen((o) => !o)}
-                  aria-expanded={mobileMenuOpen}
-                  aria-label={mobileMenuOpen ? getLabel('common.closeMenu').en : getLabel('common.openMenu').en}
-                >
-                  <span />
-                  <span />
-                  <span />
-                </button>
-              )}
+              <button
+                type="button"
+                className={`mobile-hamburger${mobileMenuOpen ? ' is-open' : ''}`}
+                onClick={() => setMobileMenuOpen((o) => !o)}
+                aria-expanded={mobileMenuOpen}
+                aria-label={mobileMenuOpen ? getLabel('common.closeMenu').en : getLabel('common.openMenu').en}
+              >
+                <span />
+                <span />
+                <span />
+              </button>
               <div className="header-title-stack">
                 <span className="header-page-name">{mobilePageTitle}</span>
                 <span className="header-shop-name">{user?.shopName || user?.username || 'Chai Khata'}</span>
@@ -306,19 +284,6 @@ function LayoutShell() {
                     aria-label="Cloud sync status"
                   />
                 </>
-              )}
-              {!isHome && (
-                <button
-                  type="button"
-                  className={`mobile-hamburger mobile-hamburger-end${mobileMenuOpen ? ' is-open' : ''}`}
-                  onClick={() => setMobileMenuOpen((o) => !o)}
-                  aria-expanded={mobileMenuOpen}
-                  aria-label={mobileMenuOpen ? getLabel('common.closeMenu').en : getLabel('common.openMenu').en}
-                >
-                  <span />
-                  <span />
-                  <span />
-                </button>
               )}
               <span className="header-badge auth-page-badge">Patiwala</span>
               <span className="header-date">

@@ -5,7 +5,6 @@
 
 /* Desktop defaults: hide mobile-only chrome */
 .mobile-hamburger,
-.mobile-back-btn,
 .mobile-drawer,
 .mobile-drawer-backdrop,
 .mobile-sync-chip,
@@ -72,34 +71,6 @@
   .header-meta {
     gap: 0.4rem;
     margin-left: 0;
-  }
-
-  /* ── Back ── */
-  .mobile-back-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-    min-height: 42px;
-    padding: 0 0.65rem 0 0.45rem;
-    border: 1px solid rgba(26, 61, 47, 0.12);
-    border-radius: 12px;
-    background: rgba(45, 106, 79, 0.05);
-    color: var(--tea-deep);
-    font: inherit;
-    font-size: 0.82rem;
-    font-weight: 800;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
-  .mobile-back-arrow {
-    font-size: 1.05rem;
-    line-height: 1;
-  }
-
-  .mobile-back-text .english-text,
-  .mobile-back-text .urdu-text {
-    font-size: inherit;
   }
 
   /* ── Hamburger ── */
@@ -712,7 +683,6 @@
 
   .export-toolbar-mobile,
   .mobile-hamburger,
-  .mobile-back-btn,
   .mobile-drawer,
   .mobile-drawer-backdrop,
   .mobile-sync-chip {
